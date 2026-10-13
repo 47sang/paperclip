@@ -6433,6 +6433,10 @@ it.each([
         recoveryFault === "none" ? null : await fingerprintTree(stateDirectory);
       const authorizationStages: string[] = [];
       let releaseHeldAuthorization: (() => void) | undefined;
+      let markHeldAuthorizationEntered!: () => void;
+      const heldAuthorizationEntered = new Promise<void>((resolve) => {
+        markHeldAuthorizationEntered = resolve;
+      });
       const authorizationFault = recoveryFault.startsWith("authorize_");
       const failedAuthorizationStage = recoveryFault.slice("authorize_".length);
       const beforeProviderBytes = await readFile(
@@ -6492,6 +6496,7 @@ it.each([
                 ) {
                   await new Promise<void>((resolveGate) => {
                     releaseHeldAuthorization = resolveGate;
+                    markHeldAuthorizationEntered();
                   });
                 }
                 if (stage === failedAuthorizationStage)
@@ -6524,9 +6529,13 @@ it.each([
           authorizationFault &&
           failedAuthorizationStage === "before_bootstrap"
         ) {
-          await vi.waitFor(() =>
-            expect(releaseHeldAuthorization).toBeTypeOf("function"),
-          );
+          await within(Promise.race([
+            heldAuthorizationEntered,
+            recoveryRequest.then(() => {
+              throw new Error("warm restart authorization callback was not entered");
+            }),
+          ]));
+          expect(releaseHeldAuthorization).toBeTypeOf("function");
           const queuedBefore = cores[1]!.store.state.commands.map(
             (command) => command.commandId,
           );
