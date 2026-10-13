@@ -83,7 +83,7 @@ async function verifyMacConsumer(packageDirectory, sourceRevision, receiptPath) 
     const probe = (name, source) => { const file = join(root, name); writeFileSync(file, source); return JSON.parse(run(process.execPath, [file]).trim()); };
     const daemon = probe('daemon-probe.mjs', installedDaemonProbeSource(installed, consumer, sourceRevision));
     const codex = probe('codex-probe.mjs', installedCodexProbeSource(join(installed, 'index.js'), consumer, undefined, { nativeCodex: true }));
-    const claude = probe('claude-probe.mjs', installedClaudeProbeSource(join(installed, 'index.js'), server));
+    const claude = probe('claude-probe.mjs', installedClaudeProbeSource(join(installed, 'index.js')));
     const startupScript = macInstalledStartupProbeSource(consumer, server, daemon.sha256, join(repo, 'tests/runner-e2e/installed-cli.ts'));
     const startupFile = join(root, 'startup-probe.mts'); writeFileSync(startupFile, startupScript);
     const startup = JSON.parse(run(process.execPath, ['--import', 'tsx', startupFile], join(repo, 'server')).trim());
@@ -160,7 +160,7 @@ async function verifyLinuxArmConsumer(packageDirectory, sourceRevision, receiptP
     const hostServer = join(consumer, 'node_modules/@paperclipai/server'), hostInstalled = join(hostServer, 'dist/vendor/paperclip-runner');
     const hostDaemon = () => hostProbe('host-daemon-probe.mjs', installedDaemonProbeSource(hostInstalled, consumer, sourceRevision));
     const hostCodex = () => hostProbe('host-codex-probe.mjs', installedCodexProbeSource(join(hostInstalled, 'index.js'), consumer, undefined, { nativeCodex: true }));
-    const claude = hostProbe('host-claude-probe.mjs', installedClaudeProbeSource(join(hostInstalled, 'index.js'), hostServer));
+    const claude = hostProbe('host-claude-probe.mjs', installedClaudeProbeSource(join(hostInstalled, 'index.js')));
     const digest = value => createHash('sha256').update(value).digest('hex');
     const beforeCodex = hostCodex();
     const before = { lockSha256: digest(lock), runnerSha256: hostDaemon().sha256.slice(7), codexCommandSha256: beforeCodex.codexCommandSha256, codexNativeExecutableSha256: beforeCodex.codexNativeExecutableSha256 };

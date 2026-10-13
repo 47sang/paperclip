@@ -18,7 +18,7 @@ test('installed Claude admission propagates failure without emitting a passing r
   const root = mkdtempSync(join(tmpdir(), 'installed-claude-admission-'));
   try {
     const fixture = join(root, 'runner.mjs'), probe = join(root, 'probe.mjs');
-    writeFileSync(probe, installedClaudeProbeSource(fixture, root));
+    writeFileSync(probe, installedClaudeProbeSource(fixture));
     writeFileSync(fixture, "export async function probeAcpxClaudeInstallation(model) { if (model !== 'claude-opus-5-5') throw Error('wrong model'); }\n");
     const accepted = spawnSync(process.execPath, [probe], { encoding: 'utf8', timeout: 5000 });
     assert.equal(accepted.status, 0, accepted.stderr);
@@ -28,6 +28,23 @@ test('installed Claude admission propagates failure without emitting a passing r
     const rejected = spawnSync(process.execPath, [probe], { encoding: 'utf8', timeout: 5000 });
     assert.notEqual(rejected.status, 0);
     assert.equal(rejected.stdout, '');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('ordinary Claude consumer admission rejects authority overrides before invoking the verifier', () => {
+  const root = mkdtempSync(join(tmpdir(), 'installed-claude-authority-'));
+  try {
+    const fixture = join(root, 'runner.mjs'), probe = join(root, 'probe.mjs');
+    writeFileSync(probe, installedClaudeProbeSource(fixture));
+    writeFileSync(fixture, "export async function probeAcpxClaudeInstallation() { throw Error('provider verifier invoked'); }\n");
+    for (const key of ['PAPERCLIP_ACPX_PROVIDER_PACKAGE_ROOT', 'PAPERCLIP_ACPX_PROVIDER_PACKAGE_MANIFEST']) {
+      const rejected = spawnSync(process.execPath, [probe], { encoding: 'utf8', timeout: 5000,
+        env: { PATH: process.env.PATH, [key]: root } });
+      assert.notEqual(rejected.status, 0);
+      assert.equal(rejected.stdout, '');
+      assert.match(rejected.stderr, /AssertionError/);
+      assert.doesNotMatch(rejected.stderr, /provider verifier invoked/);
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
