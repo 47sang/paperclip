@@ -363,3 +363,32 @@ Refreshed only these reviewed source fingerprints. This review adds no browser
 rendering, play execution, screenshot baselines, Storybook build or live managed
 acceptance. Full parity remains unreviewed for five entries; the older model
 connection preview remains historical.
+
+
+## Actual merged-master reconciliation — 2026-10-13
+
+Compared behavior d1a945229e503347023224e3f9e8976865f85457 with its
+actual-master composition 3f442729a4f1253771e5693724142efb58f9c006. Master
+contains merged prerequisite d67e3507b23041212fa26302ce6de078c5ebcc05.
+The inherited delta changes nine declared sources across 61 entries. Reviewed
+all nine changed inputs: the task handoff recipe, chat identity response type,
+three thread/composer subjects, TaskChatComposer, IssueDetail, ChatEndpointDetail
+and its existing chat-management story. The scope and each before/after hash are
+retained in /private/tmp/claude-d67-catalog-source-review.json.
+
+Composer sources now retain manual assignee drafts across suggestions and use
+assignment activity after a current-user handoff. Existing callbacks and API
+fixtures do not establish authoritative transfer, outgoing-run completion or
+cancellation. The task recipe adds that separate live requirement. Linked-user
+access rows use the returned image or initials. The inherited Access play checks
+image loading and alignment with the existing asset; it was inspected, not run.
+Added the directly used avatar/initials sources to three endpoint entries and
+the imported existing avatar asset to chat-management's review sources.
+
+Retained every export, title, stable ID and classification: seven current,
+50 unreviewed, two mixed and two historical entries. Current classifications
+retain their named prior scope; none is promoted to live handoff or avatar proof.
+No source changes to the other declared fixtures are claimed. Refreshed only
+the 61 reviewed fingerprints and regenerated the index. Catalog validation and
+all nine checker controls pass: 224 files, 2,223 story IDs. This is a source
+reconciliation with no new rendering, play, visual baseline or live acceptance.

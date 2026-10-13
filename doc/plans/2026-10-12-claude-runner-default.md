@@ -1087,3 +1087,46 @@ $1 run reservation and a conservative $1 reserve for unknown setup charges.
 Local checkpoint: /private/tmp/claude-local-startup-checkpoint-20261013.json.
 Further paid work waits on the recorded accounting state and a safe startup
 path; final cloud package and PR qualification also remain outstanding.
+
+
+## Actual prerequisite merge reconciliation — 2026-10-13
+
+The source owner confirmed prerequisite #16028 merged as actual master commit
+`d67e3507b23041212fa26302ce6de078c5ebcc05`. That object is present locally.
+Protocol composition `abcd8261d2` merges this actual commit; behavior composition
+`3f442729a4f1253771e5693724142efb58f9c006` carries it forward. Five conflict
+files retained only the reviewed newer Codex checkpoint history, Linux libc
+compatibility prose, source/access-map scopes and native-platform test import;
+master additions outside those hunks remain intact. Obsolete instructions to
+start the already existing Codex slice were not restored. No source-owned branch
+or new npm/staging qualification environment was changed.
+
+Focused reconciliation checks pass: 213 root controls (197 Claude setup and 16
+development native-binary controls), six package-local installed-authority
+controls, UI noemit, generated ACPX profiles, map contracts, token gates and nine
+catalog controls. The initial root invocation does not include runner package
+tests; the six authority controls were separately run from that package's cwd.
+The inherited Storybook delta has nine changed declared inputs across 61
+entries; source review retains classifications and all 2,223 IDs. Rendering,
+play, final broad checks and live task/follow-up proof remain pending. Logs are
+/private/tmp/claude-d67-reconcile-focused.log,
+/private/tmp/claude-d67-authority-controls.log,
+/private/tmp/claude-d67-reconcile-ui-types.log and
+/private/tmp/claude-d67-catalog-after.log.
+
+The source owner's separate private Codex rehearsal is frozen at
+`a758b226d898ef457f524427c19a9919ec3b5276`; its receipt independently matches
+SHA-256 `568f927baed3e0864a31a6a4dbb44ab0ec0f7ccab2b93f7848c24387eb1e1c3a`.
+It remains private and unqualified for live execution; it was not merged here.
+The source-owned published Codex branch still needs final reconciliation before
+our protocol publication can satisfy its review-size boundary. These source
+checks do not relabel the live treatment preview as new compiled master.
+
+The human authorized the source owner a separate $25 npm-canary/fresh-staging
+qualification lane, with $15 stack/sandbox, $5 setup/four Codex turns and $5
+cleanup reservations. It does not fund Claude and does not redistribute the old
+$250 ledger or our $50 ceiling. No such environment or budget was allocated here.
+Claude's budget-check/manual-retry question remains pending. The read-only budget
+check failed to execute after approval-review timeout and then model-capacity
+failure. No approval bypass, foreign listener cleanup, hold clearing, paid retry,
+local Docker/Rust build or production promotion was performed.
