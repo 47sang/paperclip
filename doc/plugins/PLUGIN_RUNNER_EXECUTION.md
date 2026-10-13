@@ -197,7 +197,7 @@ Normal agent initialization and the agent Test flow acquire a disposable task le
 Core issues an expiring private Runner identity, with no issue, project mounts, or
 agent tool authority. It uses the same describe, submit, connection, status,
 checkpoint, stop, and complete operations as execution. No workspace-realization
-or command hook is required. Core also bounds Runner's own maximum lifetime to the probe deadline, so a controller crash cannot leave an unlimited probe. Core runs a bounded read-only hello turn and checks
+or command hook is required. Core also bounds Runner's own lifetime through its supported maximum-runtime flag to the probe deadline, so a controller crash cannot leave an unlimited probe. Core runs a bounded read-only hello turn and checks
 PRP identity, the qualified provider driver, the observed model, a completed
 response, and confirmed task shutdown. A plugin readiness flag cannot replace
 this probe. Managed accounts also require the project-auth check before launch.

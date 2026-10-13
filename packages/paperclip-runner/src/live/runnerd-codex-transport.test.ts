@@ -3092,6 +3092,32 @@ it("does not certify probe cleanup while owned credential preparation is unconfi
   }
 }, 15_000);
 
+it("expires an unconnected setup Runner through its supported runtime flag", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runnerd-probe-expiry-"));
+  const server = createServer(); await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  const runId = `probe-${randomUUID()}`;
+  const binary = defaultCapabilityRunnerdBinary();
+  const artifact = readRunnerdArtifactBinding(binary);
+  const handle = durableControlPlane.spawnRunner({ runnerBinaryPath: binary, runnerVersion: artifact.version, runnerDigest: artifact.digest,
+    stateDirectory: join(root, "runner"), ticket: "synthetic-probe-ticket",
+    identity: { runnerInstanceId: "probe-runner", environmentLeaseId: "probe-lease", runId, normalizedSessionId: "probe-session", turnId: "probe-turn", itemId: "probe-item" },
+    connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: port, listenPath: `/api/runner/v1/connect/${runId}` },
+    maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 250,
+    lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([handle.completion, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Unconnected probe ignored its runtime deadline")), 5000);
+    })]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/deadline.*elapsed|deadline.*exceeded/);
+    expect(await readFile(join(root, "runner/runner-state.json"), "utf8")).toContain("deadline");
+  } finally { clearTimeout(timer); handle.child.kill("SIGKILL"); await handle.completion.catch(() => {}); await rm(root, { recursive: true, force: true }); }
+}, 10_000);
+
 it.each(["complete", "api-key", "default-model", "mismatched-model", "model-refresh-error", "model-cleanup-error", "missing-model", "missing-runtime", "missing-completion", "late-bootstrap", "remote-complete", "remote-mismatched-model", "late-remote-preparation", "late-remote-release-error"] as const)("native Codex setup requires its daemon/app-server hello (%s)", async mode => {
   const root = await mkdtemp(join(tmpdir(), "runnerd-native-setup-"));
   const runtimeDirectory = join(root, "native-state");

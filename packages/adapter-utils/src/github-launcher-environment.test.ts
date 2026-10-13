@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { watch } from "node:fs";
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -11,6 +11,8 @@ import { githubBrokerEnvironment } from "./github-launcher.js";
 import {
   ensureAdapterExecutionTargetCommandResolvable,
   prepareGitHubOperationLaunchers,
+  rewriteGitHubOperationLauncherProfiles,
+  cleanupGitHubOperationLaunchers,
   prepareGitHubExecutionEnvironment,
   runAdapterExecutionTargetProcess,
 } from "./execution-target.js";
@@ -68,6 +70,26 @@ async function sandbox(layout: string) {
 }
 
 describe("managed GitHub launcher environment", () => {
+  it("keeps wrappers active when a shell loads profiles after task relocation", async () => {
+    const fixture = await sandbox("provider-bin");
+    const location = { runId: `relocated-${path.basename(fixture.root)}`, target: { kind: "local" as const } };
+    const env = await prepareGitHubOperationLaunchers({ ...location, cwd: fixture.root,
+      env: githubBrokerEnvironment({ PATH: fixture.remotePath }, { url: "", token: "" }) });
+    const source = env.PAPERCLIP_GITHUB_LAUNCHER_DIR;
+    const guest = path.join(fixture.root, "guest launchers");
+    try {
+      await rewriteGitHubOperationLauncherProfiles({ directory: source, runtimePath: `${guest}:${fixture.remotePath}` });
+      await cp(source, guest, { recursive: true });
+      await cleanupGitHubOperationLaunchers(location);
+      const result = await fixture.runner.execute({ command: "bash", args: ["--noprofile", "--norc", "-c", "command -v git; command -v gh; git status; gh auth status"],
+        env: { ...env, PATH: `${guest}:${fixture.remotePath}`, BASH_ENV: path.join(guest, ".bashrc"), ZDOTDIR: guest, HOME: guest,
+          GH_CONFIG_DIR: path.join(guest, "gh-config"), PAPERCLIP_GITHUB_LAUNCHER_DIR: guest } });
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(result.stdout.split("\n").slice(0, 2)).toEqual([path.join(guest, "git"), path.join(guest, "gh")]);
+      expect(result.stdout).toContain("git started"); expect(result.stdout).toContain("gh started");
+      expect(result.stderr).toContain("continuing without managed credentials");
+    } finally { await cleanupGitHubOperationLaunchers(location); }
+  });
   // The Daytona native directory oracle uses Linux inotify. Run its real
   // filesystem regression on that platform; shell/launcher tests cover both.
   it.runIf(process.platform === "linux")("keeps launcher restaging and command scratch inside the runner runtime", async () => {

@@ -1,3 +1,4 @@
+import { rewriteGitHubOperationLauncherProfiles } from "@paperclipai/adapter-utils/execution-target";
 import { authorizePluginTaskLeaseTransition } from "../environment-task-runtime.js";
 import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
 import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
@@ -11508,6 +11509,9 @@ async function createRunnerdBackendWithinSessionClaim(
       taskEnvironment.PATH = taskEnvironment.PATH?.split(":").map(entry => entry === sourceLauncherDirectory ? guestLauncherDirectory : entry).join(":");
       taskEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR = guestLauncherDirectory;
       taskEnvironment.GH_CONFIG_DIR = posix.join(guestRoot, "github-config");
+      taskEnvironment.ZDOTDIR = guestLauncherDirectory;
+      taskEnvironment.BASH_ENV = posix.join(guestLauncherDirectory, ".bashrc");
+      await rewriteGitHubOperationLauncherProfiles({ directory: sourceLauncherDirectory, runtimePath: taskEnvironment.PATH ?? guestLauncherDirectory });
     }
     const guestContext = sourceContext ? { ...sourceContext,
       instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle,

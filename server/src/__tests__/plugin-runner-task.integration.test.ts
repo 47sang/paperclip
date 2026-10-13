@@ -134,8 +134,8 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
         lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, environment: {}, assets: [] },
     });
     const probeSubmit = calls.find((op): op is Extract<PluginEnvironmentTaskOperation, { kind: "submit" }> => op.kind === "submit")!;
-    expect(probeSubmit.launch?.maxLifetimeMs).toBeGreaterThan(0);
-    expect(probeSubmit.launch?.maxLifetimeMs).toBeLessThanOrEqual(120_000);
+    expect(probeSubmit.launch?.maxRuntimeMs).toBeGreaterThan(0);
+    expect(probeSubmit.launch?.maxRuntimeMs).toBeLessThanOrEqual(120_000);
     executionStopped = true;
     await probe.release(); released.mockClear(); complete.mockClear(); calls.length = 0;
     const orchestrator = environmentRunOrchestrator(db, { environmentRuntime: runtime });

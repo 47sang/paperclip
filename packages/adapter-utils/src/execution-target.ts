@@ -1749,6 +1749,21 @@ printf '\0PAPERCLIP_GIT_CONTEXT_END\0'
   };
 }
 
+const githubOperationProfileNames = [".zshenv", ".zprofile", ".zshrc", ".bash_profile", ".bashrc", ".profile"];
+
+function githubOperationShellProfile(managedPath: string): string {
+  const clearEmptyGitIdentity = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]
+    .map((key) => `if [ -z "\${${key}-}" ]; then unset ${key}; fi\n`)
+    .join("");
+  return `export PATH=${shellQuote(managedPath)}\n${clearEmptyGitIdentity}`;
+}
+
+/** Regenerate trusted local assets before a task provider relocates them. */
+export async function rewriteGitHubOperationLauncherProfiles(input: { directory: string; runtimePath: string }): Promise<void> {
+  const profile = githubOperationShellProfile(input.runtimePath);
+  await Promise.all(githubOperationProfileNames.map(name => fs.writeFile(path.join(input.directory, name), profile, { mode: 0o700 })));
+}
+
 /** Stage token-free launchers next to the execution, not in shared global Git config. */
 export async function prepareGitHubOperationLaunchers(input: {
   runId: string; target: AdapterExecutionTarget | null | undefined; cwd: string; env: Record<string, string>;
@@ -1763,16 +1778,13 @@ export async function prepareGitHubOperationLaunchers(input: {
   // Empty merge overrides clear host identity before launch, but Git treats
   // them as an explicit empty author. Remove them once the shell has inherited
   // its final environment; preserve nonempty per-operation identity values.
-  const clearEmptyGitIdentity = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]
-    .map((key) => `if [ -z "\${${key}-}" ]; then unset ${key}; fi\n`)
-    .join("");
-  const profile = `export PATH=${shellQuote(managedPath)}\n${clearEmptyGitIdentity}`;
+  const profile = githubOperationShellProfile(managedPath);
   const files: Record<string, string> = Object.fromEntries([
     // Remote launchers live beneath the checkout. Pin their own package scope
     // so an enclosing project's "type": "module" cannot reinterpret require().
     ["package.json", '{"type":"commonjs"}\n'],
     ...["git", "gh"].map((name) => [name, githubLauncherSource()] as const),
-    ...[".zshenv", ".zprofile", ".zshrc", ".bash_profile", ".bashrc", ".profile"].map((name) => [name, profile] as const),
+    ...githubOperationProfileNames.map((name) => [name, profile] as const),
   ]);
   if (remote) {
     const runner = adapterExecutionTargetCommandRunner(remote);

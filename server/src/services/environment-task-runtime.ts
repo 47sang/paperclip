@@ -78,8 +78,10 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
     const remainingMs = Number(probe.expiresAtMs) - Date.now();
     if (remainingMs <= 0 || !operation.launch) throw new Error("Plugin-provided Runner probe lease is not active");
     // Runner itself must stop if Core disappears during a setup probe.
-    operation.launch.maxLifetimeMs = operation.launch.maxLifetimeMs && operation.launch.maxLifetimeMs > 0
-      ? Math.min(operation.launch.maxLifetimeMs, remainingMs) : remainingMs;
+    const requestedLimits = [operation.launch.maxRuntimeMs, operation.launch.maxLifetimeMs]
+      .filter((value): value is number => typeof value === "number" && value > 0);
+    operation.launch.maxRuntimeMs = Math.min(remainingMs, ...requestedLimits);
+    delete operation.launch.maxLifetimeMs;
   }
   if (operation.kind === "submit") {
     // No ticket, headers, environment values, or launch paths belong in metadata.

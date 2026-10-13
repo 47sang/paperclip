@@ -10097,6 +10097,8 @@ describe("runnerd provider runtime wiring", () => {
   });
 
   it("selects the plugin task process owner and binds Runner identity to its acquired lease", async () => {
+    const sourceWrappers = join(isolatedStateDirectory, "controller-wrappers");
+    await mkdir(sourceWrappers, { recursive: true, mode: 0o700 });
     const instructionRoot = join(isolatedStateDirectory, "agent-files/working");
     await mkdir(instructionRoot, { recursive: true, mode: 0o700 });
     await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
@@ -10117,7 +10119,7 @@ describe("runnerd provider runtime wiring", () => {
         runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
       await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
         runnerExecutionTarget: target, runnerIngressAuthorized: true,
-        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/github-wrappers", PATH: "/controller/github-wrappers:/usr/bin" } });
+        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: sourceWrappers, PATH: `${sourceWrappers}:/usr/bin` } });
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
       expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
@@ -10138,9 +10140,11 @@ describe("runnerd provider runtime wiring", () => {
       expect(state.createBackend.mock.calls.at(-1)![0]).toMatchObject({ runtimeContext: { instructions: { workingCopy: { rootPath: "/state/context/instruction-working-copy" } } } });
       expect(options.environment).toMatchObject({ AGENT_HOME: "/state/context/instruction-working-copy", PATH: "/state/github-launchers:/usr/bin",
         PAPERCLIP_GITHUB_LAUNCHER_DIR: "/state/github-launchers", GH_CONFIG_DIR: "/state/github-config" });
+      expect(await readFile(join(sourceWrappers, ".bashrc"), "utf8")).toContain("/state/github-launchers:/usr/bin");
+      expect(options.environment).toMatchObject({ BASH_ENV: "/state/github-launchers/.bashrc", ZDOTDIR: "/state/github-launchers" });
       expect(owner.mock.calls.at(-1)![0].assets!()).toEqual(expect.arrayContaining([
         { sourcePath: instructionRoot, targetPath: "/state/context/instruction-working-copy" },
-        { sourcePath: "/controller/github-wrappers", targetPath: "/state/github-launchers" },
+        { sourcePath: sourceWrappers, targetPath: "/state/github-launchers" },
       ]));
       const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
       await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
