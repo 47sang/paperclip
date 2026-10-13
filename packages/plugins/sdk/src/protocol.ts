@@ -57,6 +57,7 @@ export type { PluginLauncherRenderContextSnapshot } from "@paperclipai/shared";
 import type {
   PluginEvent,
   ResourceLifecycleEvent,
+  ResourceLifecycleResult,
   PluginIssueCheckoutOwnership,
   PluginIssueOrchestrationSummary,
   PluginIssueRelationSummary,
@@ -1352,6 +1353,7 @@ export interface HostToWorkerMethods {
   handleApiRequest: [params: PluginApiRequestInput, result: PluginApiResponse];
   /** @see PLUGIN_SPEC.md §13.8 */
   agentLifecycle: [params: AgentLifecycleRequest, result: AgentLifecycleResult];
+  resourceLifecycle: [params: ResourceLifecycleEvent, result: ResourceLifecycleResult];
   getData: [params: GetDataParams, result: unknown];
   /** @see PLUGIN_SPEC.md §13.9 */
   performAction: [params: PerformActionParams, result: unknown];
@@ -1490,6 +1492,7 @@ export const HOST_TO_WORKER_OPTIONAL_METHODS: readonly HostToWorkerMethodName[] 
   "handleWebhook",
   "handleApiRequest",
   "agentLifecycle",
+  "resourceLifecycle",
   "getData",
   "performAction",
   "executeTool",
