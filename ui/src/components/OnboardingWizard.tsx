@@ -1,6 +1,7 @@
-import type { AgentRunnerChoice } from "@paperclipai/shared";
+import type { AgentRunner, AgentRunnerChoice } from "@paperclipai/shared";
+import { needsClaudeSetupQualification, qualifyClaudeSetup } from "../lib/qualify-claude-setup";
 import { agentHarnessType } from "@paperclipai/shared";
-import { adaptersApi } from "../api/adapters";
+import { adaptersApi, type AdapterInfo } from "../api/adapters";
 import { AgentRunnerSelect } from "./AgentRunnerSelect";
 import { healthApi } from "@/api/health";
 import { LocalProviderLoginInstructions } from "./AdapterLoginChrome";
@@ -1024,6 +1025,23 @@ function OnboardingWizardInner({
       null,
     [loginEnvironmentList, resolvedLoginEnvironmentId],
   );
+  const claudeSetupSelectionKey = JSON.stringify([createdCompanyId, adapterType, runner, model, command,
+    args, url, credentialMode, apiKey, selectedSavedKey, selectedApiKey?.binding, savedSubscription?.binding,
+    resolvedLoginEnvironmentId, resolvedLoginEnvironment?.config]);
+  const claudeSetupSelectionRef = useRef(claudeSetupSelectionKey);
+  claudeSetupSelectionRef.current = claudeSetupSelectionKey;
+  const activeClaudeQualification = useRef<{ attempt: number; selection: string } | null>(null);
+  useEffect(() => {
+    const active = activeClaudeQualification.current;
+    if (!active || active.selection === claudeSetupSelectionKey) return;
+    activeClaudeQualification.current = null;
+    connectAttemptRef.current++;
+    hiringAgentRef.current = null;
+    autoConnectStartedRef.current = true;
+    setLoading(false);
+    setAdapterEnvLoading(false);
+    setError("Configuration changed during setup. Connect again to test the current settings.");
+  }, [claudeSetupSelectionKey]);
   // Sandbox provider capabilities for the login pseudo-terminal gate, loaded
   // only when the adapter declares a login capability — the same query the
   // agent configuration form runs (AgentConfigForm.tsx:652-658).
@@ -1851,13 +1869,13 @@ function OnboardingWizardInner({
     }
   }
 
-  function buildAdapterConfig(bindApiKey = false): Record<string, unknown> {
+  function buildAdapterConfig(bindApiKey = false, setupRunner?: AgentRunner): Record<string, unknown> {
     const adapter = getUIAdapter(adapterType);
     const config = adapter.buildAdapterConfig({
       ...defaultCreateValues,
       adapterType,
       runner,
-      resolvedRunner,
+      resolvedRunner: setupRunner ?? resolvedRunner,
       model:
         adapterType === "gemini_local"
           ? model || DEFAULT_GEMINI_LOCAL_MODEL
@@ -1923,6 +1941,7 @@ function OnboardingWizardInner({
     adapterConfigOverride?: Record<string, unknown>,
     appliedStoredClaudeLoginBinding = false,
     isCurrent = () => true,
+    onQualifiedConfig?: (config: Record<string, unknown>, adapters: AdapterInfo[], environmentId: string | null) => void,
   ): Promise<AdapterEnvironmentTestResult | null> {
     if (!runnerDiscoveryReady) return null;
     if (!createdCompanyId) {
@@ -1985,11 +2004,27 @@ function OnboardingWizardInner({
         visibleEnvironmentIds: environmentList.map((environment) => environment.id),
       });
       if (!isCurrent()) return null;
+      const selection = { adapterType, runner, savedAgentId: createdAgentId,
+        environment: environmentList.find(environment => environment.id === environmentId) };
+      const qualified = await qualifyClaudeSetup({ ...selection,
+        readAdapters: () => adaptersApi.list({ companyId: createdCompanyId, environmentId }),
+        probeEnvironment: () => environmentsApi.probe(environmentId!, createdCompanyId),
+        isCurrent,
+      });
+      if (!isCurrent() || (needsClaudeSetupQualification(selection) && !qualified)) return null;
+      let testedConfig = adapterConfigOverride ?? buildAdapterConfig();
+      if (qualified) {
+        testedConfig = buildAdapterConfig(true, qualified.runner);
+        if (appliedStoredClaudeLoginBinding) testedConfig.env = {
+          ...(isEnvRecord(testedConfig.env) ? testedConfig.env : {}), ...buildFixedClaudeOAuthBinding(),
+        };
+        onQualifiedConfig?.(testedConfig, qualified.adapters, environmentId);
+      }
       const result = await agentsApi.testEnvironment(
         createdCompanyId,
         adapterType,
         {
-          adapterConfig: adapterConfigOverride ?? buildAdapterConfig(),
+          adapterConfig: testedConfig,
           ...(["codex_local", "claude_local"].includes(adapterType) && runner !== "auto" ? { runner } : {}),
           ...(managedBindingForStep() ? { aiConnection: managedBindingForStep() } : {}),
           environmentId,
@@ -2070,12 +2105,17 @@ function OnboardingWizardInner({
     }
     if (!runnerDiscoveryReady || hiringAgentRef.current !== null) return;
     const attempt = ++connectAttemptRef.current;
+    const qualifyManagedClaude = needsClaudeSetupQualification({ adapterType, runner, savedAgentId: createdAgentId, environment: resolvedLoginEnvironment });
+    const setupSelection = claudeSetupSelectionRef.current;
+    activeClaudeQualification.current = qualifyManagedClaude ? { attempt, selection: setupSelection } : null;
     const isCurrent = () => connectAttemptRef.current === attempt && stillTheSameCompany(createdCompanyId)
-      && runnerSelectionRef.current === runnerSelectionKey;
+      && runnerSelectionRef.current === runnerSelectionKey
+      && (!qualifyManagedClaude || claudeSetupSelectionRef.current === setupSelection);
     hiringAgentRef.current = attempt;
     autoConnectStartedRef.current = true;
     setLoading(true);
     setError(null);
+    let qualifiedDiscovery: { adapters: AdapterInfo[]; environmentId: string | null } | undefined;
     try {
       if (adapterType === "opencode_local") {
         const selectedModelId = model.trim();
@@ -2156,7 +2196,7 @@ function OnboardingWizardInner({
         setClaudeOAuthStatus(storedClaudeLogin);
       }
       const shouldApplyStoredClaudeLogin = storedClaudeLogin !== null;
-      const hireAdapterConfig = shouldApplyStoredClaudeLogin
+      let hireAdapterConfig = shouldApplyStoredClaudeLogin
         ? {
             ...baseAdapterConfig,
             env: {
@@ -2175,14 +2215,15 @@ function OnboardingWizardInner({
         // stored login, would lock out a customer who has since fixed the
         // problem or signed in.
         const cachedUsable =
-          adapterEnvResult &&
+          !needsClaudeSetupQualification({ adapterType, runner, savedAgentId: createdAgentId, environment: resolvedLoginEnvironment }) && adapterEnvResult &&
           adapterEnvResultAppliedStoredLoginRef.current === shouldApplyStoredClaudeLogin &&
           !blocksAgentCreate(adapterEnvResult)
             ? adapterEnvResult
             : null;
         const result =
           cachedUsable ??
-          (await runAdapterEnvironmentTest(hireAdapterConfig, shouldApplyStoredClaudeLogin, isCurrent));
+          (await runAdapterEnvironmentTest(hireAdapterConfig, shouldApplyStoredClaudeLogin, isCurrent,
+            (config, adapters, environmentId) => { hireAdapterConfig = config; qualifiedDiscovery = { adapters, environmentId }; }));
         if (!result || !isCurrent()) return;
         // Block the hire on a failed environment test. Also block it on a
         // pass or a warn result that reports missing authentication — the
@@ -2276,7 +2317,13 @@ function OnboardingWizardInner({
       setError(err instanceof Error ? err.message : "Failed to create agent");
     } finally {
       if (hiringAgentRef.current === attempt) hiringAgentRef.current = null;
-      if (isCurrent()) setLoading(false);
+      if (activeClaudeQualification.current?.attempt === attempt) activeClaudeQualification.current = null;
+      if (isCurrent()) {
+        if (qualifiedDiscovery) queryClient.setQueryData(
+          queryKeys.adapters.availability(createdCompanyId, qualifiedDiscovery.environmentId), qualifiedDiscovery.adapters,
+        );
+        setLoading(false);
+      }
       // Authentication is already saved. A failed probe or hire must offer a
       // retry with that account, rather than keep the completed login busy.
       if (connectCredentialStored && isCurrent()) {

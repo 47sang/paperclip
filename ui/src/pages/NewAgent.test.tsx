@@ -9,6 +9,87 @@ import {
 } from "./NewAgent.test-support";
 
 describe("New agent setup", () => {
+  it.each(["paperclip", "legacy"] as const)("qualifies new managed Claude on explicit setup and saves measured %s defaults", async measured => {
+    const image = `registry.example.test/runtime@sha256:${"a".repeat(64)}`;
+    envApi.list.mockResolvedValue([{ id: "sandbox-1", driver: "sandbox", config: { provider: "daytona", image } }]);
+    settings.get.mockResolvedValue({ defaultEnvironmentId: "sandbox-1" });
+    settings.getExperimental.mockResolvedValue({ enableManagedSandboxOnly: true, enableNativeRunner: false });
+    api.getClaudeOAuthTokenStatus.mockResolvedValue({ secretId: "saved-oauth", latestVersion: 1 });
+    state.adapters = state.adapters.map((adapter: any) => adapter.type === "claude_local"
+      ? { ...adapter, defaultRunner: "legacy", supportedRunners: ["legacy"] } : adapter);
+    let qualified = false;
+    const calls: string[] = [];
+    adapterApi.list.mockImplementation(async context => {
+      if (context?.companyId) calls.push(qualified ? "discovery-after" : "discovery-before");
+      return state.adapters;
+    });
+    envApi.probe.mockImplementation(async () => {
+      calls.push("platform"); qualified = true;
+      state.adapters = state.adapters.map((adapter: any) => adapter.type === "claude_local"
+        ? { ...adapter, defaultRunner: measured, supportedRunners: [measured] } : adapter);
+      return { ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "owned-platform-lease" } };
+    });
+    api.testEnvironment.mockImplementation(async () => { calls.push("adapter"); return pass; });
+    await render("claude_local");
+    expect(envApi.probe).not.toHaveBeenCalled();
+    await click("ClaudeSubscription");
+    calls.length = 0;
+    await click("Use saved subscription");
+    expect(calls).toEqual(["discovery-before", "platform", "discovery-after", "adapter"]);
+    expect(envApi.probe).toHaveBeenCalledExactlyOnceWith("sandbox-1", "company-1");
+    await click("Finish setup");
+    expect(api.testEnvironment).toHaveBeenCalledTimes(1);
+    expect(api.hire).toHaveBeenCalledTimes(1);
+    const tested = api.testEnvironment.mock.calls[0][2].adapterConfig;
+    const saved = api.hire.mock.calls[0][1];
+    expect(saved).not.toHaveProperty("runner");
+    expect(saved.adapterConfig).toEqual(tested);
+    if (measured === "paperclip") expect(tested).not.toHaveProperty("maxTurnsPerRun");
+    else expect(tested.maxTurnsPerRun).toBe(1000);
+  });
+
+  it("drops a held managed Claude probe when the same environment changes configuration", async () => {
+    const config = { provider: "daytona", image: `registry.example.test/runtime@sha256:${"a".repeat(64)}` };
+    envApi.list.mockResolvedValue([{ id: "sandbox-1", driver: "sandbox", config }]);
+    settings.get.mockResolvedValue({ defaultEnvironmentId: "sandbox-1" });
+    state.adapters = state.adapters.map((adapter: any) => adapter.type === "claude_local"
+      ? { ...adapter, defaultRunner: "legacy", supportedRunners: ["legacy"] } : adapter);
+    api.getClaudeOAuthTokenStatus.mockResolvedValue({ secretId: "saved-oauth", latestVersion: 1 });
+    let finish!: (value: object) => void;
+    envApi.probe.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    await render("claude_local");
+    await click("ClaudeSubscription");
+    await click("Use saved subscription");
+    expect(envApi.probe).toHaveBeenCalledTimes(1);
+    await act(async () => cache.setQueryData(queryKeys.environments.list("company-1"), [{ id: "sandbox-1", driver: "sandbox", config: {
+      ...config, image: `registry.example.test/runtime@sha256:${"b".repeat(64)}`,
+    } }]));
+    await settle();
+    await act(async () => finish({ ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "owned-lease" } }));
+    await settle();
+    expect(envApi.probe).toHaveBeenCalledTimes(1);
+    expect(api.testEnvironment).not.toHaveBeenCalled();
+    expect(api.hire).not.toHaveBeenCalled();
+  });
+
+  it("retains the existing managed Claude platform-probe permission gate", async () => {
+    envApi.list.mockResolvedValue([{ id: "sandbox-1", driver: "sandbox", config: {
+      provider: "daytona", image: `registry.example.test/runtime@sha256:${"a".repeat(64)}`,
+    } }]);
+    settings.get.mockResolvedValue({ defaultEnvironmentId: "sandbox-1" });
+    state.adapters = state.adapters.map((adapter: any) => adapter.type === "claude_local"
+      ? { ...adapter, defaultRunner: "legacy", supportedRunners: ["legacy"] } : adapter);
+    api.getClaudeOAuthTokenStatus.mockResolvedValue({ secretId: "saved-oauth", latestVersion: 1 });
+    envApi.probe.mockRejectedValue(new Error("Instance admin access required"));
+    await render("claude_local");
+    await click("ClaudeSubscription");
+    await click("Use saved subscription");
+    expect(container.textContent).toContain("Instance admin access required");
+    expect(envApi.probe).toHaveBeenCalledTimes(1);
+    expect(api.testEnvironment).not.toHaveBeenCalled();
+    expect(api.hire).not.toHaveBeenCalled();
+  });
+
   it("waits for the current instance default instead of testing cached SSH discovery", async () => {
     let finish!: (value: object) => void;
     settings.get.mockReturnValue(new Promise<object>(resolve => { finish = resolve; }));
