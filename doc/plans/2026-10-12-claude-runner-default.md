@@ -1190,3 +1190,24 @@ Claude's budget-check/manual-retry question remains pending. The read-only budge
 check failed to execute after approval-review timeout and then model-capacity
 failure. No approval bypass, foreign listener cleanup, hold clearing, paid retry,
 local Docker/Rust build or production promotion was performed.
+
+
+The reconciliation report is attached to the existing completed QA task as
+work product `ebb8457c-6a9c-40ee-bfaf-690538702feb`, attachment
+`a42cc0c7-f253-4242-98ca-2d671e5cd5a9`. Independent download verifies
+4,612 bytes and SHA-256
+`84322cef2fd1b3eb7074b7f946dce9b0466302fed8b0160ea7ef2fc527e9515b`.
+[Download merged-master checkpoint](http://127.0.0.1:3105/api/attachments/a42cc0c7-f253-4242-98ca-2d671e5cd5a9/content?download=1).
+Receipt: /private/tmp/claude-d67-reconciliation-checkpoint-upload.json.
+
+At attachment time the earlier preview process had expired and 3105 was free.
+Restored the same recorded JavaScript treatment without rebuilding or changing
+its runtime. Health at 2026-10-13T11:44:32.104Z confirms all six QA companies
+have zero live runs, the experimental flag is false and the original completed
+x64 task persists. Its agent is paused; no resume or budget read was performed.
+The served controller is ad5875fa with the recorded 52486d6b lookup repair and
+9b068c UI, not a newly compiled d67 package. Health receipt:
+/private/tmp/claude-d67-source-treatment-preview-health.json.
+Full workspace typecheck/tests/build and final packaged acceptance remain
+unrun on the reconciled head; they belong to the still pending cloud/full-check
+handoff after dependency and local acceptance gates are satisfied.
