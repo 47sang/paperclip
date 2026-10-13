@@ -1045,3 +1045,45 @@ It records behavior commit `6ea47e5480ca17e8e634c203964e99d5614db1dc`
 and the platform composition at attachment time; it does not claim a final
 packaged runtime or completed live managed acceptance. Receipt:
 `/private/tmp/claude-managed-checkpoint-20261013-upload.json`.
+
+
+## JavaScript-only local treatment and startup collision — 2026-10-13
+
+Built only the UI JavaScript from behavior 9b068c0120 and copied the two verified
+lookup repair files into a separate APFS-cloned ad5875fa consumer. The original
+consumer is retained. The supplied daemon and sidecar are unchanged; the normal
+Claude SDK probe passes without credentials or explicit package authority. No
+Docker or Rust build ran locally. Treatment identity is recorded in
+/private/tmp/claude-installed-9b068c-js-treatment-identity.json. After all six QA
+companies were confirmed idle, the owned preview was stopped gracefully, its
+complete data backed up to /private/tmp/claude-qa-before-js-treatment-snapshot,
+and the private treatment started at 3105 with scheduling and ambient Claude
+credentials disabled. This is explicitly a treatment, not a final package.
+
+The real creation UI displays Paperclip Runner (default) for Claude Code. Both
+native readiness and the existing supplementary credential check pass with the
+saved personal Anthropic API key. Three bounded setup walkthroughs were used:
+the first browser harness waited on the wrong Configure label; the corrected
+walkthrough reached Configure; the final walkthrough saved the agent but watched
+/agents rather than the product's /agent-hires response. No duplicate agent was
+created. Reload independently verifies agent dd26921e-fe79-4ef7-a83c-5755bebd8936
+as paperclip_runner/acpx/claude/claude-opus-5-5 with the existing managed API-key
+binding. The runner control was inspected without changing its default.
+
+The first manual file task CLAAAAAAA-2 (6689bb7c-785e-4884-842f-13f6f5fddefa)
+failed in session.open, run 04da7f23-3cff-4efb-87f5-7a757500bfc3, with
+provider_lifetime_owned. No artifact or successful task execution is claimed.
+The exact provider record identifies Claude SDK 0.3.286. Its deterministic
+three-port lifetime fence is 56223/54772/53321. Read-only ownership inspection
+finds unrelated node processes already listening on the first two ports: PID
+13796 belongs to a separate runtime-service test directory; PID 42452's cwd is
+not yet confirmed. The two-of-three guard refused admission. No guard was
+weakened and neither foreign process was stopped. The failed run is preserved
+and no retry was submitted. The post-failure budget read is pending, so no
+accounting completeness or zero-charge claim is made. Existing company cap $4
+and new agent cap $2 remain inside the aggregate $50 company ceiling; retain
+$1 run reservation and a conservative $1 reserve for unknown setup charges.
+
+Local checkpoint: /private/tmp/claude-local-startup-checkpoint-20261013.json.
+Further paid work waits on the recorded accounting state and a safe startup
+path; final cloud package and PR qualification also remain outstanding.
