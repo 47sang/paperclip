@@ -876,3 +876,44 @@ through the existing release-smoke producer/consumer workflow in the cloud, with
 zero provider prompts and no package publication or deployment. This preserves
 the existing PR boundaries while current package evidence is collected. Any
 later source changes require an explicit evidence applicability check.
+
+## Frozen cloud campaign and remaining onboarding gap — 2026-10-12
+
+Frozen qualification source is `ad5875fa4b78804e77911703f7ab2aacb9b32067`
+on `codex/claude-runner-qualification-ad5875`. Its
+[four-target package campaign](https://github.com/paperclipai/paperclip/actions/runs/38342761144)
+has passed all native producers; package assembly and clean consumers remain
+pending at this checkpoint. Independent no-follow reads verified all downloaded
+daemon hashes, source bindings and executable architectures without executing
+them locally. Receipt: `/private/tmp/claude-ad5875-daemon-identities.json`.
+
+| Target | Verified daemon SHA-256 |
+| --- | --- |
+| Apple Silicon | `bd55bd6f1868415fb6d0e3d402f469c310a35f34b96ca830216212e95fc77dd3` |
+| Intel Mac | `37fe6575758600312ce13870d5471d464e6421ad9103db81f03b3451d0eabed6` |
+| Linux ARM64 | `2b8f13c311cc33de809ba97718fd6f79e9f184658a2fe316dfc6c1f3251fdddc` |
+| Linux x64 | `e55a45705095558110592fa38a7bf6e5ae52da5199c6051298e6db3c27ca3a78` |
+
+The [Linux x64 image build](https://github.com/paperclipai/paperclip/actions/runs/38342885632)
+passed on the same source. Its recorded immutable image is
+`ghcr.io/paperclipai/paperclip-daytona-runner@sha256:d42fc84fda9af4cf37c52ba850b6d928c475e8ec72d3c9df0332120f247ea62d`.
+Source/digest receipts are in `/private/tmp/claude-ad5875-image-evidence`; build
+dispatch and fixed workflow identities are retained in
+`/private/tmp/claude-ad5875-qualification-dispatch.json`. Neither campaign uses
+provider prompts. No local Docker or Rust build ran.
+
+Shared parent correction `021df20762d96bc58d90a1dfa0fdb884393b1d5d` is
+composed through all three review branches. The platform tree differs from
+the frozen source only in the shared transport test and source-owner dated
+record; runtime/UI/package/workflow inputs are unchanged. Runner noemit passes
+for that composition. The ongoing package result retains literal source ad5875fa.
+
+The source owner separately found that fresh managed onboarding does not probe
+its saved environment before Auto resolution; an immutable but unprobed new
+company therefore stays on Legacy. Existing managed E2E fixtures preprobe that
+environment and do not establish the ordinary first-use path. Claude's local
+Mac proof and prior qualified selected-environment proofs retain their stated
+scope. The source owner is repairing the shared/Codex setup flow and cloud seed
+defaults. Claude must be checked against that repair before claiming fresh
+managed onboarding or final additional-platform defaults. This gap is not
+closed by the current package/image builds.
