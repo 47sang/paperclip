@@ -2,6 +2,48 @@
 
 Updated 2026-10-12.
 
+## Held-authorization fixture correction
+
+The ordinary reconciliation candidate `dae808fe02694d13d322c535944910813b21f6d6`
+has fresh Greptile 5/5, all four resolved threads, passing isolated native
+compilation and the required browser aggregate. Its runner shard passes both
+previously corrected cases, but fails a different `authorize_before_bootstrap`
+cell: the same implicit one-second polling deadline expires before the fixture
+installs its release callback. The shard records 1,672 passes, one failure and
+three skips. The exact failure and gate receipt remain:
+`/private/tmp/ci-final-dae808-ci-review-failure-receipt.json`.
+
+The existing fixture now signals actual entry after installing the release
+callback in the exact before-bootstrap authorization hook. Race that signal
+against the original recovery request under the unchanged five-second bound.
+All authority, stage, denied-work, command queue, process, provider-state,
+durable-byte and cleanup assertions remain. On canonical Node 24, controlled
+1,250 ms scheduling delay reproduces the old undefined-callback assertion and
+passes after correction. An injected early recovery error surfaces unchanged.
+The original hosted cause remains inconclusive; this proves fixture weakness
+and preserves the next diagnostic. These are historical-mock-binary controls,
+not final installed runtime qualification. Matching-source independent review
+is clear. Receipts:
+`/private/tmp/ci-final-dae808-held-authorization-signal-receipt.json` and
+`/private/tmp/pr2-dae808-held-authorization-independent-review.json`.
+
+The already-running package campaign
+https://github.com/paperclipai/paperclip/actions/runs/38342104102
+is immutable to literal `dae808` throughout: daemon, assembly and installed
+consumer checkouts use its explicit 40-character SHA, while the tooling checkout
+uses the captured workflow SHA. Publishing this test-only correction cannot
+change that run's source. Let it finish without rerun or cancellation, keep its
+receipts literal and overlap fresh current-head CI with its remaining steps.
+No new package campaign starts until the existing one is terminal.
+
+Both worktrees and root's test-drive data stay preserved. Its loopback health
+is OK at literal `fe1ecf1c34`, recovery ready, zero active runs; a sandbox-blocked
+read was corrected with the authorized read-only loopback path, without restart
+or build. Root HEAD stays `1a0ca662`. Codex and Claude reconciliation/acceptance,
+normal code-owner approval, private Cloud composition and production baseline
+remain pending. No merge/deployment/default promotion, paid provider call,
+new paid host or local native/Docker build occurred.
+
 ## Final CI fixture corrections and current master
 
 Published prerequisite `16a53254c495f3e49a28cc911f5dcd60c41779fc`
