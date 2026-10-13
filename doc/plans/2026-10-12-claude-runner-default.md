@@ -979,3 +979,11 @@ integrated or qualified here yet. The source-owned Codex dependency still needs
 to advance before these PR code updates meet the review file limit. GitHub CLI
 authentication expired during the source campaign; attended reauthentication is
 owned there. No alternative credentials or conflicting auth changes are used.
+
+The incomplete checkpoint is attached to the existing isolated acceptance task
+as work product `38b9e957-df5c-416f-b370-d51405a755ed`, attachment
+`194e1903-5bd3-45b3-af94-af6821a6bf13`. Its independent download matches
+6,911 bytes and SHA-256
+`398c24270b7bd1f2e00883ddf9a5132ad642cb38c7647d830c04ad2541845a81`.
+[Download checkpoint](http://127.0.0.1:3105/api/attachments/194e1903-5bd3-45b3-af94-af6821a6bf13/content?download=1).
+Upload receipt: `/private/tmp/claude-checkpoint-20261013-upload.json`.
