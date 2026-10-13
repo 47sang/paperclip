@@ -16,7 +16,7 @@ const api = vi.hoisted(() => ({
   getAdapterAuthSignal: vi.fn(),
   getClaudeOAuthTokenStatus: vi.fn(),
 }));
-const envApi = vi.hoisted(() => ({ list: vi.fn(), capabilities: vi.fn() }));
+const envApi = vi.hoisted(() => ({ list: vi.fn(), capabilities: vi.fn(), probe: vi.fn() }));
 const settings = vi.hoisted(() => ({
   get: vi.fn(),
   getExperimental: vi.fn(),
@@ -183,6 +183,8 @@ beforeEach(() => {
     { id: "local-1", name: "Local", driver: "local", config: {} },
   ]);
   envApi.capabilities.mockResolvedValue({ sandboxProviders: {} });
+  envApi.probe.mockReset().mockResolvedValue({ ok: true, driver: "sandbox", summary: "Measured image",
+    details: { platformQualificationRecorded: true, leaseId: "owned-platform-lease" } });
   settings.get.mockResolvedValue({ defaultEnvironmentId: "local-1" });
   settings.getExperimental.mockResolvedValue({ enableNativeRunner: true });
   settings.getGeneral.mockResolvedValue({ executionMode: "any" });

@@ -338,3 +338,28 @@ Recomputed only these two combined fingerprints after inspecting those map
 diffs; existing sources, notes, statuses and stable IDs remain intact. The
 catalog checker passes with 224 files and 2,223 stories. No new rendering, play,
 provider execution or backend acceptance is claimed by this conflict resolution.
+
+
+## Claude managed setup source review — 2026-10-13
+
+Reviewed the six affected entries: activity/data-viz-misc,
+chat-channels/github-bot-management/management, onboarding/onboarding-agent-arc,
+onboarding/onboarding-character, onboarding/onboarding-connect-model and
+agents/codex-runner-creation. Four declare the shipped wizard or creation setup;
+their sources now include the Claude qualification helper. The other two depend
+on the updated onboarding recipe. Existing subjects, mocks, exports, stable IDs
+and classifications are retained.
+
+The shipped setup qualifies new Auto Claude on an explicit immutable sandbox
+image at Connect, refreshes scoped discovery and uses the measured runner for
+testing and saving. Permission failures and stale company/environment/settings
+results stop setup. Wizard discovery is cached after the operation to avoid
+cancelling its own measured default transition. Existing local and sandbox
+fixtures without an immutable image do not exercise this new boundary. Mounted
+unit tests simulate it separately; they do not establish provider execution,
+permissions in a real instance or sandbox allocation/cleanup.
+
+Refreshed only these reviewed source fingerprints. This review adds no browser
+rendering, play execution, screenshot baselines, Storybook build or live managed
+acceptance. Full parity remains unreviewed for five entries; the older model
+connection preview remains historical.

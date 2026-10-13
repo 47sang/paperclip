@@ -1869,8 +1869,8 @@
       "status": "unreviewed",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed. Claude explicit-Connect qualification and stale-result guards source-reviewed; existing mock, local and unqualified-image fixture boundaries remain. No new managed live acceptance or rendering is claimed.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/activity.md",
         "ui/src/components/ActivityCharts.tsx",
@@ -1886,10 +1886,11 @@
         "ui/src/components/PageSkeleton.tsx",
         "ui/src/components/StatusBadge.tsx",
         "ui/src/components/SwipeToArchive.tsx",
+        "ui/src/lib/qualify-claude-setup.ts",
         "ui/storybook/fixtures/paperclipData.ts",
         "ui/storybook/stories/activity/data-viz-misc.stories.tsx"
       ],
-      "fingerprint": "22270ab32ce08f89b6e5769423b05306fb1ee46d0923d699624da8d138203dce",
+      "fingerprint": "8586a87722ad7421144fddbc9f58fe1aebf1a4bc19739997245297ac49e7a31e",
       "stableId": "product-data-visualization-misc",
       "sidebarTitle": "Oversight and operation/Dashboards and audit trails/Product/Data Visualization & Misc"
     },
@@ -2528,8 +2529,8 @@
       "status": "unreviewed",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed. Task-workspace reconciliation: mounted repository and endpoint editors use simulated defaults. Endpoint PATCH now persists omitted/null/concrete values across GET and resets on remount; repository PUT already preserves them. Choice caches intentionally contain no projects/workspaces. Browser editor interactions, access denials and new-task inheritance remain unverified.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed. Task-workspace reconciliation: mounted repository and endpoint editors use simulated defaults. Endpoint PATCH now persists omitted/null/concrete values across GET and resets on remount; repository PUT already preserves them. Choice caches intentionally contain no projects/workspaces. Browser editor interactions, access denials and new-task inheritance remain unverified. Claude explicit-Connect qualification and stale-result guards source-reviewed; existing mock, local and unqualified-image fixture boundaries remain. No new managed live acceptance or rendering is claimed.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/chat-channels.md",
         "ui/src/api/chatEndpoints.ts",
@@ -2538,6 +2539,7 @@
         "ui/src/components/AgentRunnerSelect.tsx",
         "ui/src/components/Layout.tsx",
         "ui/src/components/OnboardingWizard.tsx",
+        "ui/src/lib/qualify-claude-setup.ts",
         "ui/src/pages/apps/chat/ChatConversationList.tsx",
         "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
         "ui/src/pages/apps/chat/ChatExecutionDefaults.tsx",
@@ -2552,7 +2554,7 @@
         "ui/storybook/support/github-bot-management/fixture-api.tsx",
         "ui/storybook/support/github-bot-management/fixtures.ts"
       ],
-      "fingerprint": "a5738c8ecdb983379dacf07138f833f5461facc55e1405f1300c85b2968ef86e",
+      "fingerprint": "c7d45af1276651c71e023f6af2619b395c466fdd526ff904973fe82b06af2b27",
       "stableId": "connectors-github-bot-management",
       "sidebarTitle": "Apps, channels, and extensions/External chat and email/Connectors/GitHub bot management"
     },
@@ -3228,19 +3230,20 @@
       "status": "unreviewed",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner display/default/effort and matching-discovery source changes reviewed; existing fixture, proposal and historical scope retained. No new rendering, play, backend or provider qualification is claimed. Claude explicit-Connect qualification and stale-result guards source-reviewed; existing mock, local and unqualified-image fixture boundaries remain. No new managed live acceptance or rendering is claimed.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/onboarding.md",
         "ui/src/components/AgentRunnerSelect.tsx",
         "ui/src/components/OnboardingWizard.tsx",
         "ui/src/components/onboarding/PillGuy.tsx",
         "ui/src/components/onboarding/Stepper.tsx",
+        "ui/src/lib/qualify-claude-setup.ts",
         "ui/storybook/fixtures/onboardingDraft.ts",
         "ui/storybook/fixtures/onboardingEnvironment.ts",
         "ui/storybook/stories/onboarding/onboarding-agent-arc.stories.tsx"
       ],
-      "fingerprint": "17189193e8ad01810a0606a38862732c14bf43d541449acd4b342434826db096",
+      "fingerprint": "d9a34a47c7fb8874f840e2794d80d7aa7a6cde98659c0b3eca6c7a31aa0453cc",
       "stableId": "onboarding-agent-arc",
       "sidebarTitle": "Getting started and access/Onboarding and first work/Onboarding/Agent arc"
     },
@@ -3253,15 +3256,15 @@
       "status": "unreviewed",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner-default recipe text reviewed; rendered subjects and fixture contracts are unchanged by that documentation update.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Shipped subjects identified through imports and local wrappers; full state, fixture-contract and route parity remain unreviewed. Runner-default recipe text reviewed; rendered subjects and fixture contracts are unchanged by that documentation update. Updated onboarding verification recipe source-reviewed; display subjects and fixture classification remain unchanged.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/onboarding.md",
         "ui/src/components/onboarding/OnboardingCharacter.tsx",
         "ui/src/components/ui/button.tsx",
         "ui/storybook/stories/onboarding/onboarding-character.stories.tsx"
       ],
-      "fingerprint": "4d3998161d4d1a02a72014f3ea33a41ff096969fec90f7abf50f2735b4453a8f",
+      "fingerprint": "8c7c138665b104c1bed08b9fb01f5994548ce4c91c8cde6f7cda157798cc5c3d",
       "stableId": "onboarding-character",
       "sidebarTitle": "Getting started and access/Onboarding and first work/Onboarding/Character"
     },
@@ -3275,15 +3278,15 @@
       "status": "historical",
       "implementation": "prototype",
       "boundary": "fixtures",
-      "notes": "Older tile/mode preview; onboarding-agent-arc mounts the production wizard. Runner-default recipe text reviewed; rendered subjects and fixture contracts are unchanged by that documentation update.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Older tile/mode preview; onboarding-agent-arc mounts the production wizard. Runner-default recipe text reviewed; rendered subjects and fixture contracts are unchanged by that documentation update. Updated onboarding verification recipe source-reviewed; display subjects and fixture classification remain unchanged.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/onboarding.md",
         "ui/src/components/onboarding/ConnectModelPreview.tsx",
         "ui/storybook/stories/onboarding/onboarding-connect-model.stories.tsx"
       ],
       "replacement": "ui/storybook/stories/onboarding/onboarding-agent-arc.stories.tsx",
-      "fingerprint": "96a36e9be6ba34c1e4c5eff1fb222474217b47559450916b79dba77462df9638",
+      "fingerprint": "74c8e6e695922c2d34505a88b9abbd47771156c70b1bf4a2bef909d79de34786",
       "stableId": "onboarding-connect-a-model",
       "sidebarTitle": "Getting started and access/Onboarding and first work/Onboarding/Connect a model"
     },
@@ -5617,8 +5620,8 @@
       "status": "unreviewed",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "Production NewAgent and AgentBasicsDialog with an isolated fetch boundary. Native/Legacy replies and save mutations are simulated; source inspection does not establish all play cases or provider/default qualification. Existing eight story IDs retained through explicit metadata and feature placement. Native adapter inventory is not duplicated when the shared preview provides it.",
-      "reviewedAt": "2026-10-12",
+      "notes": "Production NewAgent and AgentBasicsDialog with an isolated fetch boundary. Native/Legacy replies and save mutations are simulated; source inspection does not establish all play cases or provider/default qualification. Existing eight story IDs retained through explicit metadata and feature placement. Native adapter inventory is not duplicated when the shared preview provides it. Claude explicit-Connect qualification and stale-result guards source-reviewed; existing mock, local and unqualified-image fixture boundaries remain. No new managed live acceptance or rendering is claimed.",
+      "reviewedAt": "2026-10-13",
       "sources": [
         "maps/feature-map/agents.md",
         "maps/feature-map/runs-adapters.md",
@@ -5629,12 +5632,13 @@
         "ui/src/components/new-agent/NewAgentSetup.tsx",
         "ui/src/lib/new-agent-adapters.ts",
         "ui/src/lib/new-agent-runtime-config.ts",
+        "ui/src/lib/qualify-claude-setup.ts",
         "ui/src/pages/NewAgent.tsx",
         "ui/storybook/fixtures/onboardingEnvironment.ts",
         "ui/storybook/fixtures/paperclipData.ts",
         "ui/storybook/stories/agents/codex-runner-creation.stories.tsx"
       ],
-      "fingerprint": "323f32e42c70dd18285f4b8472d000b9bea4d33c3418770d8be0fcdd3db013d7",
+      "fingerprint": "b629f51121c44e404db0465daca51275e2bd73139e87050bb3ccc1269639b19e",
       "stableId": "agents-codex-runner-creation",
       "sidebarTitle": "Agents and reusable capabilities/Hiring, configuration, and organization/Codex runner/Creation"
     }

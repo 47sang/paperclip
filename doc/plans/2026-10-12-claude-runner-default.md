@@ -987,3 +987,49 @@ as work product `38b9e957-df5c-416f-b370-d51405a755ed`, attachment
 `398c24270b7bd1f2e00883ddf9a5132ad642cb38c7647d830c04ad2541845a81`.
 [Download checkpoint](http://127.0.0.1:3105/api/attachments/194e1903-5bd3-45b3-af94-af6821a6bf13/content?download=1).
 Upload receipt: `/private/tmp/claude-checkpoint-20261013-upload.json`.
+
+
+## Claude managed Connect qualification — 2026-10-13
+
+The root private patch 665a4bda8dd09ef82911e8b384004c29cbe72da9d534781c548a1bc223f159ef
+is Codex-only. Claude now has a separate narrow counterpart in the shipped
+onboarding wizard and agent setup. New Claude Code with Auto and an explicit
+immutable sandbox image uses fresh company/environment discovery; an unqualified
+eligible environment is probed once through the existing permission-gated API
+at Connect. Discovery is refreshed afterward, and the measured runner controls
+both the environment test and saved configuration. Native forms omit the Legacy
+turn-limit default; a measured Legacy result retains it. No runner override is
+submitted for Auto.
+
+Existing API-key storage and managed connection bindings remain in use. A new
+API key is saved once before qualification; subsequent test/hire payloads carry
+the managed binding rather than the raw key. Local execution, saved agents,
+explicit runner choices, other harnesses, disabled/overridden adapters, mutable
+images and named snapshots do not acquire this additional qualification path.
+Named Cloud snapshot identity remains a separate unresolved acceptance boundary.
+
+The helper validates the existing probe's recorded qualification and lease ID.
+Permission, connection, cleanup or missing-identity failures stop setup without
+an automatic retry. Generation and selection checks discard held results after
+company/environment/configuration changes. The wizard caches measured discovery
+after its operation so its own new default does not invalidate the setup; agent
+creation recognizes that same measured transition while retaining stale guards.
+
+Four mounted positive cases fail against the prior components and pass after
+the change. Final focused verification passes all 197 tests: 109 wizard,
+69 creation and 19 helper controls. The new cases include native and Legacy
+measurements, API-key storage, denied probe access and held-result races.
+UI noemit, token gates, map contracts, all nine catalog controls and the catalog
+checker pass (224 files, 2,223 stable story IDs). The six affected catalog entries
+were source-reviewed; no new rendering, play or live managed acceptance is
+claimed. Logs: /private/tmp/claude-managed-cache-full-controls.log,
+/private/tmp/claude-managed-cache-types.log,
+/private/tmp/claude-managed-cache-catalog-controls.log and
+/private/tmp/claude-managed-cache-token.log. The before comparison is retained
+in /private/tmp/claude-managed-setup-before-controls.log.
+
+No provider prompts, paid setup retries or local Docker/Rust builds were used.
+The live preview remains the unmodified ad5875fa installed package; the runtime
+lookup repair and this UI change still need a new cloud-qualified package and
+real API task/revision acceptance. Full repository checks and PR review must run
+on the reconciled delivery heads before a PR-ready claim.

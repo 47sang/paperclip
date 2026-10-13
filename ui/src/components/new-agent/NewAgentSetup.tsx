@@ -3,7 +3,7 @@ import { AgentCharacter } from "../AgentCharacter";
 import { useAgentAppearanceDraft } from "../../hooks/useAgentAppearanceDraft";
 import { AiConnectionField, aiProviderForAdapter } from "../ai-connections/AiConnectionField";
 import type { AiConnectionBinding } from "@paperclipai/shared";
-import type { AgentRunnerChoice } from "@paperclipai/shared";
+import type { AgentRunner, AgentRunnerChoice } from "@paperclipai/shared";
 import { AgentRunnerSelect } from "../AgentRunnerSelect";
 import { SelectPopover } from "../ui/select";
 import { DEFAULT_CODEX_LOCAL_MODEL } from "@paperclipai/adapter-codex-local";
@@ -14,6 +14,7 @@ import {
   setupProviderKeys,
 } from "@/lib/agent-setup-fields";
 import { testAgentSetup } from "@/lib/test-agent-setup";
+import { needsClaudeSetupQualification, qualifyClaudeSetup } from "@/lib/qualify-claude-setup";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
 import { useEffect, useRef, useState } from "react";
@@ -189,6 +190,7 @@ function Setup({
   );
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
+  const qualificationTransition = useRef<{ run: number; companyId: string; environmentId: string | null; runner: AgentRunner } | null>(null);
   const savingRef = useRef(false);
   useEffect(
     () => () => {
@@ -197,6 +199,7 @@ function Setup({
     [],
   );
   const resetTest = () => {
+    qualificationTransition.current = null;
     generation.current++;
     setResult(null);
     setTestState("idle");
@@ -283,12 +286,19 @@ function Setup({
         : "Could not resolve the environment.";
   }
   const environment = envs.data?.find((env) => env.id === environmentId);
+  const setupEnvironmentKey = JSON.stringify([companyId, environmentId, environment?.config]);
+  const setupEnvironmentRef = useRef("");
+  setupEnvironmentRef.current = setupEnvironmentKey;
+  useEffect(() => { resetTest(); }, [setupEnvironmentKey]);
   const adapters = useQuery({
     queryKey: queryKeys.adapters.availability(companyId, environmentId),
     queryFn: () => adaptersApi.list({ companyId, environmentId }),
   });
   const defaultRunner = adapters.data?.find(adapter => adapter.type === adapterType)?.defaultRunner;
   useEffect(() => {
+    const transition = qualificationTransition.current;
+    if (transition?.run === generation.current && transition.companyId === companyId
+      && transition.environmentId === environmentId && transition.runner === defaultRunner) return;
     resetTest();
   }, [companyId, environmentId, runner === "auto" ? defaultRunner : undefined]);
   const sandboxProvider =
@@ -371,12 +381,13 @@ function Setup({
   function buildConfig(
     nextConnection = connection,
     binding = selectedBinding,
+    setupRunner?: AgentRunner,
   ): Record<string, unknown> {
     const values = {
       ...defaultCreateValues,
       adapterType,
       runner,
-      resolvedRunner: runner === "auto" ? defaultRunner : runner,
+      resolvedRunner: runner === "auto" ? setupRunner ?? defaultRunner : runner,
       model:
         model || (brandType === "codex_local" ? DEFAULT_CODEX_LOCAL_MODEL : ""),
       thinkingEffort: effort,
@@ -429,7 +440,7 @@ function Setup({
     }
     return config;
   }
-  function preparedConfig(nextConnection = connection) {
+  function preparedConfig(nextConnection = connection, setupRunner?: AgentRunner) {
     if (isDot && !allowUnmeteredProvider) throw new Error("Acknowledge external provider billing before creating your Dot agent.");
     if (multiProvider && (!model.trim() || !model.includes("/")))
       throw new Error("Choose or enter a model in provider/model format.");
@@ -458,7 +469,7 @@ function Setup({
     }
     if (usingKimiApi && !kimiModel.trim())
       throw new Error("Enter the Kimi API model name.");
-    return buildConfig(nextConnection);
+    return buildConfig(nextConnection, selectedBinding, setupRunner);
   }
   function pendingCredentials(nextConnection = connection) {
     if (aiBinding || nextConnection?.aiConnection) return {};
@@ -473,11 +484,25 @@ function Setup({
   async function runTest(nextConnection = connection): Promise<boolean> {
     if (!ready) return false;
     const run = ++generation.current;
+    const setupEnvironment = setupEnvironmentRef.current;
     setTestState("running");
     setResult(null);
     setError(null);
     try {
-      const config = await preparedConfig(nextConnection);
+      preparedConfig(nextConnection);
+      const selection = { adapterType, runner, savedAgentId: createdAgentId, environment };
+      const qualified = await qualifyClaudeSetup({ ...selection,
+        readAdapters: () => adaptersApi.list({ companyId, environmentId }),
+        probeEnvironment: () => environmentsApi.probe(environmentId!, companyId),
+        isCurrent: () => run === generation.current && setupEnvironmentRef.current === setupEnvironment,
+      });
+      if (run !== generation.current || setupEnvironmentRef.current !== setupEnvironment
+        || (needsClaudeSetupQualification(selection) && !qualified)) return false;
+      if (qualified) {
+        qualificationTransition.current = { run, companyId, environmentId, runner: qualified.runner };
+        cache.setQueryData(queryKeys.adapters.availability(companyId, environmentId), qualified.adapters);
+      }
+      const config = preparedConfig(nextConnection, qualified?.runner);
       const tested = await testAgentSetup({
         companyId,
         adapterType: requestAdapterType,
