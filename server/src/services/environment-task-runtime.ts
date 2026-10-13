@@ -46,7 +46,8 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
     || (activeProbe && (operation.runner.sessionId !== probe.sessionId || operation.projectIds.length > 0)))) {
     throw new Error("Plugin-provided Runner execution identity mismatch");
   }
-  if (operation.kind === "describe" && activeProbe && (operation.sessionId !== probe.sessionId || operation.projectIds.length)) {
+  if (activeProbe && ((operation.kind === "describe" && operation.sessionId !== probe.sessionId)
+    || ((operation.kind === "describe" || operation.kind === "check_project_auth") && operation.projectIds.length > 0))) {
     throw new Error("Plugin-provided Runner probe identity mismatch");
   }
   if (metadata.driver !== "plugin" || typeof metadata.pluginId !== "string" || typeof metadata.driverKey !== "string") {
@@ -62,7 +63,7 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
   const issue = operation.kind === "submit" && lease.issueId ? await db.select({ id: issues.id }).from(issues)
     .where(and(eq(issues.id, lease.issueId), eq(issues.companyId, input.companyId))).limit(1).then(rows => rows[0]) : null;
   if (operation.kind === "submit" && lease.issueId && !issue) throw new Error("Plugin-provided Runner execution issue unavailable");
-  const projectIds = operation.kind === "submit" || operation.kind === "describe" ? operation.projectIds : [];
+  const projectIds = operation.kind === "submit" || operation.kind === "describe" || operation.kind === "check_project_auth" ? operation.projectIds : [];
   if (projectIds.length > 0) {
     const authorizedProjects = await db.select({ id: projects.id }).from(projects)
       .where(and(eq(projects.companyId, input.companyId), inArray(projects.id, projectIds)));

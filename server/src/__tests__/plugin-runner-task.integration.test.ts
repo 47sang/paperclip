@@ -121,7 +121,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     if (probe.executionTarget?.kind !== "remote" || probe.executionTarget.transport !== "sandbox" || !probe.executionTarget.runnerTaskProbe) throw new Error("Probe task target unavailable");
     await expect(probe.executionTarget.runnerTask!({ kind: "describe", harness: "codex", projectIds: [], sessionId: probe.executionTarget.runnerTaskProbe.sessionId }))
       .resolves.toMatchObject({ kind: "description" });
-    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", cwd: "/workspace" }))
+    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", cwd: "/workspace", projectIds: [] }))
       .resolves.toMatchObject({ kind: "project_auth", conflict: false });
     const [probeLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, probe.executionTarget.leaseId!));
     expect(probeLease.heartbeatRunId).toBeNull();

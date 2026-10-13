@@ -62,6 +62,14 @@ describe("plugin-provided Runner execution", () => {
     const scope = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
     expect(scope.params).toEqual([leaseId, "company", "run"]);
   });
+  it("validates project storage before provider-owned authentication inspection", async () => {
+    const workers = worker({ kind: "project_auth", taskId: "attempt-1", conflict: false });
+    const operation = { kind: "check_project_auth", provider: "openai", cwd: "/workspace", projectIds: [projectId] } as const;
+    await expect(executeEnvironmentTask(database(row(), []).db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).rejects.toThrow("project unavailable");
+    expect(workers.call).not.toHaveBeenCalled();
+    await expect(executeEnvironmentTask(database().db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).resolves.toMatchObject({ kind: "project_auth", conflict: false });
+    expect(workers.call).toHaveBeenCalledWith("original", "environmentTask", expect.objectContaining({ projectIds: [projectId] }), 15_000);
+  });
   it("dispatches with host-derived scope and a persisted attempt identity", async () => {
     const { db, query } = database(); const workers = worker();
     await expect(executeEnvironmentTask(db, workers as never, { companyId: "company", leaseId, operation: submit })).resolves.toEqual({ kind: "accepted", taskId: "attempt-1" });

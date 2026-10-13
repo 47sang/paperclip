@@ -1213,7 +1213,7 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
     const target = { kind: "remote", transport: "sandbox", remoteCwd: "/workspace/project", runnerTask: task } as Parameters<typeof assertManagedAiProjectAuth>[2];
     try {
       await expect(assertManagedAiProjectAuth({}, "openai", target)).resolves.toBeUndefined();
-      expect(task).toHaveBeenCalledWith({ kind: "check_project_auth", cwd: "/workspace/project", provider: "openai" });
+      expect(task).toHaveBeenCalledWith({ kind: "check_project_auth", cwd: "/workspace/project", provider: "openai", projectIds: [] });
       task.mockResolvedValueOnce({ kind: "project_auth", taskId: "task", conflict: true });
       await expect(assertManagedAiProjectAuth({}, "anthropic", target)).rejects.toThrow("project authentication settings");
       task.mockRejectedValueOnce(new Error("private provider failure"));

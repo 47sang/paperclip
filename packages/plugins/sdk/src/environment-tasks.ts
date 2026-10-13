@@ -62,7 +62,7 @@ export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
     byteSize: z.number().int().positive().max(64 * 1024 * 1024), sha256: z.string().regex(/^[a-f0-9]{64}$/),
   }).strict(),
   z.object({ kind: z.literal("check_project_auth"), cwd: absolutePath,
-    provider: z.enum(["openai", "anthropic"]),
+    provider: z.enum(["openai", "anthropic"]), projectIds: z.array(z.string().uuid()).max(64),
   }).strict(),
   z.object({ kind: z.literal("status") }).strict(),
   z.object({ kind: z.literal("connection") }).strict(),

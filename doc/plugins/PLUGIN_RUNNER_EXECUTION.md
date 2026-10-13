@@ -106,7 +106,7 @@ opaque strings; each provider owns its addressing constraints.
 
 - `describe`: returns the trusted artifact and session filesystem layout. Core
   validates its project IDs like submission. It does not start a process.
-- `check_project_auth`: inspects OpenAI or Anthropic project authentication settings in the workspace and its parent directories. Return only a conflict boolean, never file contents or secrets. The SDK `checkRunnerProjectAuth` helper accepts a provider-owned file reader; return null only for missing files and reject other read failures. This operation must work before submission and must not require a shell hook.
+- `check_project_auth`: prepares the company-validated `projectIds` storage without starting Runner, then inspects OpenAI or Anthropic project authentication settings in the workspace and its parent directories. Return only a conflict boolean, never file contents or secrets. The SDK `checkRunnerProjectAuth` helper accepts a provider-owned file reader; return null only for missing files and reject other read failures. This operation must work before submission and must not require a shell hook.
 - `checkpoint`: exports registered files and returns durable Runner state.
 - `read_file`: returns a confined, size- and hash-checked workspace file.
 - `submit`: supplies a unique list of up to 64 project UUIDs, Runner identity,
