@@ -45,8 +45,10 @@ import {
 } from "./prp-transport-types.js";
 
 const protocol = "paperclip.runner";
-const protocolMinVersion = 1;
-const protocolVersion = 3;
+export const RUNNER_PRP_PROTOCOL_MIN = 1;
+const protocolMinVersion = RUNNER_PRP_PROTOCOL_MIN;
+export const RUNNER_PRP_PROTOCOL_MAX = 3;
+const protocolVersion = RUNNER_PRP_PROTOCOL_MAX;
 const secureFrameSchema = "paperclip.runner.secure-frame.v1";
 const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const coreStateSchema = "paperclip.runner.durable.control-plane-state.v1";
@@ -303,6 +305,8 @@ export type RunnerProcessConnection =
     };
 
 export interface RunnerProcessLaunchSpec {
+  /** Structured launch data for a provider-owned Runner; never parse argv. */
+  nativeRunner?: Omit<Parameters<typeof spawnRunner>[0], "processLauncher" | "runnerBinaryPath" | "environment" | "connectUrl">;
   command: string;
   args: readonly string[];
   cwd: string;
@@ -3627,7 +3631,18 @@ export function spawnRunner(options: {
   });
   if (options.processLauncher !== undefined) {
     return withRestart(
-      options.processLauncher({ command, args, cwd: packageRoot, environment }),
+      options.processLauncher({ command, args, cwd: packageRoot, environment,
+        nativeRunner: {
+          identity: options.identity, ticket: options.ticket, connection,
+          stateDirectory: options.stateDirectory,
+          runnerVersion: options.runnerVersion, runnerDigest: options.runnerDigest,
+          maxOutboxBytes: options.maxOutboxBytes, p0ReserveBytes: options.p0ReserveBytes,
+          maxRuntimeMs: options.maxRuntimeMs, maxLifetimeMs: options.maxLifetimeMs,
+          reconnectGraceMs: options.reconnectGraceMs, lifecyclePolicy: options.lifecyclePolicy,
+          acpxLaunchProfile: options.acpxLaunchProfile, opencodeLaunchProfile: options.opencodeLaunchProfile,
+          diagnosticsDirectory: options.diagnosticsDirectory,
+        },
+      }),
     );
   }
 

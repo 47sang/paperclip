@@ -153,6 +153,16 @@ remaining operations before qualifying the whole capability.
 Gaps: Choosing among permitted targets differs from creating/configuring host targets;
 test authorized and denied selection.
 
+Scoped plugin execution update: `paperclip_runner` supports a saved plugin
+environment through the server-selected lease and the SDK `environmentTask` RPC.
+This is an execution path, not a new agent-callable management endpoint. Host
+company/project checks and native PRP authorization remain required; declaring a
+plugin capability does not authorize the agent to change its environment.
+The [integration fixture](../../server/src/__tests__/plugin-runner-task.integration.test.ts)
+exercises the host and SDK with synthetic resources and a mocked WebSocket.
+This source update does not qualify live agent access, warm retention, or a provider.
+See the [execution contract](../../doc/plugins/PLUGIN_RUNNER_EXECUTION.md).
+
 ## `images`
 
 Review: `baseline`.

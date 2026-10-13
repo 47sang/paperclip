@@ -1,4 +1,4 @@
-import { executeEnvironmentTask } from "./environment-task-runtime.js";
+import { executeEnvironmentTask, pluginEnvironmentSupportsTasks, settleDispatchedEnvironmentTask } from "./environment-task-runtime.js";
 import type { PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import { allowLegacyShutdownWorkspaceCleanup, legacyShutdownWorkspaceResourceProtected } from "./legacy-shutdown-workspace-settlement.js";
 import { beginIdleTrackedWork } from "./task-admission.js";
@@ -3652,6 +3652,7 @@ function createPluginEnvironmentDriver(
     },
 
     async releaseRunLease(input) {
+      const taskStopped = await settleDispatchedEnvironmentTask(db, workerManager, input.lease);
       const { plugin, driverKey, driverConfig } = await resolvePluginDriverForRelease(input);
       await workerManager.call(plugin.id, "environmentReleaseLease", {
         driverKey,
@@ -3662,7 +3663,10 @@ function createPluginEnvironmentDriver(
         providerLeaseId: input.lease.providerLeaseId,
         leaseMetadata: input.lease.metadata ?? undefined,
       });
-      return await environmentsSvc.releaseLease(input.lease.id, input.status);
+      return await environmentsSvc.releaseLease(input.lease.id, input.status, taskStopped ? {
+        cleanupStatus: "success", remoteExecutionTermination: remoteTerminationReceipt(input.lease,
+          { providerLeaseId: input.lease.providerLeaseId, state: "stopped" }),
+      } : undefined);
     },
 
     async resumeRunLease(input) {
@@ -3690,6 +3694,7 @@ function createPluginEnvironmentDriver(
     },
 
     async destroyRunLease(input) {
+      const taskStopped = await settleDispatchedEnvironmentTask(db, workerManager, input.lease);
       const { pluginKey, driverKey, driverConfig } = await resolvePluginDriverForRelease({
         ...input,
         status: "failed",
@@ -3710,7 +3715,19 @@ function createPluginEnvironmentDriver(
       });
       return await environmentsSvc.releaseLease(input.lease.id, "failed", {
         failureReason: input.failureReason ?? "lease_destroyed",
+        ...(taskStopped ? { cleanupStatus: "success", remoteExecutionTermination: remoteTerminationReceipt(input.lease,
+          { providerLeaseId: input.lease.providerLeaseId, state: "stopped" }) } : {}),
       });
+    },
+
+    async isPendingCleanupWorkerReady(input) {
+      return pluginEnvironmentSupportsTasks(db, workerManager, input.lease);
+    },
+
+    async retryPendingSandboxTeardown(input) {
+      const stopped = await settleDispatchedEnvironmentTask(db, workerManager, input.lease);
+      if (!stopped) throw new Error("Plugin task termination is unconfirmed");
+      return { providerLeaseId: input.lease.providerLeaseId, state: "stopped" };
     },
 
     async realizeWorkspace(input) {
@@ -3991,6 +4008,11 @@ export function environmentRuntimeService(
       return resolveSandboxDuplexBridgeInput(experimental);
     },
 
+    async supportsTasks(input: { lease: EnvironmentLease }) {
+      return options.pluginWorkerManager
+        ? pluginEnvironmentSupportsTasks(db, options.pluginWorkerManager, input.lease) : false;
+    },
+
     /** Dispatch plugin-provided Runner execution, including resource preparation and task lifecycle. */
     async task(input: { companyId: string; leaseId: string; operation: PluginEnvironmentTaskOperation }) {
       if (!options.pluginWorkerManager) throw new Error("Plugin-provided Runner execution worker manager unavailable");
@@ -4137,7 +4159,16 @@ export function environmentRuntimeService(
             }
             continue;
           }
-          if (!environment) continue;
+          if (!environment) {
+            if (leaseSnapshot.metadata?.driver === "plugin" && options.pluginWorkerManager &&
+                await settleDispatchedEnvironmentTask(db, options.pluginWorkerManager, leaseSnapshot)) {
+              await environmentsSvc.releaseLease(leaseSnapshot.id, status, { cleanupStatus: "success",
+                remoteExecutionTermination: remoteTerminationReceipt(leaseSnapshot,
+                  { providerLeaseId: leaseSnapshot.providerLeaseId, state: "stopped" }),
+              });
+            }
+            continue;
+          }
           if (
             providerResourceDisposition === "keep_running" &&
             leaseSnapshot.leasePolicy === "reuse_by_environment"

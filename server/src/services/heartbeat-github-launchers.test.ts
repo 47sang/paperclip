@@ -11,6 +11,16 @@ import { prepareHeartbeatGitHubLaunchers } from "./heartbeat-github-launchers.js
 const target = { kind: "remote" as const, transport: "sandbox" as const, providerKey: "daytona", remoteCwd: "/workspace" };
 
 describe("heartbeat GitHub launcher lifetime", () => {
+  it("builds token-free task launch assets locally and retires the local files", async () => {
+    const prepare = vi.fn(async input => input.env), mint = vi.fn();
+    const result = await prepareHeartbeatGitHubLaunchers({ native: true, githubConfigured: true, agentId: "agent",
+      runId: "run", target: { ...target, runnerTask: async () => ({}) }, cwd: "/core/workspace",
+      env: { GH_TOKEN: "ambient", PATH: "/controller/private/bin" }, brokerUrl: "https://paperclip.test", createBrokerToken: mint }, prepare);
+    expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ target: { kind: "local" }, runId: "run" }));
+    expect(result.cleanupLocation).toEqual({ target: { kind: "local" }, runId: "run" });
+    expect(result.env).toMatchObject({ GH_TOKEN: "", PAPERCLIP_GITHUB_BROKER_TOKEN: "", PATH: "/usr/local/bin:/usr/bin:/bin" });
+    expect(mint).not.toHaveBeenCalled();
+  });
   it.each([target, null])("defers native managed authorization/staging to the session owner (%j)", async (target) => {
     const prepare = vi.fn();
     const mint = vi.fn();

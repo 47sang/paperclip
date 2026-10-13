@@ -1,3 +1,4 @@
+import * as pluginTaskRuntime from "./plugin-runner-task.js";
 import { configuredEnvironmentProjection } from "../../vendor/paperclip-runner/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -10057,6 +10058,59 @@ describe("runnerd provider runtime wiring", () => {
       } as never,
     })).rejects.toThrow("assigned native MCP launch binding is incomplete");
     expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
+  });
+
+  it("selects the plugin task process owner and binds Runner identity to its acquired lease", async () => {
+    const launcher = vi.fn();
+    const registration = vi.fn();
+    const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration });
+    const task = vi.fn(async (_operation: unknown): Promise<unknown> => ({ kind: "description", taskId: "task", filesystemRoot: "/state",
+      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex" }));
+    const target = { kind: "remote", transport: "sandbox", providerKey: "plugin",
+      leaseId: "plugin-task-lease", remoteCwd: "/workspace", runnerTask: task,
+      runnerTaskProjectIds: ["project-one", "project-two"] } as never;
+    state.createBackend.mockClear(); state.createTransport.mockClear();
+    try {
+      await expect(createRunnerdBackend({ db: leaseDb(execution), execution,
+        runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
+      await createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "plugin-runner",
+        runnerExecutionTarget: target, runnerIngressAuthorized: true });
+      expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
+      state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
+      expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+        runnerProcessLauncher: launcher,
+        prpIdentity: expect.objectContaining({ environmentLeaseId: "plugin-task-lease" }),
+      }));
+      expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+        runnerArtifact: expect.objectContaining({ version: "fixture" }), codexCommand: "/codex",
+        runnerFilesystemRoot: "/state", readRunnerState: expect.any(Function),
+        archiveExternalRunnerState: expect.any(Function),
+        environment: expect.objectContaining({ HOME: "/state/codex-home", PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" }),
+      }));
+      expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["project-one", "project-two"] }));
+      const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
+      await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
+      await writeFile(join(root, "codex-home/auth.json"), "preserved-private-fixture");
+      task.mockImplementation(async (operation: any) => {
+        for (const item of operation.exports ?? []) await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
+        return { kind: "checkpoint", taskId: "task", state: { lifecycle: "active", runId: "wrong-run" } };
+      });
+      await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).rejects.toThrow("checkpoint identity mismatch");
+      expect(await readFile(join(root, "codex-home/auth.json"), "utf8")).toBe("preserved-private-fixture");
+      task.mockImplementation(async (operation: any) => {
+        for (const item of operation.exports ?? []) {
+          await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
+          if (item.sourcePath.endsWith("/runner")) await writeFile(join(item.targetPath, "codex-provider-state.json"), JSON.stringify({
+            schema: "paperclip.runner.codex-provider-state.v1", lifecycle: "session_open", threadId: "thread",
+            activeProviderTurnId: null, config: { provider: "codex", driver: "codex_app_server" },
+          }));
+        }
+        return { kind: "checkpoint", taskId: "task", state: { schema: "paperclip.runner.durable.state.v1",
+          ...state.createTransport.mock.calls.at(-1)![0].prpIdentity, lifecycle: "suspended" } };
+      });
+      await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).resolves.toBeUndefined();
+      expect(JSON.parse(await readFile(join(root, "runner/runner-state.json"), "utf8"))).toMatchObject({ lifecycle: "suspended", environmentLeaseId: "plugin-task-lease" });
+    } finally { owner.mockRestore(); }
   });
 
   it("keeps assigned MCP credentials on the control plane for remote Codex", async () => {

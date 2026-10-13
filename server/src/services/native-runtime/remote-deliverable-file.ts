@@ -114,3 +114,19 @@ export async function readVerifiedRemoteWorkspaceFile(input: {
   if (createHash("sha256").update(body).digest("hex") !== sha256) throw new Error(`${PREFIX}hash_mismatch`);
   return body;
 }
+
+/** Task provider reads only its bound workspace; Core verifies the returned bytes. */
+export async function readVerifiedTaskWorkspaceFile(input: {
+  task: (operation: unknown) => Promise<unknown>; contentRef: string; byteSize: number; sha256: string;
+}): Promise<Buffer> {
+  if (input.byteSize > MAX_REMOTE_DELIVERABLE_BYTES) throw new Error(`${PREFIX}size_denied`);
+  const { environmentTaskOperationSchema, environmentTaskResultSchema } = await import("@paperclipai/plugin-sdk");
+  const operation = environmentTaskOperationSchema.parse({ kind: "read_file", contentRef: input.contentRef,
+    byteSize: input.byteSize, sha256: input.sha256 });
+  const result = environmentTaskResultSchema.parse(await input.task(operation));
+  if (result.kind !== "file" || result.base64.length !== 4 * Math.ceil(input.byteSize / 3)) throw new Error(`${PREFIX}size_denied`);
+  const body = Buffer.from(result.base64, "base64");
+  if (body.length !== input.byteSize || body.toString("base64") !== result.base64) throw new Error(`${PREFIX}size_denied`);
+  if (createHash("sha256").update(body).digest("hex") !== input.sha256) throw new Error(`${PREFIX}hash_mismatch`);
+  return body;
+}

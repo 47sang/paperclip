@@ -1259,6 +1259,8 @@ export interface CapabilityRunnerdCodexTransportOptions {
     model: string;
   };
   runnerBinary?: string;
+  /** Trusted external process owner pins the deployed artifact; PRP authenticates these exact values. */
+  runnerArtifact?: { version: string; digest: string };
   codexCommand?: string;
   codexArgs?: string[];
   /** Controller-visible Codex home used only to seed the isolated runner home. */
@@ -1348,7 +1350,7 @@ export interface CapabilityRunnerdCodexTransportOptions {
       | "runner_ingress_unavailable";
     /** Persists only exact, independently verified suspended remote state. */
     checkpoint?: (settlement: "settled" | "unsettled") => Promise<void> | void;
-    release: () => Promise<void> | void;
+    release: (reason?: "detach") => Promise<void> | void;
   }>;
   /** Existing server-owned routes only; never provision two ingress owners. */
   warmTransitionRegistrationMode?: "routed_connect";
@@ -3612,7 +3614,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   #controlPlaneCheckpoint:
     ((settlement: "settled" | "unsettled") => Promise<void> | void) | null =
     null;
-  #controlPlaneRelease: (() => Promise<void> | void) | null = null;
+  #controlPlaneRelease: ((reason?: "detach") => Promise<void> | void) | null = null;
   #nextTraceDebugSequence = 1;
   #traceRehydrationSpoolOverflow = false;
   readonly #traceFrameIndex = new RunnerdTraceFrameIndex();
@@ -4443,7 +4445,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     this.#core?.disconnectActiveRunner();
     const release = this.#controlPlaneRelease;
     this.#controlPlaneRelease = null;
-    await Promise.resolve(release?.()).catch((error: unknown) => {
+    await Promise.resolve(release?.("detach")).catch((error: unknown) => {
       this.#diagnostic(
         `controller route release failed during restart detach: ${String(error)}`,
       );
@@ -4730,7 +4732,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     };
     const runnerBinaryPath =
       this.options.runnerBinary ?? defaultCapabilityRunnerdBinary();
-    const runnerArtifact = approvedRunnerArtifact(runnerBinaryPath);
+    const runnerArtifact = this.options.runnerArtifact ?? approvedRunnerArtifact(runnerBinaryPath);
     this.#durableTurnId = identity.turnId;
     this.#eventIdentity = structuredClone(identity);
     const dynamicTools = Array.isArray(params.dynamicTools)
@@ -5420,7 +5422,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     }
     const runnerBinaryPath =
       this.options.runnerBinary ?? defaultCapabilityRunnerdBinary();
-    const runnerArtifact = approvedRunnerArtifact(runnerBinaryPath);
+    const runnerArtifact = this.options.runnerArtifact ?? approvedRunnerArtifact(runnerBinaryPath);
     this.#durableTurnId = identity.turnId;
     this.#eventIdentity = structuredClone(identity);
     const provider = this.options.provider ?? "codex";

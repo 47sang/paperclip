@@ -71,6 +71,15 @@ execution. Remote-driver probes and a real bounded run need their own evidence.
 
 ### `remote-execution`
 
+For `paperclip_runner`, a saved plugin environment can provide per-turn Runner
+execution when its manifest and worker expose the Runner task API. The task
+contract delivers assets and checkpoints without shell or workspace hooks. Core resolves the saved lease, stages runtime context, connects
+through PRP, and verifies stop before lease cleanup. See the
+[plugin contract](../../doc/plugins/PLUGIN_RUNNER_EXECUTION.md).
+The [fake-provider integration](../../server/src/__tests__/plugin-runner-task.integration.test.ts)
+checks acquisition, SDK dispatch, scope denial, stop proof and deletion recovery.
+Its WebSocket is mocked; it does not qualify a live provider or a real Runner handshake.
+
 Automated: [execution target](../../server/src/__tests__/environment-execution-target.test.ts) and [custom images](../../server/src/__tests__/environment-custom-images-service.test.ts) cover contracts; [SSH live test](../../server/src/__tests__/environment-live-ssh.test.ts) requires its own external setup.
 
 Manual: Run a bounded command in the intended target, inspect its output and workspace, and verify execution did not silently fall back to the server host. For custom-image changes, build/probe the disposable image before assigning it. Inspect cleanup and shutdown after the run.

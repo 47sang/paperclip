@@ -134,3 +134,19 @@ describe.skipIf(!hasLinuxNode)("remote deliverable real Linux descriptor reads",
     expect(result.equals(maximum)).toBe(true);
   }, 20_000);
 });
+
+// Task-only providers use the same content hash and size boundary without a shell.
+describe("task workspace file handoff", () => {
+  it("checks provider bytes and rejects traversal before dispatch", async () => {
+    const { readVerifiedTaskWorkspaceFile } = await import("./remote-deliverable-file.js");
+    const body = Buffer.from("task deliverable");
+    const sha256 = createHash("sha256").update(body).digest("hex");
+    const task = vi.fn(async () => ({ kind: "file", taskId: "task", base64: body.toString("base64") }));
+    await expect(readVerifiedTaskWorkspaceFile({ task, contentRef: "results/output.txt", byteSize: body.length, sha256 })).resolves.toEqual(body);
+    task.mockClear();
+    await expect(readVerifiedTaskWorkspaceFile({ task, contentRef: "../private", byteSize: body.length, sha256 })).rejects.toThrow();
+    expect(task).not.toHaveBeenCalled();
+    task.mockResolvedValue({ kind: "file", taskId: "task", base64: Buffer.alloc(body.length).toString("base64") });
+    await expect(readVerifiedTaskWorkspaceFile({ task, contentRef: "results/output.txt", byteSize: body.length, sha256 })).rejects.toThrow("hash_mismatch");
+  });
+});

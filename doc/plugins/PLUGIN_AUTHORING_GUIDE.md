@@ -772,6 +772,9 @@ element export. This replaces only the menu, not company policy or authorization
 ## Plugin-provided Runner execution
 
 Plugins can [provide Runner execution through environment drivers](PLUGIN_RUNNER_EXECUTION.md).
-The driver uses host-supplied project context to prepare project and repository
-storage, starts Runner, and exposes its PRP connection. It also manages task
-status, completion, cancellation, and cleanup.
+Core can select this path for `paperclip_runner` agents assigned to a saved plugin
+environment. The plugin owns project volumes and starts Runner from structured
+task launch inputs. Core sends runtime assets, connects PRP, collects checkpoints,
+and verifies cancellation and durable cleanup. No remote shell, file-command,
+or workspace hook is required. The guide defines the task operations, lease
+hooks, artifact qualification, and supported per-turn lifecycle.

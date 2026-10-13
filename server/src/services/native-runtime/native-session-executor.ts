@@ -1,3 +1,5 @@
+import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
+import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
 import { configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
 import { apiKeyBillingType } from "@paperclipai/adapter-utils/api-billing-type";
 import { agents } from "@paperclipai/db";
@@ -25,7 +27,7 @@ import { createNativeGitHubAccess, type NativeGitHubAccess } from "./native-gith
 import { resolveGitHubOperationCredentials } from "../github-operation-credentials.js";
 import { bindManagedNativeCredentialTurn, completeManagedNativeCredentialTurn } from "./managed-native-credentials.js";
 import { createLocalNativeQuestionBridge } from "./local-native-question-bridge.js";
-import { readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
+import { readVerifiedRemoteWorkspaceFile, readVerifiedTaskWorkspaceFile } from "./remote-deliverable-file.js";
 import { copyBackCodexAuth } from "@paperclipai/adapter-codex-local/server";
 import { nativeCompletionFeedback } from "./native-completion-feedback.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent } from "../acknowledged-native-stop.js";
@@ -7464,6 +7466,7 @@ export async function executePaperclipNativeSession(input: {
   managedAiCredentialHome?: string;
   managedAiCredentialIdentity?: string;
   billingIdentity?: Pick<AdapterExecutionResult, "provider" | "biller" | "billingType">;
+  onTaskDispatched?: () => Promise<void> | void;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
   /** Resolved per-run authorization; not an independent instance setting. */
   runnerIngressAuthorized?: boolean;
@@ -8609,7 +8612,8 @@ async function executePaperclipNativeSessionWithinScope(
     controller,
   });
   try {
-    if (input.managedGitHub && input.execution.provider.kind !== "openai_dot") {
+    if (input.managedGitHub && input.execution.provider.kind !== "openai_dot" &&
+        !(input.runnerExecutionTarget?.kind === "remote" && input.runnerExecutionTarget.transport === "sandbox" && input.runnerExecutionTarget.runnerTask)) {
       if (!input.execution.workspace.cwd) throw new Error("native_workspace_required");
       githubAccess ??= await createNativeGitHubAccess({
         scope: input.execution.binding,
@@ -11144,6 +11148,7 @@ export async function createRunnerdBackend(input: {
   runnerEnvironment?: NodeJS.ProcessEnv;
   /** Private grant materialization; never a user-configured host path. */
   managedAiCredentialHome?: string;
+  onTaskDispatched?: () => Promise<void> | void;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
   /** Resolved per-run authorization; not an independent instance setting. */
   runnerIngressAuthorized?: boolean;
@@ -11345,6 +11350,11 @@ async function createRunnerdBackendWithinSessionClaim(
   let recoveryPending = retainedTransition !== undefined;
   const target = input.runnerExecutionTarget ?? { kind: "local" as const };
   const remoteTarget = target.kind === "remote" ? target : null;
+  const pluginTask = remoteTarget?.transport === "sandbox" ? remoteTarget.runnerTask : undefined;
+  if (pluginTask && input.runnerIngressAuthorized !== true) throw new Error("runner_ingress_unavailable");
+  if (pluginTask && (input.execution.schema === "paperclip.native-execution-input.v6" || input.execution.session.lifecyclePolicy.mode !== "per_turn")) {
+    throw new Error("Plugin Runner tasks currently require a per-turn workspace session");
+  }
   const remoteCommandRunner = remoteTarget
     ? remoteTarget.transport === "ssh"
       ? createNativeSshCommandRunner({
@@ -11353,7 +11363,7 @@ async function createRunnerdBackendWithinSessionClaim(
         })
       : remoteTarget.runner
     : null;
-  if (remoteTarget && !remoteCommandRunner) {
+  if (remoteTarget && !remoteCommandRunner && !pluginTask) {
     throw new Error(
       "runner_transport_ineligible: remote process runner is unavailable",
     );
@@ -11424,7 +11434,9 @@ async function createRunnerdBackendWithinSessionClaim(
     assertBridgeAuthority: input.execution.provider.kind === "openai_dot" ? () => dotRunnerBroker(input.db).assertRunAuthority(input.execution as import("../../vendor/paperclip-runner/index.js").NativeExecutionInputV6) : undefined,
     workspaceRoot: input.dotWorkspaceRoot ?? remoteTarget?.remoteCwd ?? input.execution.workspace.cwd ?? undefined,
     executionTargetKind: target.kind,
-    readRemoteWorkspaceFile: remoteTarget && remoteCommandRunner
+    readRemoteWorkspaceFile: pluginTask
+      ? file => readVerifiedTaskWorkspaceFile({ task: pluginTask, ...file })
+      : remoteTarget && remoteCommandRunner
       ? (file) => readVerifiedRemoteWorkspaceFile({ runner: remoteCommandRunner, workspaceRoot: remoteTarget.remoteCwd, ...file })
       : undefined,
     currentWakeComments: currentWakeComments ?? undefined,
@@ -11457,10 +11469,150 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveRunnerInstanceId =
     durableBinding?.runnerInstanceId ?? input.runnerInstanceId;
   const effectiveEnvironmentLeaseId =
-    durableBinding?.environmentLeaseId ??
+    (pluginTask ? remoteTarget?.leaseId : undefined) ?? durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
     input.execution.binding.executionWorkspaceId;
   mkdirSync(root, { recursive: true, mode: 0o700 });
+  if (pluginTask && remoteTarget?.transport === "sandbox" && input.execution.schema !== "paperclip.native-execution-input.v6") {
+    // Task providers own their qualified image and project volumes. Core keeps
+    // PRP authority and session state; no shell transport is constructed here.
+    const provider = input.execution.provider;
+    if (provider.kind !== "codex" && provider.kind !== "opencode" && provider.kind !== "acpx") throw new Error("Plugin Runner tasks require a workspace harness");
+    const harness = provider.kind === "acpx" ? provider.agent : provider.kind;
+    const description = environmentTaskResultSchema.parse(await pluginTask({ kind: "describe",
+      sessionId: nativeSessionKey(input.execution), harness, projectIds: [...remoteTarget.runnerTaskProjectIds ?? []] }));
+    if (description.kind !== "description") throw new Error("Plugin Runner artifact description unavailable");
+    if (provider.kind === "codex" && !description.codexCommand) throw new Error("Plugin Runner Codex executable unavailable");
+    if ((provider.kind === "acpx" || provider.kind === "opencode") && !description.providerPack) throw new Error("Plugin Runner qualified provider pack unavailable");
+    const guestRoot = description.filesystemRoot;
+    const taskEnvironment: NodeJS.ProcessEnv = { ...resolveNativeProviderEnvironment(provider, input.runnerEnvironment),
+      HOME: posix.join(guestRoot, "codex-home"), CODEX_HOME: posix.join(guestRoot, "codex-home"),
+      PAPERCLIP_WORKSPACE_CWD: remoteTarget.remoteCwd, PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" };
+    if (relayAssignedMcp) {
+      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_NAME;
+      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_URL;
+      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_TOKEN;
+    }
+    const sourceContext = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+    const guestContext = sourceContext ? { ...sourceContext,
+      instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle,
+        rootPath: posix.join(guestRoot, "context/instructions") } },
+      skills: sourceContext.skills.map((skill, index) => ({ ...skill, bundle: { ...skill.bundle,
+        rootPath: posix.join(guestRoot, "context/skills", String(index)) } })),
+    } : null;
+    const assets = () => [
+      ...["runtime-context.json", "codex-home", "acpx", "opencode"].filter(name => existsSync(join(root, name)))
+        .map(name => ({ sourcePath: join(root, name), targetPath: posix.join(guestRoot, name) })),
+      ...(input.runnerEnvironment?.PAPERCLIP_GITHUB_LAUNCHER_DIR ? [{
+        sourcePath: input.runnerEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR,
+        targetPath: input.runnerEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR,
+      }] : []),
+      ...(sourceContext && guestContext ? [
+        { sourcePath: sourceContext.instructions.bundle.rootPath, targetPath: guestContext.instructions.bundle.rootPath },
+        ...sourceContext.skills.map((skill, index) => ({ sourcePath: skill.bundle.rootPath, targetPath: guestContext.skills[index]!.bundle.rootPath })),
+        ...(sourceContext.instructions.workingCopy ? [{ sourcePath: sourceContext.instructions.workingCopy.rootPath,
+          targetPath: sourceContext.instructions.workingCopy.rootPath }] : []),
+      ] : []),
+    ];
+    const checkpoint = async (exports: { sourcePath: string; targetPath: string }[] = [], archive?: unknown) => {
+      const result = environmentTaskResultSchema.parse(await pluginTask({ kind: "checkpoint",
+        stateDirectory: posix.join(guestRoot, "runner"), exports, ...(archive ? { archive } : {}) }));
+      if (result.kind !== "checkpoint") throw new Error("Plugin Runner checkpoint unavailable");
+      return result.state;
+    };
+    const owner = createPluginRunnerTaskOwner({ task: pluginTask, projectIds: remoteTarget.runnerTaskProjectIds ?? [],
+      harness, runnerExecutable: description.runner.executable, prepare: async () => {}, assets,
+      checkpoint: async settlement => {
+        if (settlement !== "settled") return;
+        const directories = [...(provider.kind === "acpx" ? ["acpx"] : provider.kind === "opencode" ? ["opencode"] : ["codex-home"]), "runner"]
+          .map(name => ({ name, sourcePath: posix.join(guestRoot, name), targetPath: join(root, name) }));
+        if (sourceContext?.instructions.workingCopy) directories.push({ name: "instruction-working-copy",
+          sourcePath: sourceContext.instructions.workingCopy.rootPath, targetPath: sourceContext.instructions.workingCopy.rootPath });
+        const pending = mkdtempSync(join(root, ".plugin-checkpoint-"));
+        const replaced: typeof directories = [];
+        const installed: typeof directories = [];
+        let cleanPending = true;
+        try {
+          const state = await checkpoint(directories.map(item => ({ sourcePath: item.sourcePath, targetPath: join(pending, item.name) })));
+          const expected = { schema: RUNNERD_STATE_SCHEMA, runnerInstanceId: effectiveRunnerInstanceId,
+            environmentLeaseId: effectiveEnvironmentLeaseId, runId: input.execution.binding.runId,
+            normalizedSessionId: nativeSessionKey(input.execution), lifecycle: "suspended" };
+          if (Object.entries(expected).some(([key, value]) => state[key] !== value)) throw new Error("Plugin Runner checkpoint identity mismatch");
+          for (const item of directories) if (!isSafeNativeStateDirectory(join(pending, item.name))) throw new Error("Plugin Runner checkpoint files unavailable");
+          const providerState = JSON.parse(readBoundedNativeFile(join(pending, "runner", runnerProviderStateFilename(input.execution)),
+            NATIVE_RUNNER_STATE_MAX_BYTES, "plugin_runner_checkpoint_too_large").toString("utf8"));
+          if (!providerSessionIdentityIsPresent(providerSessionIdentityFromDurableProviderState({ execution: input.execution, providerState }))) {
+            throw new Error("Plugin Runner provider checkpoint is incomplete");
+          }
+          writeFileSync(join(pending, "runner/runner-state.json"), JSON.stringify(state), { mode: 0o600 });
+          for (const item of directories) {
+            if (existsSync(item.targetPath)) { renameSync(item.targetPath, join(pending, `${item.name}.previous`)); replaced.push(item); }
+            renameSync(join(pending, item.name), item.targetPath); installed.push(item);
+          }
+          await input.db.update(environmentLeases).set({ metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || '{"runnerTaskCheckpointed":true}'::jsonb` })
+            .where(and(eq(environmentLeases.id, remoteTarget.leaseId!), eq(environmentLeases.companyId, input.execution.binding.companyId)));
+        } catch (error) {
+          cleanPending = false;
+          for (const item of installed.reverse()) rmSync(item.targetPath, { recursive: true, force: true });
+          for (const item of replaced.reverse()) renameSync(join(pending, `${item.name}.previous`), item.targetPath);
+          cleanPending = true;
+          throw error;
+        } finally { if (cleanPending) rmSync(pending, { recursive: true, force: true }); }
+      }, onDispatched: input.onTaskDispatched,
+    });
+    const executeTool = (call: Parameters<SessionToolAuthorityEpoch["execute"]>[0]) => {
+      const current = sessionToolAuthorityEpochs.get(sessionScopeId);
+      if (!current) throw new Error("native_session_tool_authority_unavailable");
+      return current.execute(call);
+    };
+    const backend = createNativeSessionBackend({ ...input.execution, workspace: { ...input.execution.workspace, cwd: remoteTarget.remoteCwd } }, {
+      runnerInstanceId: effectiveRunnerInstanceId, environment: taskEnvironment,
+      workingDirectoryAuthority: "remote_runner", dynamicTools, dynamicToolHandler: executeTool,
+      completionFeedback: async result => { await authorityEpoch.definitions(); return nativeCompletionFeedback(input.db, input.execution.binding.runId, result); },
+      codexTransportFactory: recovery => createRunnerdCodexTransport({ provider: provider.kind, stateDirectory: root,
+        ...(provider.kind === "acpx" ? { acpxAgent: provider.agent,
+          acpxCandidateProfile: provider.agent === "pi" ? undefined : resolveAcpxQualification(provider, process.env),
+          acpxPermissionMode: provider.permissionMode, acpxMode: provider.mode, piThinkingLevel: provider.piThinkingLevel,
+          acpxRuntimeDirectory: posix.join(guestRoot, "acpx"), acpxPermissionModePinned: true } : {}),
+        ...(provider.kind === "opencode" ? { opencodePermissionMode: provider.permissionMode,
+          opencodeRuntimeDirectory: posix.join(guestRoot, "opencode") } : {}),
+        ...(description.providerPack ? { providerPackAuthorityDigest: description.providerPack.authorityDigest,
+          providerNodeCommand: description.providerPack.node.executable, providerNodeCommandSha256: description.providerPack.node.digest,
+          acpxSidecarPath: description.providerPack.acpxSidecar?.executable, acpxSidecarSha256: description.providerPack.acpxSidecar?.digest,
+          opencodeCommand: description.providerPack.opencodeExecutable?.executable, opencodeCommandSha256: description.providerPack.opencodeExecutable?.digest,
+          opencodeProxyPath: description.providerPack.opencodeProxy?.executable, opencodeProxySha256: description.providerPack.opencodeProxy?.digest,
+        } : {}),
+        runnerArtifact: description.runner, runnerBinary: description.runner.executable,
+        codexCommand: description.codexCommand, runnerFilesystemRoot: guestRoot,
+        runnerStateDirectory: posix.join(guestRoot, "runner"), readRunnerState: () => checkpoint(),
+        prepareExternalRunnerState: async () => { await checkpoint(); },
+        archiveExternalRunnerState: archive => checkpoint([], archive),
+        environment: taskEnvironment,
+        sourceCodexHome: resolveSourceCodexHome(resolveNativeProviderEnvironment(input.execution.provider, input.runnerEnvironment)),
+        runnerProcessLauncher: owner.launcher, runnerReconnectGraceMs: 120_000,
+        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, runtimeContext: sourceContext,
+        runnerRuntimeContext: guestContext, resumeWorkingDirectory: remoteTarget.remoteCwd,
+        externallySandboxed: true, baseInstructions: recovery?.baseInstructions,
+        resumeDynamicTools: dynamicTools, resumeCompletionContract: { revision: input.execution.completionContract.contract.revision,
+          criterionIds: input.execution.completionContract.contract.criteria.map(criterion => criterion.id) },
+        resumeActiveTurnId: recovery?.persistedSession?.activeTurnId ?? null, resumeProviderSession: recovery?.persistedSession,
+        prpIdentity: { runnerInstanceId: effectiveRunnerInstanceId, environmentLeaseId: effectiveEnvironmentLeaseId,
+          runId: input.execution.binding.runId, normalizedSessionId: nativeSessionKey(input.execution),
+          turnId: `turn-${input.execution.binding.runId}`, itemId: `item-${input.execution.binding.runId}` },
+        controlPlaneRegistration: (control, identity, signal) => owner.registration(control, identity?.runId ?? input.execution.binding.runId, signal),
+      }).transport,
+    });
+    sessionToolAuthorityEpochs.get(sessionScopeId)?.revoke();
+    sessionToolAuthorityEpochs.set(sessionScopeId, authorityEpoch);
+    const bind = (session: NativeSession) => input.managedAiCredentialHome && provider.kind === "codex" ? bindManagedNativeCredentialTurn(session, {
+      copyBack: async () => { await copyBackCodexAuth({ hostAuthPath: join(input.managedAiCredentialHome!, "auth.json"),
+        readSandboxAuth: async () => readFileSync(join(root, "codex-home/auth.json")), log: () => {} }); },
+      remove: async () => { rmSync(join(root, "codex-home/auth.json"), { force: true }); },
+    }) : session;
+    return { ...backend, descriptor: () => backend.descriptor(), openSession: async session => bind(await backend.openSession(session)),
+      recoverSession: async (snapshot, options) => { const result = await backend.recoverSession!(snapshot, options);
+        return result.session ? { ...result, session: bind(result.session) } : result; }, bindManagedSession: bind };
+  }
   if (input.execution.schema === "paperclip.native-execution-input.v6") {
     if (target.kind === "remote" && input.dotWorkspaceRoot) throw new Error("dot_remote_workspace_access_unavailable");
     const remoteDot = target.kind === "remote"
@@ -12676,7 +12828,7 @@ async function createRunnerdBackendWithinSessionClaim(
         }
       : undefined;
 
-  const remoteProcessLauncher =
+  const remoteProcessLauncher = (
     remoteTarget && remoteCommandRunner && remoteBinary && remoteStateDirectory
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
@@ -12695,7 +12847,7 @@ async function createRunnerdBackendWithinSessionClaim(
           trace: input.trace,
           onRunnerProcessSpawned: () => resolveRemoteRunnerProcessSpawned?.(),
         })
-      : undefined;
+      : undefined);
   const runnerExecution: NativeExecutionInput = remoteTarget
     ? {
         ...input.execution,
@@ -13052,7 +13204,7 @@ async function createRunnerdBackendWithinSessionClaim(
               recoveryPending = false;
             }
           : undefined,
-        controlPlaneRegistration: async (authority, attachmentIdentity) => {
+        controlPlaneRegistration: async (authority, attachmentIdentity, signal) => {
           if (retainedTransition && recoveryPending) {
             const current = await verifyWarmTransitionRestart(input);
             if (

@@ -3,6 +3,9 @@ import type { PluginEnvironmentDriverBaseParams, PluginEnvironmentLease } from "
 
 // Provider IDs are opaque; providers validate their own addressing constraints.
 const providerId = z.string().min(1);
+const absolutePath = z.string().min(1).max(4096).refine(value => value.startsWith("/") && !/[\x00-\x1f]/.test(value), "Expected an absolute guest path");
+const asset = z.object({ sourcePath: absolutePath, targetPath: absolutePath }).strict();
+const runnerArtifact = z.object({ executable: absolutePath, version: z.string().min(1), digest: z.string().regex(/^sha256:[a-f0-9]{64}$/) }).strict();
 // PRP identity.schema.json stableId.
 const runnerIdentity = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
 const identifier = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/);
@@ -13,6 +16,15 @@ const secureUrl = z.string().url().refine(value => {
 
 /** One plugin-provided Runner execution attempt with a PRP connection. Secrets are transient RPC input. */
 export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("describe"), sessionId: runnerIdentity, harness: identifier,
+    projectIds: z.array(z.string().uuid()).max(64) }).strict(),
+  z.object({ kind: z.literal("checkpoint"), stateDirectory: absolutePath.optional(),
+    exports: z.array(asset).max(128).default([]),
+    archive: z.object({ archiveKey: runnerIdentity, priorIdentity: z.object({
+      runnerInstanceId: runnerIdentity, environmentLeaseId: runnerIdentity, runId: runnerIdentity,
+      normalizedSessionId: runnerIdentity, turnId: runnerIdentity, itemId: runnerIdentity,
+    }).strict() }).strict().optional(),
+  }).strict(),
   z.object({
     kind: z.literal("submit"),
     projectIds: z.array(z.string().uuid()).max(64).refine(ids => new Set(ids).size === ids.length, "Duplicate project IDs"),
@@ -25,6 +37,29 @@ export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
       sessionId: runnerIdentity, turnId: runnerIdentity, itemId: runnerIdentity,
     }).strict().refine(value => value.protocolMin <= value.protocolMax, "Invalid PRP version range"),
     bootstrapTicket: z.string().min(1).max(65_536),
+    /** Core supplies these protected launch inputs for native agent runs. */
+    launch: z.object({
+      stateDirectory: absolutePath, runnerExecutable: absolutePath,
+      /** Core-owned runtime bundles and homes; deliver before starting Runner. */
+      assets: z.array(asset).max(128).default([]),
+      runnerVersion: z.string().min(1), runnerDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      connection: z.object({ mode: z.literal("listen"), listenAddress: z.literal("0.0.0.0"),
+        listenPort: z.number().int().min(1).max(65_535), listenPath: z.string().startsWith("/") }).strict(),
+      maxOutboxBytes: z.number().int().positive(), p0ReserveBytes: z.number().int().positive(),
+      maxRuntimeMs: z.number().int().nonnegative().optional(), maxLifetimeMs: z.number().int().nonnegative().optional(),
+      reconnectGraceMs: z.number().int().nonnegative().optional(),
+      lifecyclePolicy: z.object({ mode: z.literal("per_turn"), idleTimeoutMs: z.null() }).strict(),
+      environment: z.record(z.string(), z.string()),
+      acpxLaunchProfile: z.object({ authorityDigest: z.string(), command: z.string(), commandSha256: z.string(),
+        sidecarScript: z.string(), sidecarScriptSha256: z.string() }).strict().optional(),
+      opencodeLaunchProfile: z.object({ command: z.string(), commandSha256: z.string(), proxyScript: z.string(),
+        proxyScriptSha256: z.string(), executable: z.string(), executableSha256: z.string() }).strict().optional(),
+      diagnosticsDirectory: z.string().optional(),
+    }).strict().optional(),
+  }).strict(),
+  z.object({ kind: z.literal("read_file"), contentRef: z.string().min(1).max(2000)
+    .refine(value => !value.startsWith("/") && !value.includes("\\") && !value.split("/").includes("..") && value !== "." && !/^[a-z][a-z0-9+.-]*:/i.test(value) && !/[\x00-\x1f]/.test(value)),
+    byteSize: z.number().int().positive().max(64 * 1024 * 1024), sha256: z.string().regex(/^[a-f0-9]{64}$/),
   }).strict(),
   z.object({ kind: z.literal("status") }).strict(),
   z.object({ kind: z.literal("connection") }).strict(),
@@ -34,6 +69,18 @@ export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
 
 export const environmentTaskResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), taskId: providerId }).strict(),
+  z.object({ kind: z.literal("description"), taskId: providerId,
+    runner: runnerArtifact, filesystemRoot: absolutePath, codexCommand: absolutePath.optional(),
+    providerPack: z.object({ authorityDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      node: runnerArtifact, acpxSidecar: runnerArtifact.optional(),
+      opencodeExecutable: runnerArtifact.optional(), opencodeProxy: runnerArtifact.optional(),
+    }).strict().optional(),
+  }).strict(),
+  z.object({ kind: z.literal("file"), taskId: providerId, base64: z.string().max(90 * 1024 * 1024) }).strict(),
+  z.object({ kind: z.literal("checkpoint"), taskId: providerId,
+    /** Independently checked by Core against its PRP authority and suspension state. */
+    state: z.record(z.string(), z.unknown()),
+  }).strict(),
   z.object({
     kind: z.literal("status"), taskId: providerId,
     phase: z.enum(["preparing", "running", "completed", "failed", "cancelled", "interrupted"]),
@@ -74,7 +121,7 @@ export interface PluginEnvironmentTaskParams extends Omit<PluginEnvironmentDrive
 /** An accepted stop is not proof of process termination. */
 export function parseEnvironmentTaskResult(operation: PluginEnvironmentTaskOperation, taskId: string, value: unknown): PluginEnvironmentTaskResult {
   const result = environmentTaskResultSchema.parse(value);
-  const expected = operation.kind === "status" || operation.kind === "connection" ? operation.kind : "accepted";
+  const expected = operation.kind === "read_file" ? "file" : operation.kind === "describe" ? "description" : ["status", "connection", "checkpoint"].includes(operation.kind) ? operation.kind : "accepted";
   if (result.taskId !== taskId || result.kind !== expected) throw new Error("Invalid plugin-provided Runner execution response");
   return result;
 }

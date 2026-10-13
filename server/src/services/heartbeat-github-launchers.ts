@@ -15,6 +15,15 @@ export async function prepareHeartbeatGitHubLaunchers(
   prepareLaunchers = prepareGitHubOperationLaunchers,
   cleanupLaunchers = cleanupGitHubOperationLaunchers,
 ) {
+  if (input.target?.kind === "remote" && input.target.transport === "sandbox" && input.target.runnerTask) {
+    // Task launch assets carry token-free wrappers; no remote command or
+    // controller PATH/credential discovery is needed.
+    const location = { runId: input.runId, target: { kind: "local" as const } };
+    const env = githubBrokerEnvironment({ ...input.env, PATH: "/usr/local/bin:/usr/bin:/bin" }, { url: "", token: "" });
+    try {
+      return { env: await prepareLaunchers({ ...location, cwd: input.cwd, env }), cleanupLocation: location };
+    } catch (error) { await cleanupLaunchers(location).catch(() => undefined); throw error; }
+  }
   // Native configured access is owned by the provider session supervisor.
   // Defer staging until it has acquired that session; never mutate a live
   // process's authorization from heartbeat preparation.

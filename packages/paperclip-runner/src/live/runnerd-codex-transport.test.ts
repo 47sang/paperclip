@@ -140,6 +140,33 @@ async function expectTurnStarted(
   );
 }
 
+it("authenticates a provider-owned Runner artifact without reading a controller binary", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runnerd-external-artifact-"));
+  const binary = defaultCapabilityRunnerdBinary();
+  const artifact = readRunnerdArtifactBinding(binary);
+  const launch = vi.fn((spec: durableControlPlane.RunnerProcessLaunchSpec) => {
+    expect(spec.command).toBe("/provider/pinned-runner");
+    expect(spec.nativeRunner).toMatchObject({ runnerVersion: artifact.version, runnerDigest: artifact.digest });
+    const child = spawn(binary, [...spec.args], { cwd: spec.cwd, env: spec.environment, stdio: "ignore" });
+    const completion = new Promise<durableControlPlane.RunnerProcessResult>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code, signal) => resolve({ code, signal, stdout: "", stderr: "" }));
+    });
+    return { child, completion };
+  });
+  const bundle = createCapabilityRunnerdCodexTransport({ runnerBinary: "/provider/pinned-runner", runnerArtifact: artifact,
+    runnerProcessLauncher: launch, codexCommand: fakeCodex, codexArgs: fakeCodexArgs(root), stateDirectory: root,
+    lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } });
+  try {
+    const opened = await bundle.transport.request("thread/start", { cwd: root, dynamicTools: [] });
+    expect(opened).toBeTruthy();
+    expect(launch).toHaveBeenCalledOnce();
+    await bundle.transport.close();
+    const state = JSON.parse(await readFile(join(root, "runner/runner-state.json"), "utf8"));
+    expect(state.lifecycle).toBe("suspended");
+  } finally { await bundle.transport.close().catch(() => {}); await rm(root, { recursive: true, force: true }); }
+});
+
 it("replaces an owned v1 runner with fresh v2 authorization before warm attachment", async () => {
   const directory = await mkdtemp(join(tmpdir(), "runnerd-v1-v2-replacement-"));
   const handles: durableControlPlane.RunnerProcessHandle[] = [];

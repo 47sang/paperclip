@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
-import { heartbeatRuns, type Db } from "@paperclipai/db";
+import { environmentLeases, heartbeatRuns, type Db } from "@paperclipai/db";
 import { parseObject } from "../../adapters/utils.js";
 import { logger } from "../../middleware/logger.js";
 import { AgentDirectoryReuseInvalidatedError, isAgentDirectoryCopy } from "../agent-directory-working-copies.js";
@@ -76,6 +76,21 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
   let nativeInstructionReservation: Awaited<ReturnType<typeof reserveWarmNativeInstructionDirectory>> = null;
   let instructionCopy: Awaited<ReturnType<typeof instructionCopies.prepare>> = null;
   let instructionSave: Record<string, unknown> | null = null;
+  const task = executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" ? executionTarget.runnerTask : undefined;
+  // Core validates and saves a local mirror. The task owner transfers the
+  // registered working copy without a shell or command bridge.
+  const instructionTarget = task ? { kind: "local" as const } : executionTarget;
+  const checkpointTaskInstructions = async () => {
+    if (!task || !instructionCopy || executionTarget?.kind !== "remote") return;
+    const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases)
+      .where(and(eq(environmentLeases.id, executionTarget.leaseId!), eq(environmentLeases.companyId, agent.companyId)));
+    // The native checkpoint exports agent files before complete revokes task
+    // grants. Never re-read a completed task or save an old local mirror.
+    if (!lease || (lease.metadata?.runnerTaskCheckpointed !== true &&
+        (lease.metadata?.runnerTaskDispatched === true || lease.metadata?.runnerTaskExecutionStopped === true))) {
+      throw new Error("Plugin Runner instruction checkpoint unavailable");
+    }
+  };
   const instructionPreparationKey = createHash("sha256").update(JSON.stringify({
     adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, sessionConfigMetadata,
     workspace: nativeSessionWorkspaceScope({
@@ -99,8 +114,9 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
   };
   const collectStoppedInstructions = async () => {
     if (!instructionCopy) return;
+    await checkpointTaskInstructions();
     const saved = await collectStoppedInstructionCopyWithRetries(() => instructionCopies.collectStopped({
-      companyId: agent.companyId, runId: readRun().id, target: executionTarget,
+      companyId: agent.companyId, runId: readRun().id, target: instructionTarget,
     }));
     if (!saved) return;
     if (saved.state !== "superseded") await recordInstructionSave(saved);
@@ -109,11 +125,11 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
     ...(isAgentDirectoryCopy(instructionCopy) ? { runId: readRun().id, preparationKey: instructionPreparationKey } : {}),
     root: instructionCopy.executionRoot,
     ...(instructionCopy.receipt?.warm === true ? { checkpointWarm: async () => {
-      const saved = await instructionCopies.checkpointWarm({ companyId: agent.companyId, runId: readRun().id, target: executionTarget });
+      const saved = await instructionCopies.checkpointWarm({ companyId: agent.companyId, runId: readRun().id, target: instructionTarget });
       if (saved) await recordInstructionSave(saved);
       return saved?.state === "warm_saved" && saved.errorCode === null;
     } } : {}),
-    hasChanges: () => instructionCopies.hasChanges({ companyId: agent.companyId, runId: readRun().id, target: executionTarget }),
+    hasChanges: async () => { await checkpointTaskInstructions(); return instructionCopies.hasChanges({ companyId: agent.companyId, runId: readRun().id, target: instructionTarget }); },
     collectStopped: collectStoppedInstructions,
     retirementFailed: async () => { await instructionCopies.reportRetirementUnconfirmed(agent.companyId, readRun().id); },
   } : undefined;
@@ -141,7 +157,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
             : parseObject(agent.adapterConfig).lifecycleMode === "warm");
         if (warmFiles && taskSessionForRun?.lastRunId) {
           nativeInstructionReservation = await reserveWarmNativeInstructionDirectory({ companyId: agent.companyId, agentId: agent.id,
-            previousRunId: taskSessionForRun.lastRunId, runId: readRun().id, target: executionTarget,
+            previousRunId: taskSessionForRun.lastRunId, runId: readRun().id, target: instructionTarget,
             canReuse: () => instructionCopies.canReuseWarm(agent.companyId, agent.id, taskSessionForRun!.lastRunId!),
           });
         }
@@ -152,7 +168,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
             environmentId: executionTarget?.environmentId ?? null, runId: readRun().id, preparationKey: instructionPreparationKey, forceRetirement: !taskSessionForRun,
             adopt: async previousRunId => {
               instructionCopy = await instructionCopies.adopt({ companyId: agent.companyId, agentId: agent.id,
-                runId: readRun().id, previousRunId, target: executionTarget, cwd: executionWorkspace.cwd, allowRetirementHandoff: true });
+                runId: readRun().id, previousRunId, target: instructionTarget, cwd: executionWorkspace.cwd, allowRetirementHandoff: true });
               return nativeInstructionWorkingCopy() ?? null;
             },
           });
@@ -162,7 +178,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
         }
         const prepareInstructions = (reuseRunId?: string) => instructionCopies.prepare({
           companyId: agent.companyId, agentId: agent.id, runId: readRun().id,
-          target: executionTarget, cwd: executionWorkspace.cwd,
+          target: instructionTarget, cwd: executionWorkspace.cwd,
           legacy: Object.keys(priorFileInput).length > 0 && priorWorkingCopy.kind !== "agent_files",
           warm: warmFiles, reuseRunId,
           onWarmHandoff: copy => {

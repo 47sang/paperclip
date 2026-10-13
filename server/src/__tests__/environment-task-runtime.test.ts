@@ -18,7 +18,9 @@ const row = () => ({
 function database(value: ReturnType<typeof row> | null = row(), projectRows = [{ id: projectId }]) {
   const results = [value ? [value] : [], [{ id: "issue" }]];
   const query: any = { from: () => query, leftJoin: () => query, where: vi.fn(() => query), limit: () => Promise.resolve(results.shift()), then: (resolve: (rows: typeof projectRows) => unknown) => Promise.resolve(projectRows).then(resolve) };
-  return { db: { select: () => query } as unknown as Db, query };
+  const update: any = { set: () => update, where: () => update,
+    returning: async () => [{ id: leaseId }], then: (resolve: (value: unknown) => unknown) => Promise.resolve([]).then(resolve) };
+  return { db: { select: () => query, update: () => update } as unknown as Db, query };
 }
 function worker(result: unknown = { kind: "accepted", taskId: "attempt-1" }) {
   return { getWorker: vi.fn(() => ({ supportedMethods: ["environmentTask"] })), call: vi.fn(async () => result) };
@@ -52,6 +54,12 @@ describe("plugin-provided Runner execution", () => {
     const rejected = worker();
     await expect(executeEnvironmentTask(database(row(), [{ id: projectId }]).db, rejected as never, { companyId: "company", leaseId, operation })).rejects.toThrow("project unavailable");
     expect(rejected.call).not.toHaveBeenCalled();
+  });
+  it("validates descriptor project scope before calling the pinned task provider", async () => {
+    const workers = worker();
+    await expect(executeEnvironmentTask(database(row(), []).db, workers as never, { companyId: "company", leaseId,
+      operation: { kind: "describe", sessionId: "session", harness: "codex", projectIds: ["00000000-0000-4000-8000-000000000099"] } })).rejects.toThrow("project unavailable");
+    expect(workers.call).not.toHaveBeenCalled();
   });
   it("validates unique project IDs and allows tasks with no project mounts", async () => {
     for (const projectIds of [[projectId, projectId], ["invalid"], Array(65).fill(projectId)]) {
