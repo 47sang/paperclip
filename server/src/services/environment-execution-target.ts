@@ -273,6 +273,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
       environmentId: input.environment.id, leaseId: lease.id, remoteCwd,
       runnerLifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
       sandboxLeaseAcquisition: { outcome: "created", providerLeaseId: lease.providerLeaseId! },
+      ...(lease.metadata?.runnerTaskProbe ? { runnerTaskProbe: lease.metadata.runnerTaskProbe as { runId: string; sessionId: string } } : {}),
       runnerTask: operation => runtime.task({ companyId: input.companyId, leaseId: lease.id,
         operation: environmentTaskOperationSchema.parse(operation) }),
 

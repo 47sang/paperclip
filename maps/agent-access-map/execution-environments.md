@@ -185,3 +185,9 @@ own policy and access review.
 
 Gaps: No default agent custom-image administration/terminal path; this is a policy
 decision before adding a tool.
+
+The task-only setup path uses a Core-issued expiring probe identity and a real,
+read-only Runner hello. Managed project-auth inspection stays in the task API.
+[Setup probe coverage](../../server/src/services/native-runtime/plugin-runner-probe.test.ts)
+uses the real Runner and a synthetic Codex provider through loopback PRP; TLS
+termination is replaced by the fixture. It does not qualify a live plugin provider.

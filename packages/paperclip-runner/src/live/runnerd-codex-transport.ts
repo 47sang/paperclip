@@ -7162,7 +7162,7 @@ export const createRunnerdCodexTransport =
 
 export async function probeNativeRunnerEnvironment(options: {
   runtimeDirectory: string;
-  provider: "codex";
+  provider: "codex" | "opencode" | "acpx";
   model: string | null;
   reasoningEffort?: string;
   environment: NodeJS.ProcessEnv;
@@ -7172,7 +7172,7 @@ export async function probeNativeRunnerEnvironment(options: {
   onCodexCredentialRefresh?: (filename: string) => Promise<void>;
   onCleanupConfirmed?: () => Promise<void>;
 }): Promise<{
-  provider: "codex";
+  provider: "codex" | "opencode" | "acpx";
   providerDriver: string;
   effectiveModel: string;
   helloProbePassed: true;
@@ -7260,7 +7260,7 @@ export async function probeNativeRunnerEnvironment(options: {
       workingDirectory, signal: controller.signal });
     controller.signal.throwIfAborted();
     const ids = session.ids();
-    const expectedDriver = "codex_app_server";
+    const expectedDriver = { codex: "codex_app_server", opencode: "opencode_server", acpx: "acpx_runtime" }[options.provider];
     if (!ids.driverSessionId || !ids.providerSessionId || bundle.evidence().providerDriver !== expectedDriver) {
       throw new Error(`The native environment probe returned no matching provider identity (${bundle.evidence().providerDriver ?? "missing driver"}).`);
     }

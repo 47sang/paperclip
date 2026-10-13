@@ -51,7 +51,7 @@ artifact, state directory, listener settings, resource bounds, lifecycle policy,
 provider launch profiles, transient environment, and `assets`. Each asset maps a
 Core-owned source file or directory to its guest destination. The task provider
 must deliver these assets before starting Runner, without interpreting a shell
-command. Use a provider upload API, storage service, or equivalent task facility.
+command. The plugin can use its own HTTP API, shell/exec API, storage service, or other provider facility. Core does not select or interpret that transport.
 Core generates the runtime context, instruction and skill bundles, isolated
 provider homes, and current credentials. Assets are private; do not log them.
 Stage fresh launch material on every attempt. Do not merge credentials from an
@@ -106,12 +106,13 @@ opaque strings; each provider owns its addressing constraints.
 
 - `describe`: returns the trusted artifact and session filesystem layout. Core
   validates its project IDs like submission. It does not start a process.
+- `check_project_auth`: inspects OpenAI or Anthropic project authentication settings in the workspace and its parent directories. Return only a conflict boolean, never file contents or secrets. The SDK `checkRunnerProjectAuth` helper accepts a provider-owned file reader; return null only for missing files and reject other read failures. This operation must work before submission and must not require a shell hook.
 - `checkpoint`: exports registered files and returns durable Runner state.
 - `read_file`: returns a confined, size- and hash-checked workspace file.
 - `submit`: supplies a unique list of up to 64 project UUIDs, Runner identity,
   harness, the client's supported PRP version range (`runner.protocolMin` and `runner.protocolMax`, inclusive), and a transient
   bootstrap ticket. The Runner run and lease IDs must match the persisted host records. Only a running run with an active,
-  unexpired lease can submit.
+  unexpired lease can submit. Core setup probes use a private, expiring probe identity on an ad-hoc lease instead of a heartbeat run.
 - `status`: returns the phase and optional exit code. Optional `executionStopped`
   is live provider evidence that the complete task process tree has stopped.
 - `connection`: returns a private authenticated WebSocket endpoint for a running
@@ -124,7 +125,7 @@ opaque strings; each provider owns its addressing constraints.
   termination receipt. Reconcile status before treating execution as stopped.
 
 Submit the task, wait until it is running, then request `connection` and connect
-to its WSS endpoint with the returned headers. The provider must select a Runner
+to its WSS endpoint with the returned headers. Core obtains this endpoint only from the plugin task response. The plugin owns provisioning, address discovery, TLS termination, authentication, and any HTTP or exec calls needed to deliver it. Core does not derive an endpoint from provider lease IDs or provider-specific URLs. The provider must select a Runner
 whose supported PRP range overlaps the client's range. The client uses that same
 range during the PRP handshake, which negotiates the highest shared version and
 verifies Runner identity and artifacts before execution.
@@ -189,3 +190,15 @@ the real Runner binary to authenticate a provider-owned artifact.
 The WebSocket connection is mocked in the database fixture; it is not live-provider or real
 Runner handshake evidence. Providers must qualify their actual Runner and storage
 implementation before production use.
+
+## Agent setup verification
+
+Normal agent initialization and the agent Test flow acquire a disposable task lease.
+Core issues an expiring private Runner identity, with no issue, project mounts, or
+agent tool authority. It uses the same describe, submit, connection, status,
+checkpoint, stop, and complete operations as execution. No workspace-realization
+or command hook is required. Core runs a bounded read-only hello turn and checks
+PRP identity, the qualified provider driver, the observed model, a completed
+response, and confirmed task shutdown. A plugin readiness flag cannot replace
+this probe. Managed accounts also require the project-auth check before launch.
+Core preserves refreshed subscription credentials through checkpoint export.

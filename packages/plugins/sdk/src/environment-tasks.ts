@@ -61,6 +61,9 @@ export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
     .refine(value => !value.startsWith("/") && !value.includes("\\") && !value.split("/").includes("..") && value !== "." && !/^[a-z][a-z0-9+.-]*:/i.test(value) && !/[\x00-\x1f]/.test(value)),
     byteSize: z.number().int().positive().max(64 * 1024 * 1024), sha256: z.string().regex(/^[a-f0-9]{64}$/),
   }).strict(),
+  z.object({ kind: z.literal("check_project_auth"), cwd: absolutePath,
+    provider: z.enum(["openai", "anthropic"]),
+  }).strict(),
   z.object({ kind: z.literal("status") }).strict(),
   z.object({ kind: z.literal("connection") }).strict(),
   z.object({ kind: z.literal("complete") }).strict(),
@@ -76,6 +79,7 @@ export const environmentTaskResultSchema = z.discriminatedUnion("kind", [
       opencodeExecutable: runnerArtifact.optional(), opencodeProxy: runnerArtifact.optional(),
     }).strict().optional(),
   }).strict(),
+  z.object({ kind: z.literal("project_auth"), taskId: providerId, conflict: z.boolean() }).strict(),
   z.object({ kind: z.literal("file"), taskId: providerId, base64: z.string().max(90 * 1024 * 1024) }).strict(),
   z.object({ kind: z.literal("checkpoint"), taskId: providerId,
     /** Independently checked by Core against its PRP authority and suspension state. */
@@ -121,7 +125,27 @@ export interface PluginEnvironmentTaskParams extends Omit<PluginEnvironmentDrive
 /** An accepted stop is not proof of process termination. */
 export function parseEnvironmentTaskResult(operation: PluginEnvironmentTaskOperation, taskId: string, value: unknown): PluginEnvironmentTaskResult {
   const result = environmentTaskResultSchema.parse(value);
-  const expected = operation.kind === "read_file" ? "file" : operation.kind === "describe" ? "description" : ["status", "connection", "checkpoint"].includes(operation.kind) ? operation.kind : "accepted";
+  const expected = operation.kind === "check_project_auth" ? "project_auth" : operation.kind === "read_file" ? "file" : operation.kind === "describe" ? "description" : ["status", "connection", "checkpoint"].includes(operation.kind) ? operation.kind : "accepted";
   if (result.taskId !== taskId || result.kind !== expected) throw new Error("Invalid plugin-provided Runner execution response");
   return result;
+}
+
+/** File access stays provider-owned. Missing files return null; all other read failures must reject. */
+export async function checkRunnerProjectAuth(
+  operation: Extract<PluginEnvironmentTaskOperation, { kind: "check_project_auth" }>,
+  readFile: (absolutePath: string) => Promise<string | null>,
+): Promise<boolean> {
+  const files = operation.provider === "anthropic" ? [".claude/settings.json", ".claude/settings.local.json"] : [".codex/config.toml"];
+  let directory = operation.cwd.replace(/\/+$/, "") || "/";
+  for (;;) {
+    for (const relative of files) {
+      const content = await readFile(`${directory === "/" ? "" : directory}/${relative}`);
+      if (content !== null) {
+        if (new TextEncoder().encode(content).length > 1024 * 1024) throw new Error("Project authentication file exceeds the inspection limit");
+        if (/apiKeyHelper|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|OPENAI_API_KEY|model_provider\s*=|env_key\s*=|experimental_bearer_token|cli_auth_credentials_store/.test(content)) return true;
+      }
+    }
+    if (directory === "/") return false;
+    directory = directory.slice(0, directory.lastIndexOf("/")) || "/";
+  }
 }

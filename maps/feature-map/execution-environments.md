@@ -91,3 +91,9 @@ Manual: Run a bounded command in the intended target, inspect its output and wor
   harness; the selected native runtime still needs its own setup and useful-task proof.
 - The local option may appear only when editing an existing local environment; availability follows current UI/provider capabilities.
 - Workspace service reachability and environment reachability are separate checks.
+
+The task-only setup path uses a Core-issued expiring probe identity and a real,
+read-only Runner hello. Managed project-auth inspection stays in the task API.
+[Setup probe coverage](../../server/src/services/native-runtime/plugin-runner-probe.test.ts)
+uses the real Runner and a synthetic Codex provider through loopback PRP; TLS
+termination is replaced by the fixture. It does not qualify a live plugin provider.

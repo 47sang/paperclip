@@ -24,7 +24,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { inspect } from "node:util";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   heartbeatRuns,
   heartbeatRunEvents,
@@ -10060,7 +10060,49 @@ describe("runnerd provider runtime wiring", () => {
     expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
   });
 
+  it.each(["codex", "grok"] as const)("binds task-only %s credentials once and copies refreshes back", async kind => {
+    const privateRoot = await realpath(isolatedStateDirectory);
+    const managedHome = join(privateRoot, "selected-account");
+    await mkdir(managedHome, { mode: 0o700 });
+    await writeFile(join(managedHome, "auth.json"), "fixture-selected-subscription", { mode: 0o600 });
+    const selected = kind === "codex" ? execution : { ...execution,
+      provider: { kind: "acpx", agent: "grok", model: "grok-4.7", permissionMode: "deny-all" },
+      session: { ...execution.session, driverKind: "acpx_runtime" } } as unknown as NativeExecutionInputV1;
+    const artifact = { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` };
+    const task = vi.fn(async () => ({ kind: "description", taskId: "task", filesystemRoot: "/state", runner: artifact,
+      codexCommand: "/codex", providerPack: { authorityDigest: artifact.digest, node: artifact, acpxSidecar: artifact } }));
+    const close = vi.fn(async () => {});
+    const raw = { close };
+    state.createBackend.mockReturnValueOnce({ kind: "test", openSession: async () => raw,
+      recoverSession: async () => ({ recovered: true, session: raw }) } as never);
+    state.copyBackCodexAuth.mockClear(); grokCopyBack.mockClear();
+    const backend = await createRunnerdBackend({ db: leaseDb(selected), execution: selected, runnerInstanceId: "task-credentials",
+      runnerIngressAuthorized: true, managedAiCredentialHome: managedHome, runnerEnvironment: {},
+      runnerExecutionTarget: { kind: "remote", transport: "sandbox", providerKey: "plugin", leaseId: "task-lease", remoteCwd: "/workspace", runnerTask: task } as never });
+    state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
+    const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & { environment: NodeJS.ProcessEnv };
+    if (kind === "grok") expect(options.environment.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET).toBe("fixture-selected-subscription");
+    const session = await backend.openSession({} as never);
+    expect(backend.bindManagedSession!(session)).toBe(session);
+    expect((await backend.recoverSession!({} as never, { signal: new AbortController().signal })).session).toBe(session);
+    if (kind === "grok") {
+      const home = join(options.stateDirectory!, "acpx/acpx", acpxRuntimeSessionDirectoryName(execution.session.normalizedSessionId!), "grok-home");
+      await mkdir(home, { recursive: true, mode: 0o700 });
+      await writeFile(join(home, "auth.json"), "fixture-refreshed", { mode: 0o600 });
+      grokCopyBack.mockImplementationOnce(async input => { expect(input.hostHomeDir).toBe(managedHome); expect((await input.readSandboxAuth()).toString()).toBe("fixture-refreshed"); });
+    }
+    await session.close({ reason: "fixture done" });
+    expect(close).toHaveBeenCalledOnce();
+    expect(kind === "grok" ? grokCopyBack : state.copyBackCodexAuth).toHaveBeenCalledOnce();
+  });
+
   it("selects the plugin task process owner and binds Runner identity to its acquired lease", async () => {
+    const instructionRoot = join(isolatedStateDirectory, "agent-files/working");
+    await mkdir(instructionRoot, { recursive: true, mode: 0o700 });
+    await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
+    const runtimeContext = nativeRuntimeContextFixture();
+    runtimeContext.instructions.workingCopy = { rootPath: instructionRoot } as never;
+    const taskExecution = { ...execution, runtimeContext };
     const launcher = vi.fn();
     const registration = vi.fn();
     const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration });
@@ -10071,9 +10113,9 @@ describe("runnerd provider runtime wiring", () => {
       runnerTaskProjectIds: ["project-one", "project-two"] } as never;
     state.createBackend.mockClear(); state.createTransport.mockClear();
     try {
-      await expect(createRunnerdBackend({ db: leaseDb(execution), execution,
+      await expect(createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution,
         runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
-      await createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "plugin-runner",
+      await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
         runnerExecutionTarget: target, runnerIngressAuthorized: true });
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
@@ -10100,6 +10142,10 @@ describe("runnerd provider runtime wiring", () => {
       task.mockImplementation(async (operation: any) => {
         for (const item of operation.exports ?? []) {
           await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
+          if (item.sourcePath === instructionRoot) {
+            expect(dirname(dirname(item.targetPath))).toBe(dirname(instructionRoot));
+            await writeFile(join(item.targetPath, "AGENTS.md"), "exported instructions");
+          }
           if (item.sourcePath.endsWith("/runner")) await writeFile(join(item.targetPath, "codex-provider-state.json"), JSON.stringify({
             schema: "paperclip.runner.codex-provider-state.v1", lifecycle: "session_open", threadId: "thread",
             activeProviderTurnId: null, config: { provider: "codex", driver: "codex_app_server" },
@@ -10109,6 +10155,7 @@ describe("runnerd provider runtime wiring", () => {
           ...state.createTransport.mock.calls.at(-1)![0].prpIdentity, lifecycle: "suspended" } };
       });
       await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).resolves.toBeUndefined();
+      expect(await readFile(join(instructionRoot, "AGENTS.md"), "utf8")).toBe("exported instructions");
       expect(JSON.parse(await readFile(join(root, "runner/runner-state.json"), "utf8"))).toMatchObject({ lifecycle: "suspended", environmentLeaseId: "plugin-task-lease" });
     } finally { owner.mockRestore(); }
   });

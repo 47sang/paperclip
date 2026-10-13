@@ -31,6 +31,21 @@ beforeEach(() => {
   state.plugin = { id: "original", pluginKey: "test.provider", status: "ready", manifestJson: { capabilities: ["environment.drivers.register"], environmentDrivers: [{ driverKey: "tasks", supportsTasks: true }] } };
 });
 describe("plugin-provided Runner execution", () => {
+  it("allows only the private, unexpired setup identity on an ad-hoc lease", async () => {
+    const value = row();
+    Object.assign(value.lease, { heartbeatRunId: null, issueId: null }); value.run = null;
+    Object.assign(value.lease.metadata, { runnerTaskProbe: { runId: "probe-run", sessionId: "probe-session", expiresAtMs: Date.now() + 60_000 } });
+    const operation = { ...submit, projectIds: [], runner: { ...submit.runner, runId: "probe-run", sessionId: "probe-session" } };
+    const workers = worker();
+    await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation })).resolves.toMatchObject({ kind: "accepted" });
+    expect(workers.call).toHaveBeenCalledWith("original", "environmentTask", expect.objectContaining({ runId: "probe-run", projectIds: [] }), 15_000);
+    for (const invalid of [{ ...operation, projectIds: [projectId] }, { ...operation, runner: { ...operation.runner, sessionId: "other" } }, submit]) {
+      await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation: invalid })).rejects.toThrow("identity mismatch");
+    }
+    Object.assign(value.lease.metadata, { runnerTaskProbe: { runId: "probe-run", sessionId: "probe-session", expiresAtMs: Date.now() - 1 } });
+    await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation })).rejects.toThrow("not active");
+    await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation: { kind: "stop" } })).resolves.toMatchObject({ kind: "accepted" });
+  });
   it("fences persisted instruction mirrors until both export and stop are proved", async () => {
     let metadata: Record<string, unknown> | undefined;
     const where = vi.fn(async (_predicate: unknown) => metadata ? [{ metadata }] : []);

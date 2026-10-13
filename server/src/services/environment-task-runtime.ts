@@ -35,13 +35,20 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
   if (!row || !row.lease.providerLeaseId) throw new Error("Plugin-provided Runner execution lease unavailable");
   const { lease, environment, run } = row;
   const taskId = row.lease.providerLeaseId;
-  if ((operation.kind === "describe" || operation.kind === "submit" || operation.kind === "connection" || operation.kind === "read_file") &&
-      (!environment || !run || lease.status !== "active" || (lease.expiresAt && lease.expiresAt.getTime() <= Date.now()) ||
-       run.status !== "running")) throw new Error("Plugin-provided Runner execution lease is not active");
-  if (operation.kind === "submit" && (operation.runner.runId !== run?.id || operation.runner.leaseId !== lease.id)) {
+  const metadata = lease.metadata ?? {};
+  const probe = metadata.runnerTaskProbe as { runId?: unknown; sessionId?: unknown; expiresAtMs?: unknown } | undefined;
+  const activeProbe = lease.heartbeatRunId === null && lease.issueId === null && probe
+    && typeof probe.runId === "string" && typeof probe.sessionId === "string"
+    && typeof probe.expiresAtMs === "number" && probe.expiresAtMs > Date.now();
+  if ((operation.kind === "describe" || operation.kind === "submit" || operation.kind === "connection" || operation.kind === "read_file" || operation.kind === "check_project_auth") &&
+      (!environment || (!activeProbe && run?.status !== "running") || lease.status !== "active" || (lease.expiresAt && lease.expiresAt.getTime() <= Date.now()))) throw new Error("Plugin-provided Runner execution lease is not active");
+  if (operation.kind === "submit" && (operation.runner.runId !== (activeProbe ? probe.runId : run?.id) || operation.runner.leaseId !== lease.id
+    || (activeProbe && (operation.runner.sessionId !== probe.sessionId || operation.projectIds.length > 0)))) {
     throw new Error("Plugin-provided Runner execution identity mismatch");
   }
-  const metadata = lease.metadata ?? {};
+  if (operation.kind === "describe" && activeProbe && (operation.sessionId !== probe.sessionId || operation.projectIds.length)) {
+    throw new Error("Plugin-provided Runner probe identity mismatch");
+  }
   if (metadata.driver !== "plugin" || typeof metadata.pluginId !== "string" || typeof metadata.driverKey !== "string") {
     throw new Error("Plugin-provided Runner execution lease has no pinned plugin driver");
   }
@@ -78,7 +85,7 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
     const result = await workers.call(plugin.id, "environmentTask", {
       driverKey: metadata.driverKey, companyId: input.companyId, environmentId: environment?.id ?? null,
       issueId: lease.issueId, config: driverConfig,
-      taskId, runId: run?.id ?? null, agentId: run?.agentId ?? null, projectIds,
+      taskId, runId: run?.id ?? (activeProbe ? String(probe.runId) : null), agentId: run?.agentId ?? null, projectIds,
       lease: { providerLeaseId: lease.providerLeaseId, metadata: lease.metadata ?? undefined }, operation,
     }, 15_000);
     const parsed = parseEnvironmentTaskResult(operation, taskId, result);

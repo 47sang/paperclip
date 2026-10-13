@@ -9,6 +9,7 @@ import { startWorkerRpcHost } from "../../../packages/plugins/sdk/src/worker-rpc
 import { createRequest, parseMessage, serializeMessage, isJsonRpcSuccessResponse, isJsonRpcErrorResponse } from "../../../packages/plugins/sdk/src/protocol.js";
 import type { PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import type { PaperclipPluginManifestV1 } from "@paperclipai/shared";
+import { agentEnvironmentTestService } from "../services/agent-environment-test.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { remoteExecutionHasStopped } from "../services/remote-execution-termination.js";
 import { authorizePluginTaskLeaseTransition } from "../services/environment-task-runtime.js";
@@ -93,6 +94,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
           case "describe": return { kind: "description", taskId: params.taskId,
             runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
             filesystemRoot: "/state", codexCommand: "/codex" };
+          case "check_project_auth": return { kind: "project_auth", taskId: params.taskId, conflict: false };
           case "read_file": return { kind: "file", taskId: params.taskId, base64: "" };
           case "checkpoint": return { kind: "checkpoint", taskId: params.taskId, state: {} };
           case "submit": stopRequested = false; executionStopped = false; return { kind: "accepted", taskId: params.taskId };
@@ -111,6 +113,19 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     const workers = { isRunning: () => true, getWorker: () => ({ supportedMethods }),
       call: (_id: string, method: string, params: unknown) => harness.call(method, params) } as unknown as PluginWorkerManager;
     const runtime = environmentRuntimeService(db, { pluginWorkerManager: workers });
+    const setup = agentEnvironmentTestService(db, workers);
+    await setup.assertAdapterTestEnvironmentForCompany(companyId, environmentId, "paperclip_runner");
+    const probe = await setup.resolveAdapterTestExecutionContext({ companyId, agentId, adapterType: "paperclip_runner", environmentId });
+    expect(probe.fallbackChecks).toEqual([]);
+    expect(probe.executionTarget).toMatchObject({ runnerTaskProbe: { runId: expect.any(String), sessionId: expect.any(String) } });
+    if (probe.executionTarget?.kind !== "remote" || probe.executionTarget.transport !== "sandbox" || !probe.executionTarget.runnerTaskProbe) throw new Error("Probe task target unavailable");
+    await expect(probe.executionTarget.runnerTask!({ kind: "describe", harness: "codex", projectIds: [], sessionId: probe.executionTarget.runnerTaskProbe.sessionId }))
+      .resolves.toMatchObject({ kind: "description" });
+    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", cwd: "/workspace" }))
+      .resolves.toMatchObject({ kind: "project_auth", conflict: false });
+    const [probeLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, probe.executionTarget.leaseId!));
+    expect(probeLease.heartbeatRunId).toBeNull();
+    await probe.release(); released.mockClear();
     const orchestrator = environmentRunOrchestrator(db, { environmentRuntime: runtime });
     const acquired = await orchestrator.acquireForRun({ companyId, selectedEnvironmentId: environmentId, localEnvironmentId: randomUUID(),
       agentId, issueId: null, heartbeatRunId: runId, persistedExecutionWorkspace: null,

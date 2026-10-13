@@ -57,6 +57,7 @@ import {
   openSync,
   opendirSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   readlinkSync,
   readSync,
@@ -11486,7 +11487,11 @@ async function createRunnerdBackendWithinSessionClaim(
     if (provider.kind === "codex" && !description.codexCommand) throw new Error("Plugin Runner Codex executable unavailable");
     if ((provider.kind === "acpx" || provider.kind === "opencode") && !description.providerPack) throw new Error("Plugin Runner qualified provider pack unavailable");
     const guestRoot = description.filesystemRoot;
-    const taskEnvironment: NodeJS.ProcessEnv = { ...resolveNativeProviderEnvironment(provider, input.runnerEnvironment),
+    const grokCredential = provider.kind === "acpx" && provider.agent === "grok" ? await prepareGrokRunnerCredentials({
+      companyId: input.execution.binding.companyId, environment: input.runnerEnvironment ?? {}, remote: true,
+      managedHome: input.managedAiCredentialHome,
+    }) : null;
+    const taskEnvironment: NodeJS.ProcessEnv = { ...(grokCredential?.environment ?? resolveNativeProviderEnvironment(provider, input.runnerEnvironment)),
       HOME: posix.join(guestRoot, "codex-home"), CODEX_HOME: posix.join(guestRoot, "codex-home"),
       PAPERCLIP_WORKSPACE_CWD: remoteTarget.remoteCwd, PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" };
     if (relayAssignedMcp) {
@@ -11529,36 +11534,42 @@ async function createRunnerdBackendWithinSessionClaim(
           .map(name => ({ name, sourcePath: posix.join(guestRoot, name), targetPath: join(root, name) }));
         if (sourceContext?.instructions.workingCopy) directories.push({ name: "instruction-working-copy",
           sourcePath: sourceContext.instructions.workingCopy.rootPath, targetPath: sourceContext.instructions.workingCopy.rootPath });
-        const pending = mkdtempSync(join(root, ".plugin-checkpoint-"));
-        const replaced: typeof directories = [];
-        const installed: typeof directories = [];
+        // Each swap must stay on the destination filesystem, including agent files.
+        const staged: (typeof directories[number] & { pending: string })[] = [];
+        const replaced: typeof staged = [];
+        const installed: typeof staged = [];
         let cleanPending = true;
         try {
-          const state = await checkpoint(directories.map(item => ({ sourcePath: item.sourcePath, targetPath: join(pending, item.name) })));
+          for (const item of directories) {
+            mkdirSync(dirname(item.targetPath), { recursive: true, mode: 0o700 });
+            staged.push({ ...item, pending: mkdtempSync(join(dirname(item.targetPath), ".plugin-checkpoint-")) });
+          }
+          const state = await checkpoint(staged.map(item => ({ sourcePath: item.sourcePath, targetPath: join(item.pending, item.name) })));
           const expected = { schema: RUNNERD_STATE_SCHEMA, runnerInstanceId: effectiveRunnerInstanceId,
             environmentLeaseId: effectiveEnvironmentLeaseId, runId: input.execution.binding.runId,
             normalizedSessionId: nativeSessionKey(input.execution), lifecycle: "suspended" };
           if (Object.entries(expected).some(([key, value]) => state[key] !== value)) throw new Error("Plugin Runner checkpoint identity mismatch");
-          for (const item of directories) if (!isSafeNativeStateDirectory(join(pending, item.name))) throw new Error("Plugin Runner checkpoint files unavailable");
-          const providerState = JSON.parse(readBoundedNativeFile(join(pending, "runner", runnerProviderStateFilename(input.execution)),
+          for (const item of staged) if (!isSafeNativeStateDirectory(join(item.pending, item.name))) throw new Error("Plugin Runner checkpoint files unavailable");
+          const runnerStage = staged.find(item => item.name === "runner")!;
+          const providerState = JSON.parse(readBoundedNativeFile(join(runnerStage.pending, "runner", runnerProviderStateFilename(input.execution)),
             NATIVE_RUNNER_STATE_MAX_BYTES, "plugin_runner_checkpoint_too_large").toString("utf8"));
           if (!providerSessionIdentityIsPresent(providerSessionIdentityFromDurableProviderState({ execution: input.execution, providerState }))) {
             throw new Error("Plugin Runner provider checkpoint is incomplete");
           }
-          writeFileSync(join(pending, "runner/runner-state.json"), JSON.stringify(state), { mode: 0o600 });
-          for (const item of directories) {
-            if (existsSync(item.targetPath)) { renameSync(item.targetPath, join(pending, `${item.name}.previous`)); replaced.push(item); }
-            renameSync(join(pending, item.name), item.targetPath); installed.push(item);
+          writeFileSync(join(runnerStage.pending, "runner/runner-state.json"), JSON.stringify(state), { mode: 0o600 });
+          for (const item of staged) {
+            if (existsSync(item.targetPath)) { renameSync(item.targetPath, join(item.pending, "previous")); replaced.push(item); }
+            renameSync(join(item.pending, item.name), item.targetPath); installed.push(item);
           }
           await input.db.update(environmentLeases).set({ metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || '{"runnerTaskCheckpointed":true}'::jsonb` })
             .where(and(eq(environmentLeases.id, remoteTarget.leaseId!), eq(environmentLeases.companyId, input.execution.binding.companyId)));
         } catch (error) {
           cleanPending = false;
           for (const item of installed.reverse()) rmSync(item.targetPath, { recursive: true, force: true });
-          for (const item of replaced.reverse()) renameSync(join(pending, `${item.name}.previous`), item.targetPath);
+          for (const item of replaced.reverse()) renameSync(join(item.pending, "previous"), item.targetPath);
           cleanPending = true;
           throw error;
-        } finally { if (cleanPending) rmSync(pending, { recursive: true, force: true }); }
+        } finally { if (cleanPending) for (const item of staged) rmSync(item.pending, { recursive: true, force: true }); }
       }, onDispatched: input.onTaskDispatched,
     });
     const executeTool = (call: Parameters<SessionToolAuthorityEpoch["execute"]>[0]) => {
@@ -11608,11 +11619,30 @@ async function createRunnerdBackendWithinSessionClaim(
     });
     sessionToolAuthorityEpochs.get(sessionScopeId)?.revoke();
     sessionToolAuthorityEpochs.set(sessionScopeId, authorityEpoch);
-    const bind = (session: NativeSession) => input.managedAiCredentialHome && provider.kind === "codex" ? bindManagedNativeCredentialTurn(session, {
-      copyBack: async () => { await copyBackCodexAuth({ hostAuthPath: join(input.managedAiCredentialHome!, "auth.json"),
-        readSandboxAuth: async () => readFileSync(join(root, "codex-home/auth.json")), log: () => {} }); },
-      remove: async () => { rmSync(join(root, "codex-home/auth.json"), { force: true }); },
-    }) : session;
+    const boundManagedSessions = new WeakSet<NativeSession>();
+    const bind = (session: NativeSession) => {
+      if (boundManagedSessions.has(session)) return session;
+      if (grokCredential?.home) {
+        boundManagedSessions.add(session);
+        const home = join(realpathSync(root), "acpx/acpx", acpxRuntimeSessionDirectoryName(nativeSessionKey(input.execution)), "grok-home");
+        return bindManagedNativeCredentialTurn(session, {
+          copyBack: async () => { await copyBackGrokAuth({ hostHomeDir: grokCredential.home!, log: () => {},
+            readSandboxAuth: async () => {
+              try { return Buffer.from(await readLocalAiCredentialFile(join(home, "auth.json"))); }
+              catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+                return Buffer.from(await readLocalAiCredentialFile(join(home, "auth-refresh.json"))); }
+            } }); },
+          remove: async () => { for (const name of ["auth.json", "auth-refresh.json", "auth-refresh.json.tmp"]) rmSync(join(home, name), { force: true }); },
+        });
+      }
+      if (!input.managedAiCredentialHome || provider.kind !== "codex") return session;
+      boundManagedSessions.add(session);
+      return bindManagedNativeCredentialTurn(session, {
+        copyBack: async () => { await copyBackCodexAuth({ hostAuthPath: join(input.managedAiCredentialHome!, "auth.json"),
+          readSandboxAuth: async () => readFileSync(join(root, "codex-home/auth.json")), log: () => {} }); },
+        remove: async () => { rmSync(join(root, "codex-home/auth.json"), { force: true }); },
+      });
+    };
     return { ...backend, descriptor: () => backend.descriptor(), openSession: async session => bind(await backend.openSession(session)),
       recoverSession: async (snapshot, options) => { const result = await backend.recoverSession!(snapshot, options);
         return result.session ? { ...result, session: bind(result.session) } : result; }, bindManagedSession: bind };
