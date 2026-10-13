@@ -1,6 +1,34 @@
 # Runner defaults: staged delivery
 
-Updated 2026-10-12.
+Updated 2026-10-13 UTC.
+
+## Fresh cloud onboarding remains unqualified
+
+The source audit found two ordinary-use gaps in the dependent release. Codex
+onboarding resolves Auto from saved environment facts before setup testing.
+The normal setup path does not perform the saved environment platform probe.
+An immutable OCI environment without prior facts therefore creates a Legacy
+agent. Existing managed E2E fixtures explicitly probe first; those fixtures do
+not prove fresh onboarding. A private UI correction is being tested against
+the existing onboarding suite. It uses the existing permission-gated saved
+probe on explicit Connect, refreshes company-scoped discovery, then tests the
+selected runtime. Creation and discovery still allocate nothing. Probe errors
+must stay actionable, and permissions must not broaden.
+
+Cloud master `23531d729756ab0461a53f9358beb8df5c1781ed` distributes named
+Daytona snapshots. Its recorded runtime image digest identifies the app copied
+into that snapshot, not the final boot image. Current source does not bind a
+fresh company's qualification to a verified boot identity. The pinned official
+Daytona SDK accepts snapshot IDs, but does not guarantee a boot-verified digest.
+A read-only lookup of the existing snapshot was rejected before execution by
+automatic approval review because direct credential authorization was missing.
+The exact limited authorization is now requested. No key was read or request
+sent. Source audits and CLI version probes do not close live cloud acceptance.
+
+These are release blockers for the Codex-default and actual Cloud distribution
+stages, not new runtime changes in this prerequisite. No source is merged or
+production-ready. The original budget holds, local preview, existing runners,
+remote-build boundary and no-production-deployment boundary remain intact.
 
 ## Held-authorization fixture correction
 
@@ -1452,3 +1480,24 @@ preference was off; activating it allowed the queued user onboarding response
 to run. The actual legacy Codex task completed and its independently read file
 contained the exact two requested lines. The same-task follow-up is running.
 No second task, agent hire, or automatic runner conversion was used.
+
+### Occupied credential fixture follow-up — 2026-10-12
+
+Current-head `021df207` Runner Vitest 2 failed during fixture preparation with
+`EADDRINUSE`, before credential staging. Reused the shared correction from
+`50e7554069a31af72069e7632e9ae6151019f449`: prepare a fresh home with two
+deliberately occupied candidates, preserve the foreign listener, and retain the
+actual staging denial and unchanged auth-file assertion. The three-line code
+annotation was removed to follow CONTRIBUTING; its explanation lives here.
+
+Only fixture preparation retries, up to eight fresh homes. It releases only its
+owned partial or unselected listeners, then runs credential staging once. A bind
+race during that production call remains a visible failure and receives no
+retry. No production credential or permission behavior changed.
+
+A controlled occupied-port baseline reproduces the old setup failure. All 42
+existing credential controls pass on Node 24 with isolated synthetic data and
+zero provider calls or native builds. Comment-only removal preserves the tested
+executable structure; the suite was not repeated. Evidence is recorded in
+`/private/tmp/ci-final-021df2-shared-credential-quorum-receipt.json` and its
+comment-closure receipt. Fresh published-head CI and review remain required.
