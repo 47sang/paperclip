@@ -109,7 +109,7 @@ export async function assertManagedAiProjectAuth(
     "apiKeyHelper|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|OPENAI_API_KEY|model_provider[[:space:]]*=|env_key[[:space:]]*=|experimental_bearer_token|cli_auth_credentials_store";
   if (target?.kind === "remote" && target.transport === "sandbox" && target.runnerTask && files.length) {
     try {
-      const result = environmentTaskResultSchema.parse(await target.runnerTask({ kind: "check_project_auth", cwd: target.remoteCwd, provider, projectIds: [...target.runnerTaskProjectIds ?? []] }));
+      const result = environmentTaskResultSchema.parse(await target.runnerTask({ kind: "check_project_auth", provider, projectIds: [...target.runnerTaskProjectIds ?? []] }));
       if (result.kind !== "project_auth" || result.conflict) throw new Error("Project authentication conflict");
     } catch {
       throw unprocessable("The environment's project authentication settings must be checked before using this AI connection", { code: "ai_connection_incompatible" });

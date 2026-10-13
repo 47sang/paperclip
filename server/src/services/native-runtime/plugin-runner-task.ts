@@ -1,11 +1,18 @@
-import { posix } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import type { RunnerIngressEndpoint } from "@paperclipai/adapter-utils/runner-connectivity";
-import { PAPERCLIP_RUNNER_INGRESS_PORT, PAPERCLIP_RUNNER_CONNECT_PATH_PREFIX } from "@paperclipai/adapter-utils/runner-connectivity";
 import { RUNNER_PRP_PROTOCOL_MIN, RUNNER_PRP_PROTOCOL_MAX, type RunnerProcessHandle, type RunnerProcessLaunchSpec,
   type DurablePrpControlPlane } from "../../vendor/paperclip-runner/index.js";
 import { connectRunnerPrpIngress } from "../../realtime/runner-prp-outbound.js";
+
+/** Do not project the controller's shell, homes or installed command locations into a task. */
+export function pluginRunnerEnvironment(input: NodeJS.ProcessEnv, provided: Record<string, string>): NodeJS.ProcessEnv {
+  const environment = { ...input };
+  for (const key of Object.keys(environment)) {
+    if (/^(PATH|HOME|USERPROFILE|CODEX_HOME|GROK_HOME|AGENT_HOME|BASH_ENV|ZDOTDIR|SHELL|TMPDIR|GH_CONFIG_DIR|GIT_CONFIG_.*|GIT_SSH.*|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|PAPERCLIP_GITHUB_.*|PAPERCLIP_WORKSPACE_CWD)$/.test(key)) delete environment[key];
+  }
+  return { ...environment, ...provided };
+}
 
 /** Adapts a lease-bound task provider to the existing native process owner.
  * No provider pid is treated as a local pid. Only executionStopped settles it.
@@ -13,10 +20,10 @@ import { connectRunnerPrpIngress } from "../../realtime/runner-prp-outbound.js";
 export function createPluginRunnerTaskOwner(input: {
   task: (operation: unknown) => Promise<unknown>;
   projectIds: readonly string[];
-  runnerExecutable: string;
+  connection: Extract<NonNullable<RunnerProcessLaunchSpec["nativeRunner"]>["connection"], { mode: "listen" }>;
   harness: string;
   prepare: () => Promise<void>;
-  assets?: () => { sourcePath: string; targetPath: string }[];
+  assets?: () => { resource: string; sourcePath: string }[];
   checkpoint: (settlement: "settled" | "unsettled") => Promise<void>;
   onDispatched?: () => Promise<void> | void;
   pollMs?: number;
@@ -61,13 +68,10 @@ export function createPluginRunnerTaskOwner(input: {
         runnerId: native.identity.runnerInstanceId, leaseId: native.identity.environmentLeaseId,
         runId: native.identity.runId, sessionId: native.identity.normalizedSessionId,
         turnId: native.identity.turnId, itemId: native.identity.itemId },
-      launch: { stateDirectory: native.stateDirectory, runnerExecutable: input.runnerExecutable,
-        runnerVersion: native.runnerVersion, runnerDigest: native.runnerDigest, connection: native.connection,
+      launch: { runnerVersion: native.runnerVersion, runnerDigest: native.runnerDigest,
         maxOutboxBytes: native.maxOutboxBytes, p0ReserveBytes: native.p0ReserveBytes,
         maxRuntimeMs: native.maxRuntimeMs, maxLifetimeMs: native.maxLifetimeMs,
         reconnectGraceMs: native.reconnectGraceMs, lifecyclePolicy: native.lifecyclePolicy,
-        acpxLaunchProfile: native.acpxLaunchProfile, opencodeLaunchProfile: native.opencodeLaunchProfile,
-        diagnosticsDirectory: native.diagnosticsDirectory ? posix.join(native.stateDirectory, "diagnostics") : undefined,
         environment: Object.fromEntries(Object.entries(spec.environment).filter(([key, value]) =>
           value !== undefined && key !== "PAPERCLIP_RUNNER_BOOTSTRAP_TICKET")),
       },
@@ -128,8 +132,7 @@ export function createPluginRunnerTaskOwner(input: {
       return { ...result.endpoint, refresh: endpoint, close: async () => {} };
     };
     return {
-      connection: { mode: "listen" as const, listenAddress: "0.0.0.0" as const,
-        listenPort: PAPERCLIP_RUNNER_INGRESS_PORT, listenPath: `${PAPERCLIP_RUNNER_CONNECT_PATH_PREFIX}/${encodeURIComponent(runId)}` },
+      connection: input.connection,
       startupFailureCode: "runner_ingress_unavailable" as const,
       activate: () => {
         activation = (async () => {

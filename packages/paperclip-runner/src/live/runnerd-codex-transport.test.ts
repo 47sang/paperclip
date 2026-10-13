@@ -8462,6 +8462,20 @@ it.each(["claude", "codex"] as const)("keeps the explicitly assigned gateway in 
   expect(environment.DATABASE_URL).toBeUndefined();
 });
 
+it.each(["codex", "opencode", "acpx"] as const)("preserves provider-owned paths without host discovery (%s)", provider => {
+  const provided = { HOME: "V:\\account", PATH: "V:\\bin;W:\\tools", PROVIDER_PRIVATE_ROOT: "W:\\runtime" };
+  const environment = createCapabilityRunnerdProviderEnvironment({ provider,
+    options: { provider, acpxAgent: "pi", environment: { OPENAI_API_KEY: "selected", DATABASE_URL: "must-not-cross", PAPERCLIP_API_KEY: "must-not-cross" },
+      runnerRuntimePaths: { codexHome: "V:\\account", runtimeContext: "W:\\input.json", skillEntries: {}, environment: provided } },
+    identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run", normalizedSessionId: "session", turnId: "turn", itemId: "item" },
+    codexHome: "V:\\account", runtimeContextPath: "W:\\input.json", hasRuntimeContext: true,
+  });
+  expect(environment).toMatchObject({ ...provided, PAPERCLIP_NATIVE_RUNTIME_CONTEXT_PATH: "W:\\input.json" });
+  expect(environment.DATABASE_URL).toBeUndefined(); expect(environment.PAPERCLIP_API_KEY).toBeUndefined();
+  expect(environment.CODEX_HOME).toBeUndefined();
+  if (provider === "acpx") expect(createAcpxSidecarHostEnvironment(environment, "pi", "session").OPENAI_API_KEY).toBe("selected");
+});
+
 it("resolves explicit skills to the remote provider home and rejects unassigned paths", () => {
   const context = assignedRuntimeContext("/controller/bundle", "/controller/instructions");
   const skill = { type: "skill", name: "assigned", path: "/controller/bundle/SKILL.md" };
@@ -8469,6 +8483,8 @@ it("resolves explicit skills to the remote provider home and rejects unassigned 
     { type: "skill", name: "assigned", path: "/runner/codex-home/skills/assigned/SKILL.md" },
   ]);
   expect(resolveRunnerdCodexSkillInputs([], context, "/runner/codex-home")).toEqual([]);
+  expect(resolveRunnerdCodexSkillInputs([skill], context, "unused", { assigned: "V:\\skills\\entry.md" })[0].path).toBe("V:\\skills\\entry.md");
+  expect(() => resolveRunnerdCodexSkillInputs([skill], context, "unused", {})).toThrow("omitted the assigned skill");
   for (const inputs of [[{ ...skill, path: "/arbitrary/SKILL.md" }], [{ ...skill, name: "other" }], [skill, skill]]) {
     expect(() => resolveRunnerdCodexSkillInputs(inputs, context, "/runner/codex-home")).toThrow("unique assigned runtime skill");
   }

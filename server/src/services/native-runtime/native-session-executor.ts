@@ -1,7 +1,6 @@
-import { rewriteGitHubOperationLauncherProfiles } from "@paperclipai/adapter-utils/execution-target";
 import { authorizePluginTaskLeaseTransition } from "../environment-task-runtime.js";
 import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
-import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
+import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
 import { configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
 import { apiKeyBillingType } from "@paperclipai/adapter-utils/api-billing-type";
 import { agents } from "@paperclipai/db";
@@ -11482,73 +11481,56 @@ async function createRunnerdBackendWithinSessionClaim(
     const provider = input.execution.provider;
     if (provider.kind !== "codex" && provider.kind !== "opencode" && provider.kind !== "acpx") throw new Error("Plugin Runner tasks require a workspace harness");
     const harness = provider.kind === "acpx" ? provider.agent : provider.kind;
+    const sourceContext = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+    const resourceIds = ["runner_state", "provider_state", "runtime_context",
+      ...(sourceContext ? ["instructions", ...sourceContext.skills.flatMap(skill => [`skill:${skill.runtimeName}`, `skill_entry:${skill.runtimeName}`]),
+        ...(sourceContext.instructions.workingCopy ? ["instruction_working_copy"] : [])] : [])];
     const description = environmentTaskResultSchema.parse(await pluginTask({ kind: "describe",
-      sessionId: nativeSessionKey(input.execution), harness, projectIds: [...remoteTarget.runnerTaskProjectIds ?? []] }));
-    if (description.kind !== "description") throw new Error("Plugin Runner artifact description unavailable");
-    if (provider.kind === "codex" && !description.codexCommand) throw new Error("Plugin Runner Codex executable unavailable");
+      sessionId: nativeSessionKey(input.execution), harness, projectIds: [...remoteTarget.runnerTaskProjectIds ?? []], resources: resourceIds }));
+    if (description.kind !== "description" || resourceIds.some(id => !description.resources[id])) throw new Error("Plugin Runner runtime description unavailable");
+    if (provider.kind === "codex" && (!description.codexCommand || !description.codexArgs)) throw new Error("Plugin Runner Codex executable unavailable");
     if ((provider.kind === "acpx" || provider.kind === "opencode") && !description.providerPack) throw new Error("Plugin Runner qualified provider pack unavailable");
-    const guestRoot = description.filesystemRoot;
+    const paths = description.resources;
     const grokCredential = provider.kind === "acpx" && provider.agent === "grok" ? await prepareGrokRunnerCredentials({
       companyId: input.execution.binding.companyId, environment: input.runnerEnvironment ?? {}, remote: true,
       managedHome: input.managedAiCredentialHome,
     }) : null;
-    const taskEnvironment: NodeJS.ProcessEnv = { ...(grokCredential?.environment ?? resolveNativeProviderEnvironment(provider, input.runnerEnvironment)),
-      HOME: posix.join(guestRoot, "codex-home"), CODEX_HOME: posix.join(guestRoot, "codex-home"),
-      PAPERCLIP_WORKSPACE_CWD: remoteTarget.remoteCwd, PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" };
+    // Runtime paths/environment come from the provider. Core only supplies selected execution inputs.
+    const taskEnvironment = pluginRunnerEnvironment(grokCredential?.environment ?? input.runnerEnvironment ?? {}, description.environment);
     if (relayAssignedMcp) {
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_NAME;
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_URL;
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_TOKEN;
     }
-    const sourceContext = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
-    const guestWorkingCopyRoot = posix.join(guestRoot, "context/instruction-working-copy");
-    if (sourceContext?.instructions.workingCopy?.kind === "agent_files") taskEnvironment.AGENT_HOME = guestWorkingCopyRoot;
-    const sourceLauncherDirectory = input.runnerEnvironment?.PAPERCLIP_GITHUB_LAUNCHER_DIR;
-    const guestLauncherDirectory = posix.join(guestRoot, "github-launchers");
-    if (sourceLauncherDirectory) {
-      taskEnvironment.PATH = taskEnvironment.PATH?.split(":").map(entry => entry === sourceLauncherDirectory ? guestLauncherDirectory : entry).join(":");
-      taskEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR = guestLauncherDirectory;
-      taskEnvironment.GH_CONFIG_DIR = posix.join(guestRoot, "github-config");
-      taskEnvironment.ZDOTDIR = guestLauncherDirectory;
-      taskEnvironment.BASH_ENV = posix.join(guestLauncherDirectory, ".bashrc");
-      await rewriteGitHubOperationLauncherProfiles({ directory: sourceLauncherDirectory, runtimePath: taskEnvironment.PATH ?? guestLauncherDirectory });
-    }
     const guestContext = sourceContext ? { ...sourceContext,
-      instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle,
-        rootPath: posix.join(guestRoot, "context/instructions") },
-        ...(sourceContext.instructions.workingCopy ? { workingCopy: { ...sourceContext.instructions.workingCopy, rootPath: guestWorkingCopyRoot } } : {}),
+      instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle, rootPath: paths.instructions },
+        ...(sourceContext.instructions.workingCopy ? { workingCopy: { ...sourceContext.instructions.workingCopy, rootPath: paths.instruction_working_copy } } : {}),
       },
-      skills: sourceContext.skills.map((skill, index) => ({ ...skill, bundle: { ...skill.bundle,
-        rootPath: posix.join(guestRoot, "context/skills", String(index)) } })),
+      skills: sourceContext.skills.map(skill => ({ ...skill, bundle: { ...skill.bundle, rootPath: paths[`skill:${skill.runtimeName}`] } })),
     } : null;
+    const providerStateName = provider.kind === "codex" ? "codex-home" : provider.kind;
     const assets = () => [
-      ...["runtime-context.json", "codex-home", "acpx", "opencode"].filter(name => existsSync(join(root, name)))
-        .map(name => ({ sourcePath: join(root, name), targetPath: posix.join(guestRoot, name) })),
-      ...(sourceLauncherDirectory ? [{
-        sourcePath: sourceLauncherDirectory,
-        targetPath: guestLauncherDirectory,
-      }] : []),
-      ...(sourceContext && guestContext ? [
-        { sourcePath: sourceContext.instructions.bundle.rootPath, targetPath: guestContext.instructions.bundle.rootPath },
-        ...sourceContext.skills.map((skill, index) => ({ sourcePath: skill.bundle.rootPath, targetPath: guestContext.skills[index]!.bundle.rootPath })),
-        ...(sourceContext.instructions.workingCopy ? [{ sourcePath: sourceContext.instructions.workingCopy.rootPath,
-          targetPath: guestWorkingCopyRoot }] : []),
+      ...[{ resource: "runtime_context", sourcePath: join(root, "runtime-context.json") },
+        { resource: "provider_state", sourcePath: join(root, providerStateName) }].filter(asset => existsSync(asset.sourcePath)),
+      ...(sourceContext ? [
+        { resource: "instructions", sourcePath: sourceContext.instructions.bundle.rootPath },
+        ...sourceContext.skills.map(skill => ({ resource: `skill:${skill.runtimeName}`, sourcePath: skill.bundle.rootPath })),
+        ...(sourceContext.instructions.workingCopy ? [{ resource: "instruction_working_copy", sourcePath: sourceContext.instructions.workingCopy.rootPath }] : []),
       ] : []),
     ];
-    const checkpoint = async (exports: { sourcePath: string; targetPath: string }[] = [], archive?: unknown) => {
-      const result = environmentTaskResultSchema.parse(await pluginTask({ kind: "checkpoint",
-        stateDirectory: posix.join(guestRoot, "runner"), exports, ...(archive ? { archive } : {}) }));
+    const checkpoint = async (exports: { resource: string; targetPath: string }[] = [], archive?: unknown) => {
+      const result = environmentTaskResultSchema.parse(await pluginTask({ kind: "checkpoint", exports, ...(archive ? { archive } : {}) }));
       if (result.kind !== "checkpoint") throw new Error("Plugin Runner checkpoint unavailable");
       return result.state;
     };
     const owner = createPluginRunnerTaskOwner({ task: pluginTask, projectIds: remoteTarget.runnerTaskProjectIds ?? [],
-      harness, runnerExecutable: description.runner.executable, prepare: async () => {}, assets,
+      harness, connection: description.connection, prepare: async () => {}, assets,
       checkpoint: async settlement => {
         if (settlement !== "settled") return;
-        const directories = [...(provider.kind === "acpx" ? ["acpx"] : provider.kind === "opencode" ? ["opencode"] : ["codex-home"]), "runner"]
-          .map(name => ({ name, sourcePath: posix.join(guestRoot, name), targetPath: join(root, name) }));
+        const directories = [{ name: providerStateName, resource: "provider_state", targetPath: join(root, providerStateName) },
+          { name: "runner", resource: "runner_state", targetPath: join(root, "runner") }];
         if (sourceContext?.instructions.workingCopy) directories.push({ name: "instruction-working-copy",
-          sourcePath: guestWorkingCopyRoot, targetPath: sourceContext.instructions.workingCopy.rootPath });
+          resource: "instruction_working_copy", targetPath: sourceContext.instructions.workingCopy.rootPath });
         // Each swap must stay on the destination filesystem, including agent files.
         const staged: (typeof directories[number] & { pending: string })[] = [];
         const replaced: typeof staged = [];
@@ -11559,7 +11541,7 @@ async function createRunnerdBackendWithinSessionClaim(
             mkdirSync(dirname(item.targetPath), { recursive: true, mode: 0o700 });
             staged.push({ ...item, pending: mkdtempSync(join(dirname(item.targetPath), ".plugin-checkpoint-")) });
           }
-          const state = await checkpoint(staged.map(item => ({ sourcePath: item.sourcePath, targetPath: join(item.pending, item.name) })));
+          const state = await checkpoint(staged.map(item => ({ resource: item.resource, targetPath: join(item.pending, item.name) })));
           const expected = { schema: RUNNERD_STATE_SCHEMA, runnerInstanceId: effectiveRunnerInstanceId,
             environmentLeaseId: effectiveEnvironmentLeaseId, runId: input.execution.binding.runId,
             normalizedSessionId: nativeSessionKey(input.execution), lifecycle: "suspended" };
@@ -11604,9 +11586,9 @@ async function createRunnerdBackendWithinSessionClaim(
         ...(provider.kind === "acpx" ? { acpxAgent: provider.agent,
           acpxCandidateProfile: provider.agent === "pi" ? undefined : resolveAcpxQualification(provider, process.env),
           acpxPermissionMode: provider.permissionMode, acpxMode: provider.mode, piThinkingLevel: provider.piThinkingLevel,
-          acpxRuntimeDirectory: posix.join(guestRoot, "acpx"), acpxPermissionModePinned: true } : {}),
+          acpxRuntimeDirectory: paths.provider_state, acpxPermissionModePinned: true } : {}),
         ...(provider.kind === "opencode" ? { opencodePermissionMode: provider.permissionMode,
-          opencodeRuntimeDirectory: posix.join(guestRoot, "opencode") } : {}),
+          opencodeRuntimeDirectory: paths.provider_state } : {}),
         ...(description.providerPack ? { providerPackAuthorityDigest: description.providerPack.authorityDigest,
           providerNodeCommand: description.providerPack.node.executable, providerNodeCommandSha256: description.providerPack.node.digest,
           acpxSidecarPath: description.providerPack.acpxSidecar?.executable, acpxSidecarSha256: description.providerPack.acpxSidecar?.digest,
@@ -11614,15 +11596,17 @@ async function createRunnerdBackendWithinSessionClaim(
           opencodeProxyPath: description.providerPack.opencodeProxy?.executable, opencodeProxySha256: description.providerPack.opencodeProxy?.digest,
         } : {}),
         runnerArtifact: description.runner, runnerBinary: description.runner.executable,
-        codexCommand: description.codexCommand, runnerFilesystemRoot: guestRoot,
-        runnerStateDirectory: posix.join(guestRoot, "runner"), readRunnerState: () => checkpoint(),
+        codexCommand: description.codexCommand, codexArgs: description.codexArgs,
+        runnerRuntimePaths: { environment: description.environment, codexHome: paths.provider_state, runtimeContext: paths.runtime_context,
+          skillEntries: Object.fromEntries((sourceContext?.skills ?? []).map(skill => [skill.runtimeName, paths[`skill_entry:${skill.runtimeName}`]])) },
+        runnerStateDirectory: paths.runner_state, readRunnerState: () => checkpoint(),
         prepareExternalRunnerState: async () => { await checkpoint(); },
         archiveExternalRunnerState: archive => checkpoint([], archive),
         authorizeEnvironmentLeaseTransition: transition => authorizePluginTaskLeaseTransition(input.db, {
           companyId: input.execution.binding.companyId, ...transition,
         }),
         environment: taskEnvironment,
-        sourceCodexHome: resolveSourceCodexHome(resolveNativeProviderEnvironment(input.execution.provider, input.runnerEnvironment)),
+        sourceCodexHome: input.managedAiCredentialHome ?? resolveSourceCodexHome(input.runnerEnvironment ?? {}) ?? "",
         runnerProcessLauncher: owner.launcher, runnerReconnectGraceMs: 120_000,
         lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, runtimeContext: sourceContext,
         runnerRuntimeContext: guestContext, resumeWorkingDirectory: remoteTarget.remoteCwd,

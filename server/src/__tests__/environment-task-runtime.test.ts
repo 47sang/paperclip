@@ -31,13 +31,21 @@ beforeEach(() => {
   state.plugin = { id: "original", pluginKey: "test.provider", status: "ready", manifestJson: { capabilities: ["environment.drivers.register"], environmentDrivers: [{ driverKey: "tasks", supportsTasks: true }] } };
 });
 describe("plugin-provided Runner execution", () => {
+  it("requires provider bindings for named resources and rejects caller-selected destinations", () => {
+    const operation = environmentTaskOperationSchema.parse({ kind: "describe", sessionId: "session", harness: "codex", projectIds: [], resources: ["instructions"] });
+    const description = { kind: "description", taskId: "attempt-1", runner: { executable: "paperclip-runnerd", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 9000, listenPath: "/connect" }, resources: { instructions: "V:\\assigned\\instructions" } };
+    expect(parseEnvironmentTaskResult(operation, "attempt-1", description)).toMatchObject({ resources: description.resources });
+    expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, resources: {} })).toThrow("omitted a requested runtime resource");
+    expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ resource: "instructions", targetPath: "/core/mirror" }] }).success).toBe(true);
+    expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ sourcePath: "/guest/guessed", targetPath: "/core/mirror" }] }).success).toBe(false);
+  });
   it("allows only the private, unexpired setup identity on an ad-hoc lease", async () => {
     const value = row();
     Object.assign(value.lease, { heartbeatRunId: null, issueId: null }); value.run = null;
     Object.assign(value.lease.metadata, { runnerTaskProbe: { runId: "probe-run", sessionId: "probe-session", expiresAtMs: Date.now() + 60_000 } });
     const operation = { ...submit, projectIds: [], runner: { ...submit.runner, runId: "probe-run", sessionId: "probe-session" },
-      launch: { stateDirectory: "/state/runner", runnerExecutable: "/runner", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
-        connection: { mode: "listen" as const, listenAddress: "0.0.0.0" as const, listenPort: 43127, listenPath: "/connect" },
+      launch: { runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
         maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0, maxLifetimeMs: 0,
         lifecyclePolicy: { mode: "per_turn" as const, idleTimeoutMs: null }, environment: {}, assets: [],
       } };
@@ -72,7 +80,7 @@ describe("plugin-provided Runner execution", () => {
   });
   it("validates project storage before provider-owned authentication inspection", async () => {
     const workers = worker({ kind: "project_auth", taskId: "attempt-1", conflict: false });
-    const operation = { kind: "check_project_auth", provider: "openai", cwd: "/workspace", projectIds: [projectId] } as const;
+    const operation = { kind: "check_project_auth", provider: "openai", projectIds: [projectId] } as const;
     await expect(executeEnvironmentTask(database(row(), []).db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).rejects.toThrow("project unavailable");
     expect(workers.call).not.toHaveBeenCalled();
     await expect(executeEnvironmentTask(database().db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).resolves.toMatchObject({ kind: "project_auth", conflict: false });

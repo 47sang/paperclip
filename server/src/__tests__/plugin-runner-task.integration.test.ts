@@ -93,7 +93,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
         switch (params.operation.kind) {
           case "describe": return { kind: "description", taskId: params.taskId,
             runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
-            filesystemRoot: "/state", codexCommand: "/codex" };
+            resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, codexCommand: "/codex", codexArgs: ["app-server"] };
           case "check_project_auth": return { kind: "project_auth", taskId: params.taskId, conflict: false };
           case "read_file": return { kind: "file", taskId: params.taskId, base64: "" };
           case "checkpoint": return { kind: "checkpoint", taskId: params.taskId, state: {} };
@@ -121,15 +121,14 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     if (probe.executionTarget?.kind !== "remote" || probe.executionTarget.transport !== "sandbox" || !probe.executionTarget.runnerTaskProbe) throw new Error("Probe task target unavailable");
     await expect(probe.executionTarget.runnerTask!({ kind: "describe", harness: "codex", projectIds: [], sessionId: probe.executionTarget.runnerTaskProbe.sessionId }))
       .resolves.toMatchObject({ kind: "description" });
-    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", cwd: "/workspace", projectIds: [] }))
+    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", projectIds: [] }))
       .resolves.toMatchObject({ kind: "project_auth", conflict: false });
     const [probeLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, probe.executionTarget.leaseId!));
     expect(probeLease.heartbeatRunId).toBeNull();
     await probe.executionTarget.runnerTask!({ kind: "submit", bootstrapTicket: "synthetic-probe-ticket", projectIds: [],
       runner: { protocolMin: 1, protocolMax: 3, harness: "codex", runnerId: "probe-runner", leaseId: probeLease.id,
         runId: probe.executionTarget.runnerTaskProbe.runId, sessionId: probe.executionTarget.runnerTaskProbe.sessionId, turnId: "probe-turn", itemId: "probe-item" },
-      launch: { stateDirectory: "/state/runner", runnerExecutable: "/runner", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
-        connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 43127, listenPath: "/probe" },
+      launch: { runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
         maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0,
         lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, environment: {}, assets: [] },
     });
@@ -153,12 +152,12 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     if (target?.kind !== "remote" || target.transport !== "sandbox" || !target.runnerTask) throw new Error("Missing plugin target");
     expect(target.runner).toBeUndefined();
     await expect(target.runnerTask({ kind: "describe", sessionId: "fixture-session", harness: "codex", projectIds: [projectId] }))
-      .resolves.toMatchObject({ kind: "description", filesystemRoot: "/state", runner: { executable: "/runner" } });
+      .resolves.toMatchObject({ kind: "description", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, runner: { executable: "/runner" } });
     const onDispatched = vi.fn(), checkpoint = vi.fn(async () => {}), close = vi.fn(async () => {});
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close });
     const owner = createPluginRunnerTaskOwner({ task: target.runnerTask, projectIds: target.runnerTaskProjectIds ?? [], harness: "codex",
-      runnerExecutable: "/runner/paperclip-runnerd", prepare: async () => {},
-      assets: () => [{ sourcePath: "/core/context", targetPath: "/runner/context" }], checkpoint, onDispatched, pollMs: 1 });
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {},
+      assets: () => [{ resource: "runtime_context", sourcePath: "/core/context" }], checkpoint, onDispatched, pollMs: 1 });
     const registration = await owner.registration({} as never, runId);
     const handle = owner.launcher({ command: "ignored", args: [], cwd: "/ignored", environment: { OPENAI_API_KEY: "synthetic-launch-key" },
       nativeRunner: { identity: { runnerInstanceId: randomUUID(), environmentLeaseId: acquired.lease.id, runId,
@@ -173,7 +172,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       expect(ingress.connect).toHaveBeenCalledWith(expect.objectContaining({ endpoint: expect.objectContaining({ websocketUrl: "wss://runner.example.test/connect" }) }));
       const submit = calls.find(operation => operation.kind === "submit");
       expect(submit).toMatchObject({ kind: "submit", projectIds: [projectId], runner: { leaseId: acquired.lease.id, runId },
-        launch: { runnerExecutable: "/runner/paperclip-runnerd", assets: [{ sourcePath: "/core/context", targetPath: "/runner/context" }], environment: { OPENAI_API_KEY: "synthetic-launch-key" } } });
+        launch: { assets: [{ resource: "runtime_context", sourcePath: "/core/context" }], environment: { OPENAI_API_KEY: "synthetic-launch-key" } } });
       const [saved] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, acquired.lease.id));
       expect(saved.metadata?.runnerTaskDispatched).toBe(true);
       expect(JSON.stringify(saved.metadata)).not.toMatch(/synthetic-launch-key|synthetic-bootstrap-ticket|synthetic-fixture/);

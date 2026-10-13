@@ -265,8 +265,8 @@ export async function resolveEnvironmentExecutionTarget(input: {
     const providerMetadata = parseObject(lease.metadata?.providerMetadata);
     const remoteCwd = typeof lease.metadata?.remoteCwd === "string" ? lease.metadata.remoteCwd
       : typeof providerMetadata.remoteCwd === "string" ? providerMetadata.remoteCwd : null;
-    if (!remoteCwd || !remoteCwd.startsWith("/") || remoteCwd.includes("\0")) {
-      throw new Error("Plugin Runner lease must provide an absolute remoteCwd");
+    if (!remoteCwd || /[\x00-\x1f]/.test(remoteCwd)) {
+      throw new Error("Plugin Runner lease must provide its workspace path");
     }
     return {
       kind: "remote", transport: "sandbox", providerKey: "plugin",

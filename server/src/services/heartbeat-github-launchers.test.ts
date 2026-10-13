@@ -11,14 +11,14 @@ import { prepareHeartbeatGitHubLaunchers } from "./heartbeat-github-launchers.js
 const target = { kind: "remote" as const, transport: "sandbox" as const, providerKey: "daytona", remoteCwd: "/workspace" };
 
 describe("heartbeat GitHub launcher lifetime", () => {
-  it("builds token-free task launch assets locally and retires the local files", async () => {
-    const prepare = vi.fn(async input => input.env), mint = vi.fn();
+  it("leaves a task provider's runtime untouched", async () => {
+    const prepare = vi.fn(), mint = vi.fn();
+    const env = { OPENAI_API_KEY: "selected-credential" };
     const result = await prepareHeartbeatGitHubLaunchers({ native: true, githubConfigured: true, agentId: "agent",
       runId: "run", target: { ...target, runnerTask: async () => ({}) }, cwd: "/core/workspace",
-      env: { GH_TOKEN: "ambient", PATH: "/controller/private/bin" }, brokerUrl: "https://paperclip.test", createBrokerToken: mint }, prepare);
-    expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ target: { kind: "local" }, runId: "run" }));
-    expect(result.cleanupLocation).toEqual({ target: { kind: "local" }, runId: "run" });
-    expect(result.env).toMatchObject({ GH_TOKEN: "", PAPERCLIP_GITHUB_BROKER_TOKEN: "", PATH: "/usr/local/bin:/usr/bin:/bin" });
+      env, brokerUrl: "https://paperclip.test", createBrokerToken: mint }, prepare);
+    expect(result).toEqual({ env, cleanupLocation: null });
+    expect(prepare).not.toHaveBeenCalled();
     expect(mint).not.toHaveBeenCalled();
   });
   it.each([target, null])("defers native managed authorization/staging to the session owner (%j)", async (target) => {

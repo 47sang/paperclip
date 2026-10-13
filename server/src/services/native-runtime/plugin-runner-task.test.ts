@@ -34,7 +34,7 @@ describe("plugin native Runner ownership", () => {
     let fail!: (error: Error) => void;
     const failure = new Promise<never>((_resolve, reject) => { fail = reject; });
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), failure, close: async () => {} });
-    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", runnerExecutable: "/runner",
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
       prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     const observed = registration.failure.catch(error => error);
@@ -50,13 +50,13 @@ describe("plugin native Runner ownership", () => {
     task.mockRejectedValueOnce(new Error("lost submit reply"));
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      runnerExecutable: "/runner", prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     const process = owner.launcher(launchSpec(registration.connection));
     try {
       registration.activate(); await registration.ready();
       expect(task.mock.calls.filter(([operation]) => operation.kind === "submit")).toHaveLength(1);
-      expect(task.mock.calls.find(([operation]) => operation.kind === "submit")?.[0].launch.diagnosticsDirectory).toBe("/state/diagnostics");
+      expect(task.mock.calls.find(([operation]) => operation.kind === "submit")?.[0].launch).not.toHaveProperty("diagnosticsDirectory");
       expect(() => owner.launcher(launchSpec(registration.connection))).toThrow("new task lease");
       await registration.release(); await registration.checkpoint("settled"); await process.completion;
       expect(task.mock.calls.filter(([operation]) => operation.kind === "complete")).toHaveLength(1);
@@ -66,7 +66,7 @@ describe("plugin native Runner ownership", () => {
   it("retains task grants when checkpoint export fails after route release", async () => {
     const { task } = provider();
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
-    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", runnerExecutable: "/runner",
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
       prepare: async () => {}, checkpoint: async () => { throw new Error("export failed"); }, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     const process = owner.launcher(launchSpec(registration.connection));
@@ -82,7 +82,7 @@ describe("plugin native Runner ownership", () => {
     const close = vi.fn(async () => {});
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close });
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      runnerExecutable: "/runner", prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     owner.launcher(launchSpec(registration.connection));
     registration.activate(); await registration.ready(); await registration.release("detach");
@@ -95,7 +95,7 @@ describe("plugin native Runner ownership", () => {
     const prepared = new Promise<void>(resolve => { finish = resolve; });
     const { task } = provider();
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      runnerExecutable: "/runner", prepare: () => prepared, checkpoint: async () => {}, pollMs: 1 });
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: () => prepared, checkpoint: async () => {}, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     const process = owner.launcher(launchSpec(registration.connection));
     registration.activate();
@@ -110,7 +110,7 @@ describe("plugin native Runner ownership", () => {
     ingress.connect.mockClear();
     const controller = new AbortController(); controller.abort();
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      runnerExecutable: "/runner", prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
     const registration = await owner.registration({} as never, "run", controller.signal);
     const process = owner.launcher(launchSpec(registration.connection));
     try {

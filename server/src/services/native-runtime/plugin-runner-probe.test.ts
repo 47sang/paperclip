@@ -39,7 +39,9 @@ describe("plugin Runner setup", () => {
   }, 600_000);
   it.each(["hello", "wrong-model", "invalid-checkpoint"])("requires the actual Runner/provider hello through the task API (%s)", async mode => {
     const root = await mkdtemp(join(tmpdir(), "plugin-probe-fixture-"));
-    const guest = join(root, "guest"), workspace = join(root, "workspace");
+    const workspace = join(root, "workspace");
+    // Provider-selected locations share no prescribed runtime root or directory names.
+    const resources: Record<string, string> = { runner_state: join(root, "records"), provider_state: join(root, "account"), runtime_context: join(root, "input.json") };
     await mkdir(workspace);
     const server = createServer();
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -51,6 +53,8 @@ describe("plugin Runner setup", () => {
     await writeFile(codexCommand, `#!/bin/sh\nexec '${fakeCodex.replace(/'/g, "'\\''")}' "$@" --state-file '${join(root, "fake-state.json")}' ${mode === "wrong-model" ? "--returned-model wrong-model" : ""}\n`);
     await chmod(codexCommand, 0o700);
     const artifact = readRunnerdArtifactBinding(runnerBinary);
+    const probeRunId = randomUUID();
+    const listenPath = `/api/runner/v1/connect/${probeRunId}`;
     const operations: PluginEnvironmentTaskOperation[] = [];
     let handle: ReturnType<typeof spawnRunner> | undefined;
     let stopped = false;
@@ -58,13 +62,14 @@ describe("plugin Runner setup", () => {
       const op = operation as PluginEnvironmentTaskOperation;
       operations.push(op);
       switch (op.kind) {
-        case "describe": return { kind: "description", taskId: "task", filesystemRoot: guest,
-          runner: { executable: runnerBinary, ...artifact }, codexCommand };
+        case "describe": return { kind: "description", taskId: "task", resources, environment: { HOME: resources.provider_state, CODEX_HOME: resources.provider_state },
+          connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: port, listenPath },
+          runner: { executable: runnerBinary, ...artifact }, codexCommand, codexArgs: ["app-server"] };
         case "submit": {
           const launch = op.launch!;
-          for (const asset of launch.assets) await cp(asset.sourcePath, asset.targetPath, { recursive: true });
-          handle = spawnRunner({ ...launch, runnerBinaryPath: launch.runnerExecutable,
-            connection: { ...launch.connection, listenPort: port }, ticket: op.bootstrapTicket,
+          for (const asset of launch.assets) await cp(asset.sourcePath, resources[asset.resource], { recursive: true });
+          handle = spawnRunner({ ...launch, runnerBinaryPath: runnerBinary, stateDirectory: resources.runner_state,
+            connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: port, listenPath }, ticket: op.bootstrapTicket,
             identity: { runnerInstanceId: op.runner.runnerId, environmentLeaseId: op.runner.leaseId, runId: op.runner.runId,
               normalizedSessionId: op.runner.sessionId, turnId: op.runner.turnId, itemId: op.runner.itemId },
             environment: launch.environment,
@@ -85,14 +90,14 @@ describe("plugin Runner setup", () => {
           return { kind: "accepted", taskId: "task" };
         }
         case "connection": return { kind: "connection", taskId: "task", endpoint: {
-          kind: "authenticated_websocket", websocketUrl: `wss://127.0.0.1:${port}${operations.find((op): op is Extract<PluginEnvironmentTaskOperation, {kind:"submit"}> => op.kind === "submit")!.launch!.connection.listenPath}`,
+          kind: "authenticated_websocket", websocketUrl: `wss://127.0.0.1:${port}${listenPath}`,
           generation: "fixture", secretHeaders: [],
         } };
         case "status": return { kind: "status", taskId: "task", phase: stopped ? "completed" : "running", executionStopped: stopped };
         case "stop": handle?.child.kill("SIGTERM"); return { kind: "accepted", taskId: "task" };
         case "checkpoint": {
-          for (const asset of op.exports) await cp(asset.sourcePath, asset.targetPath, { recursive: true });
-          return { kind: "checkpoint", taskId: "task", state: mode === "invalid-checkpoint" ? { runId: "wrong" } : JSON.parse(await readFile(join(guest, "runner/runner-state.json"), "utf8")) };
+          for (const asset of op.exports) await cp(resources[asset.resource], asset.targetPath, { recursive: true });
+          return { kind: "checkpoint", taskId: "task", state: mode === "invalid-checkpoint" ? { runId: "wrong" } : JSON.parse(await readFile(join(resources.runner_state, "runner-state.json"), "utf8")) };
         }
         case "complete": return { kind: "accepted", taskId: "task" };
         default: throw new Error("Unexpected task operation");
@@ -102,7 +107,7 @@ describe("plugin Runner setup", () => {
       const result = await probePluginRunnerEnvironment({ companyId: "fixture", adapterType: "paperclip_runner",
         config: { provider: "codex", model: "gpt-6.1-sol", env: { OPENAI_API_KEY: "synthetic-fixture" } },
         executionTarget: { kind: "remote", transport: "sandbox", providerKey: "plugin", leaseId: randomUUID(), remoteCwd: workspace,
-          runnerTaskProbe: { runId: randomUUID(), sessionId: randomUUID() }, runnerTask: task },
+          runnerTaskProbe: { runId: probeRunId, sessionId: randomUUID() }, runnerTask: task },
       });
       expect(result.status).toBe(mode === "hello" ? "pass" : "fail");
       expect(operations.some(op => op.kind === "submit")).toBe(true);

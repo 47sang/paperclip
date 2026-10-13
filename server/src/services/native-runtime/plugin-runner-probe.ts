@@ -1,17 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, posix } from "node:path";
+import { join } from "node:path";
 import type { AdapterEnvironmentTestContext, AdapterEnvironmentTestResult } from "@paperclipai/adapter-utils";
 import { parseObject } from "@paperclipai/adapter-utils/server-utils";
 import { copyBackGrokAuth } from "@paperclipai/adapter-grok-local/server";
 import { readLocalAiCredentialFile } from "../local-ai-credential-file.js";
 import { prepareGrokRunnerCredentials } from "./grok-runner-credentials.js";
-import { acpxRuntimeSessionDirectoryName } from "../../vendor/paperclip-runner/index.js";
 import { copyBackCodexAuth } from "@paperclipai/adapter-codex-local/server";
 import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
 import { probeNativeRunnerEnvironment } from "../../vendor/paperclip-runner/index.js";
-import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
+import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
 import { resolvePaperclipRunnerProviderProfile } from "./provider-profile.js";
 import { resolveAcpxQualification } from "./acpx-qualification.js";
 
@@ -32,29 +31,31 @@ export async function probePluginRunnerEnvironment(context: AdapterEnvironmentTe
     const profile = resolvePaperclipRunnerProviderProfile(context.config);
     if (profile.provider !== "codex" && profile.provider !== "opencode" && profile.provider !== "acpx") throw new Error("Plugin Runner setup requires a workspace harness");
     const description = environmentTaskResultSchema.parse(await task({ kind: "describe", sessionId: binding.sessionId,
-      harness: profile.provider === "acpx" ? profile.acpxAgent : profile.provider, projectIds: [] }));
+      harness: profile.provider === "acpx" ? profile.acpxAgent : profile.provider, projectIds: [], resources: ["runner_state", "provider_state", "runtime_context"] }));
     if (description.kind !== "description") throw new Error("Plugin Runner artifact description unavailable");
-    const guest = description.filesystemRoot;
+    if (profile.provider === "codex" && (!description.codexCommand || !description.codexArgs)) throw new Error("Plugin Runner Codex launch unavailable");
+    const paths = description.resources;
+    if (["runner_state", "provider_state", "runtime_context"].some(id => !paths[id])) throw new Error("Plugin Runner runtime description incomplete");
     const sourceEnvironment = Object.fromEntries(Object.entries(parseObject(context.config.env))
       .filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     const sourceHome = sourceEnvironment.CODEX_HOME ?? "";
     const grok = profile.provider === "acpx" && profile.acpxAgent === "grok" ? await prepareGrokRunnerCredentials({
       companyId: context.companyId, environment: sourceEnvironment, remote: true, managedHome: sourceEnvironment.GROK_HOME,
     }) : null;
-    const checkpoint = async (exports: { sourcePath: string; targetPath: string }[] = []) => {
-      const result = environmentTaskResultSchema.parse(await task({ kind: "checkpoint", stateDirectory: posix.join(guest, "runner"), exports }));
+    const checkpoint = async (exports: { resource: string; targetPath: string }[] = []) => {
+      const result = environmentTaskResultSchema.parse(await task({ kind: "checkpoint", exports }));
       if (result.kind !== "checkpoint") throw new Error("Plugin Runner probe state unavailable");
       return result.state;
     };
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [],
       harness: profile.provider === "acpx" ? profile.acpxAgent : profile.provider,
-      runnerExecutable: description.runner.executable, prepare: async () => {},
-      assets: () => ["codex-home", "acpx", "opencode"].filter(name => existsSync(join(root, name)))
-        .map(name => ({ sourcePath: join(root, name), targetPath: posix.join(guest, name) })),
+      connection: description.connection, prepare: async () => {},
+      assets: () => [{ resource: "provider_state", sourcePath: join(root, profile.provider === "codex" ? "codex-home" : profile.provider) }]
+        .filter(asset => existsSync(asset.sourcePath)),
       checkpoint: async () => {
         const state = await checkpoint([
-          ...(profile.provider === "codex" && sourceHome ? [{ sourcePath: posix.join(guest, "codex-home"), targetPath: join(root, "refreshed-home") }] : []),
-          ...(grok?.home ? [{ sourcePath: posix.join(guest, "acpx/acpx", acpxRuntimeSessionDirectoryName(binding.sessionId), "grok-home"), targetPath: join(root, "refreshed-grok") }] : []),
+          ...(profile.provider === "codex" && sourceHome ? [{ resource: "provider_state", targetPath: join(root, "refreshed-home") }] : []),
+          ...(grok?.home ? [{ resource: "provider_auth", targetPath: join(root, "refreshed-grok") }] : []),
         ]);
         const expected = { schema: "paperclip.runner.durable.state.v1", runnerInstanceId: runnerId,
           environmentLeaseId: target.leaseId, runId: binding.runId, normalizedSessionId: binding.sessionId, lifecycle: "suspended" };
@@ -65,16 +66,17 @@ export async function probePluginRunnerEnvironment(context: AdapterEnvironmentTe
     probeStarted = true;
     const result = await probeNativeRunnerEnvironment({ runtimeDirectory: root, provider: profile.provider,
       model: profile.model, workingDirectory: target.remoteCwd, timeoutMs: 45_000,
-      environment: { ...(grok?.environment ?? sourceEnvironment), HOME: posix.join(guest, "probe-home"), CODEX_HOME: posix.join(guest, "codex-home") },
+      environment: pluginRunnerEnvironment(grok?.environment ?? sourceEnvironment, description.environment),
       transportOptions: {
         runnerArtifact: description.runner, runnerBinary: description.runner.executable,
-        codexCommand: description.codexCommand, sourceCodexHome: sourceHome,
-        runnerFilesystemRoot: guest, runnerStateDirectory: posix.join(guest, "runner"), readRunnerState: () => checkpoint(),
+        codexCommand: description.codexCommand, codexArgs: description.codexArgs, sourceCodexHome: sourceHome,
+        runnerRuntimePaths: { environment: description.environment, codexHome: paths.provider_state, runtimeContext: paths.runtime_context, skillEntries: {} },
+        runnerStateDirectory: paths.runner_state, readRunnerState: () => checkpoint(),
         runnerProcessLauncher: owner.launcher,
-        ...(profile.provider === "opencode" ? { opencodePermissionMode: "deny", opencodeRuntimeDirectory: posix.join(guest, "opencode") } : {}),
+        ...(profile.provider === "opencode" ? { opencodePermissionMode: "deny", opencodeRuntimeDirectory: paths.provider_state } : {}),
         ...(profile.provider === "acpx" ? { acpxAgent: profile.acpxAgent, acpxPermissionMode: "deny-all", acpxPermissionModePinned: true,
           acpxCandidateProfile: profile.acpxAgent === "pi" ? undefined : resolveAcpxQualification({ kind: "acpx", agent: profile.acpxAgent, model: profile.model }, process.env),
-          acpxRuntimeDirectory: posix.join(guest, "acpx") } : {}),
+          acpxRuntimeDirectory: paths.provider_state } : {}),
         ...(description.providerPack ? { providerPackAuthorityDigest: description.providerPack.authorityDigest,
           providerNodeCommand: description.providerPack.node.executable, providerNodeCommandSha256: description.providerPack.node.digest,
           acpxSidecarPath: description.providerPack.acpxSidecar?.executable, acpxSidecarSha256: description.providerPack.acpxSidecar?.digest,

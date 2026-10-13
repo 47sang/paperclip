@@ -31,31 +31,47 @@ hooks, or `onEnvironmentRealizeWorkspace`. Missing task support fails closed.
 
 Implement the lease hooks: `onEnvironmentAcquireLease`,
 `onEnvironmentReleaseLease`, and `onEnvironmentDestroyLease`. Acquisition reserves
-a unique task attempt and returns an absolute `metadata.remoteCwd`. Each attempt
+a unique task attempt and returns its workspace path in `metadata.remoteCwd`. Each attempt
 needs its own provider lease ID, even when attempts share a persistent computer.
 The plugin owns the authoritative project volumes and resolves the validated
 project IDs into mounts before task startup. Core does not upload or restore a
 host checkout over those volumes.
 
-Core requests `describe` for the session and harness. Return the qualified Runner
-executable, version, digest, and a private `filesystemRoot` that remains stable for
-that session. Return `codexCommand` for Codex. ACPX and OpenCode also need a
-`providerPack` with the qualified Node and sidecar/proxy/executable artifacts.
-These values must come from the installed plugin's pinned image or trusted build
-manifest, not an agent request or an unverified hash reported by a guest. Runner
-verifies its launch profile; Core authenticates the exact Runner artifact and
-identity over PRP. The descriptor is transient and contains no credentials.
+Core requests `describe` for the session, harness, and named resources. The plugin
+returns qualified Runner/provider artifacts, listener settings, runtime environment,
+and a `resources` map of provider-owned paths. Core forwards those protocol values
+unchanged; it never joins, normalizes, or creates paths on the Runner host. There
+is no required filesystem root, shell profile, PATH, home directory, or shared
+filesystem with Core. Artifact identities must come from the installed plugin's
+pinned image or trusted build manifest. Core authenticates the Runner over PRP.
 
-Core supplies a structured `launch` object on `submit`: identity, expected
-artifact, state directory, listener settings, resource bounds, lifecycle policy,
-provider launch profiles, transient environment, and `assets`. Each asset maps a
-Core-owned source file or directory to its guest destination. The task provider
-must deliver these assets before starting Runner, without interpreting a shell
-command. The plugin can use its own HTTP API, shell/exec API, storage service, or other provider facility. Core does not select or interpret that transport.
-Core maps instruction copies, GitHub wrappers, runtime homes, and their environment paths beneath the plugin-declared filesystem root. The guest does not need Core's host directory layout. Core generates the runtime context, instruction and skill bundles, isolated
-provider homes, and current credentials. Assets are private; do not log them.
-Stage fresh launch material on every attempt. Do not merge credentials from an
-unrelated attempt or replace project mounts while a task runs.
+The resource names express purpose, not directory layout:
+
+- `runner_state`: durable Runner state in the Runner's checkpoint format.
+- `provider_state`: isolated provider configuration and resumable state.
+- `runtime_context`: the execution context document consumed by Runner.
+- `instructions` and `instruction_working_copy`: assigned and editable agent files.
+- `skill:<name>` and `skill_entry:<name>`: an assigned skill bundle and its entry file.
+- `provider_auth`: refreshed subscription authentication, exported when requested.
+
+Return every requested resource and keep its binding stable across attempts that resume the same session.
+Return `codexCommand` and `codexArgs` for Codex, or a qualified `providerPack` for ACPX/OpenCode.
+Executable resolution (including PATH lookup) belongs to the plugin; return resolved
+paths where the installed Runner requires them for artifact verification. Project
+file references remain relative to the bound workspace.
+The provider configures its runtime environment, including any homes, search
+paths, and packaged sidecar locations required by its installed Runner version.
+Core retains authority over run identity, credential binding and permission policy.
+
+On `submit`, Core supplies identity, a bootstrap ticket, expected artifact identity,
+resource limits, lifecycle policy, selected environment/credentials, and named
+`assets`. Each asset has a `resource` and a Core-local `sourcePath`; the plugin
+materializes it at its own location before starting Runner. It can use HTTP,
+storage, shell/exec, or another facility. Core does not select that transport.
+Core does not send GitHub wrappers or prescribe a guest shell environment.
+Assets are private: do not log them, reuse another attempt's credentials, or
+replace project mounts while a task runs. Core-local paths are only readable by
+the plugin worker on Core; they are never assumed to exist on the Runner host.
 
 Core waits for `running`, obtains `connection`, and opens authenticated PRP.
 PRP carries tools, provider sessions, results, and authorization. The task hook
@@ -73,16 +89,16 @@ Core tools retain their normal authorization.
 ## Files and durable state
 
 `checkpoint` reads the task's durable Runner state and returns `state`. When
-`exports` are present, copy each guest source into its Core-owned target before
+`exports` are present, export each named `resource` into its Core-owned `targetPath` before
 returning. Replace exported directories atomically. Never follow symlinks out of
-the requested source, preserve private file modes, and fail when a requested
+the bound resource, preserve private file modes, and fail when a requested
 export cannot be completed. Core exports provider homes and Runner/provider state
 after verified suspension. Core validates the returned identity and lifecycle.
 It also exports the registered agent instruction working copy before task
 completion revokes grants. The existing file store then validates and saves the
 local mirror. A persisted task lease binding and checkpoint marker prevent a stale
 mirror from being saved, including by the instruction recovery sweep. An export failure must not become a successful
-save. An export-only request can omit `stateDirectory`.
+save. Guest source locations are resolved by the plugin, never supplied by Core.
 
 For authority rotation, `checkpoint.archive` supplies an archive key and the
 prior identity. Atomically verify that the prior Runner is suspended, archive that

@@ -10069,8 +10069,8 @@ describe("runnerd provider runtime wiring", () => {
       provider: { kind: "acpx", agent: "grok", model: "grok-4.7", permissionMode: "deny-all" },
       session: { ...execution.session, driverKind: "acpx_runtime" } } as unknown as NativeExecutionInputV1;
     const artifact = { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` };
-    const task = vi.fn(async () => ({ kind: "description", taskId: "task", filesystemRoot: "/state", runner: artifact,
-      codexCommand: "/codex", providerPack: { authorityDigest: artifact.digest, node: artifact, acpxSidecar: artifact } }));
+    const task = vi.fn(async () => ({ kind: "description", taskId: "task", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, runner: artifact,
+      codexCommand: "/codex", codexArgs: ["app-server"], providerPack: { authorityDigest: artifact.digest, node: artifact, acpxSidecar: artifact } }));
     const close = vi.fn(async () => {});
     const raw = { close };
     state.createBackend.mockReturnValueOnce({ kind: "test", openSession: async () => raw,
@@ -10097,8 +10097,6 @@ describe("runnerd provider runtime wiring", () => {
   });
 
   it("selects the plugin task process owner and binds Runner identity to its acquired lease", async () => {
-    const sourceWrappers = join(isolatedStateDirectory, "controller-wrappers");
-    await mkdir(sourceWrappers, { recursive: true, mode: 0o700 });
     const instructionRoot = join(isolatedStateDirectory, "agent-files/working");
     await mkdir(instructionRoot, { recursive: true, mode: 0o700 });
     await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
@@ -10108,8 +10106,8 @@ describe("runnerd provider runtime wiring", () => {
     const launcher = vi.fn();
     const registration = vi.fn();
     const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration });
-    const task = vi.fn(async (_operation: unknown): Promise<unknown> => ({ kind: "description", taskId: "task", filesystemRoot: "/state",
-      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex" }));
+    const task = vi.fn(async (_operation: unknown): Promise<unknown> => ({ kind: "description", taskId: "task", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
+      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex", codexArgs: ["app-server"] }));
     const target = { kind: "remote", transport: "sandbox", providerKey: "plugin",
       leaseId: "plugin-task-lease", remoteCwd: "/workspace", runnerTask: task,
       runnerTaskProjectIds: ["project-one", "project-two"] } as never;
@@ -10119,7 +10117,7 @@ describe("runnerd provider runtime wiring", () => {
         runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
       await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
         runnerExecutionTarget: target, runnerIngressAuthorized: true,
-        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: sourceWrappers, PATH: `${sourceWrappers}:/usr/bin` } });
+        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/wrappers", PATH: "/controller/private/bin" } });
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
       expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
@@ -10127,24 +10125,22 @@ describe("runnerd provider runtime wiring", () => {
         prpIdentity: expect.objectContaining({ environmentLeaseId: "plugin-task-lease" }),
       }));
       expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
-        runnerArtifact: expect.objectContaining({ version: "fixture" }), codexCommand: "/codex",
-        runnerFilesystemRoot: "/state", readRunnerState: expect.any(Function),
+        runnerArtifact: expect.objectContaining({ version: "fixture" }), codexCommand: "/codex", codexArgs: ["app-server"],
+        runnerRuntimePaths: expect.objectContaining({ codexHome: "/accounts/selected", runtimeContext: "/inputs/context.json" }), readRunnerState: expect.any(Function),
         archiveExternalRunnerState: expect.any(Function),
-        environment: expect.objectContaining({ HOME: "/state/codex-home", PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" }),
+        environment: expect.objectContaining({ HOME: "/accounts/selected" }),
       }));
       expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["project-one", "project-two"] }));
       const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {
         runnerRuntimeContext: { instructions: { workingCopy: { rootPath: string } } }; environment: NodeJS.ProcessEnv;
       };
-      expect(options.runnerRuntimeContext.instructions.workingCopy.rootPath).toBe("/state/context/instruction-working-copy");
-      expect(state.createBackend.mock.calls.at(-1)![0]).toMatchObject({ runtimeContext: { instructions: { workingCopy: { rootPath: "/state/context/instruction-working-copy" } } } });
-      expect(options.environment).toMatchObject({ AGENT_HOME: "/state/context/instruction-working-copy", PATH: "/state/github-launchers:/usr/bin",
-        PAPERCLIP_GITHUB_LAUNCHER_DIR: "/state/github-launchers", GH_CONFIG_DIR: "/state/github-config" });
-      expect(await readFile(join(sourceWrappers, ".bashrc"), "utf8")).toContain("/state/github-launchers:/usr/bin");
-      expect(options.environment).toMatchObject({ BASH_ENV: "/state/github-launchers/.bashrc", ZDOTDIR: "/state/github-launchers" });
+      expect(options.runnerRuntimeContext.instructions.workingCopy.rootPath).toBe("/working/agent");
+      expect(state.createBackend.mock.calls.at(-1)![0]).toMatchObject({ runtimeContext: { instructions: { workingCopy: { rootPath: "/working/agent" } } } });
+      expect(options.environment.PATH).toBeUndefined();
+      expect(options.environment.PAPERCLIP_GITHUB_LAUNCHER_DIR).toBeUndefined();
+      expect(options.environment.BASH_ENV).toBeUndefined();
       expect(owner.mock.calls.at(-1)![0].assets!()).toEqual(expect.arrayContaining([
-        { sourcePath: instructionRoot, targetPath: "/state/context/instruction-working-copy" },
-        { sourcePath: sourceWrappers, targetPath: "/state/github-launchers" },
+        { resource: "instruction_working_copy", sourcePath: instructionRoot },
       ]));
       const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
       await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
@@ -10158,11 +10154,11 @@ describe("runnerd provider runtime wiring", () => {
       task.mockImplementation(async (operation: any) => {
         for (const item of operation.exports ?? []) {
           await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
-          if (item.sourcePath === "/state/context/instruction-working-copy") {
+          if (item.resource === "instruction_working_copy") {
             expect(dirname(dirname(item.targetPath))).toBe(dirname(instructionRoot));
             await writeFile(join(item.targetPath, "AGENTS.md"), "exported instructions");
           }
-          if (item.sourcePath.endsWith("/runner")) await writeFile(join(item.targetPath, "codex-provider-state.json"), JSON.stringify({
+          if (item.resource === "runner_state") await writeFile(join(item.targetPath, "codex-provider-state.json"), JSON.stringify({
             schema: "paperclip.runner.codex-provider-state.v1", lifecycle: "session_open", threadId: "thread",
             activeProviderTurnId: null, config: { provider: "codex", driver: "codex_app_server" },
           }));
