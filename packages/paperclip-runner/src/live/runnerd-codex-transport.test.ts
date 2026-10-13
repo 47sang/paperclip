@@ -6962,6 +6962,36 @@ it("rotates PRP authority in place for a warm cross-run attachment", async () =>
   }
 }, 30_000);
 
+it("verifies ACPX setup using its authenticated effective model and a read-only hello", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runnerd-pi-setup-"));
+  const providerNode = process.platform === "linux" ? join(root, "node") : process.execPath;
+  if (process.platform === "linux") {
+    await cp(process.execPath, providerNode, { dereference: true }); await chmod(providerNode, 0o500);
+  }
+  const cliRoot = join(root, "dist/cli"); await mkdir(cliRoot, { recursive: true, mode: 0o700 });
+  const sidecar = join(cliRoot, "acpx-runtime-sidecar.cjs");
+  const fixture = await readFile(fileURLToPath(new URL("./fixtures/fake-pi-warm-sidecar.cjs", import.meta.url)), "utf8");
+  const start = fixture.indexOf('  if (command === "turn.start") event("runtime.tool_called", {');
+  const end = fixture.indexOf('  if (command === "tool.resolve")', start);
+  expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
+  const hello = fixture.slice(0, start) + `  if (command === "turn.start") {
+    event("runtime.event", { type: "text_delta", text: "hello" });
+    event("runtime.turn_terminal", { status: "completed" });
+  }\n` + fixture.slice(end);
+  await writeFile(sidecar, hello.replace("/* fixture-config */ null", JSON.stringify({ journal: join(root, "commands.ndjson"),
+    resumeDelayMs: 0, commandDigest: QUALIFIED_ACPX_PROFILES.pi.commandDigest })), { mode: 0o600 });
+  const digest = (path: string) => `sha256:${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
+  const workspace = join(root, "workspace"); await mkdir(workspace);
+  try {
+    await expect(probeNativeRunnerEnvironment({ runtimeDirectory: root, provider: "acpx",
+      model: "openrouter/deepseek/deepseek-v4-flash-0731", workingDirectory: workspace, environment: { PATH: "/usr/bin:/bin" },
+      transportOptions: { acpxAgent: "pi", piThinkingLevel: "low", acpxPermissionMode: "deny-all", runnerFilesystemRoot: root,
+        runnerBinary: defaultCapabilityRunnerdBinary(), providerNodeCommand: providerNode, providerNodeCommandSha256: digest(providerNode),
+        acpxSidecarPath: sidecar, acpxSidecarSha256: digest(sidecar), providerPackAuthorityDigest: `sha256:${"d".repeat(64)}` },
+    })).resolves.toMatchObject({ provider: "acpx", providerDriver: "acpx_runtime", effectiveModel: "openrouter/deepseek/deepseek-v4-flash-0731", helloProbePassed: true });
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
 it("reopens Pi after a completed turn within its cold admission budget during warm attachment", async () => {
   const root = await mkdtemp(join(tmpdir(), "runnerd-pi-warm-admission-"));
   const providerNode = process.platform === "linux" ? join(root, "node") : process.execPath;
@@ -8506,7 +8536,8 @@ it.each([true, false])("preserves prepared OpenCode cleanup errors (primary fail
 it.each([
   { model: "openrouter/deepseek/deepseek-v4-flash-0731", supportsReasoning: true },
   { model: "anthropic/claude-sonnet-4", supportsReasoning: false },
-])("preserves prepared input and completion feedback through runnerd and the real OpenCode proxy boundary ($model)", async ({ model, supportsReasoning }) => {
+  { model: "openrouter/deepseek/deepseek-v4-flash-0731", supportsReasoning: true, readOnly: true },
+])("preserves prepared input and completion feedback through runnerd and the real OpenCode proxy boundary ($model, read-only: $readOnly)", async ({ model, supportsReasoning, readOnly = false }) => {
   const root = await mkdtemp(join(tmpdir(), "runnerd-prepared-opencode-"));
   // GitHub-hosted Linux toolcache Node can be group-writable, unlike the AWS
   // fleet. Qualify an owned copy with strict permissions, never chmod the host
@@ -8561,6 +8592,7 @@ it.each([
   const driver = new CodexAppServerDriver({
     taskEnvelope: task,
     conversationMode: "prepared",
+    ...(readOnly ? { requestedCollaborationMode: "plan" as const } : {}),
     model,
     transportFactory: () => bundle.transport,
     workingDirectoryAuthority: "remote_runner",
@@ -8594,6 +8626,10 @@ it.each([
         events.push(event);
         if (event.eventType === "turn.completed") break;
       }
+      if (readOnly) expect(events.find(event => event.eventType === "session.started")).toMatchObject({
+        payload: { context: { sandbox: { permissionProfile: { id: "paperclip-runner-workspace-read-only" } } } },
+      });
+      expect(events.find(event => event.eventType === "session.started")).toMatchObject({ payload: { context: { model } } });
       expect(completionCalls).toBe(2);
       expect(events.filter(event => event.eventType === "run.result.proposed")).toHaveLength(1);
       const sessionRoots = (await readdir(runtime, { withFileTypes: true })).filter((entry) => entry.isDirectory());

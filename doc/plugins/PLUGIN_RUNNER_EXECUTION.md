@@ -52,7 +52,7 @@ provider launch profiles, transient environment, and `assets`. Each asset maps a
 Core-owned source file or directory to its guest destination. The task provider
 must deliver these assets before starting Runner, without interpreting a shell
 command. The plugin can use its own HTTP API, shell/exec API, storage service, or other provider facility. Core does not select or interpret that transport.
-Core generates the runtime context, instruction and skill bundles, isolated
+Core maps instruction copies, GitHub wrappers, runtime homes, and their environment paths beneath the plugin-declared filesystem root. The guest does not need Core's host directory layout. Core generates the runtime context, instruction and skill bundles, isolated
 provider homes, and current credentials. Assets are private; do not log them.
 Stage fresh launch material on every attempt. Do not merge credentials from an
 unrelated attempt or replace project mounts while a task runs.
@@ -197,7 +197,7 @@ Normal agent initialization and the agent Test flow acquire a disposable task le
 Core issues an expiring private Runner identity, with no issue, project mounts, or
 agent tool authority. It uses the same describe, submit, connection, status,
 checkpoint, stop, and complete operations as execution. No workspace-realization
-or command hook is required. Core runs a bounded read-only hello turn and checks
+or command hook is required. Core also bounds Runner's own maximum lifetime to the probe deadline, so a controller crash cannot leave an unlimited probe. Core runs a bounded read-only hello turn and checks
 PRP identity, the qualified provider driver, the observed model, a completed
 response, and confirmed task shutdown. A plugin readiness flag cannot replace
 this probe. Managed accounts also require the project-auth check before launch.

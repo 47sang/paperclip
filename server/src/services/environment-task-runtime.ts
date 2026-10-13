@@ -74,6 +74,13 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
   const config = (environment?.config ?? {}) as Record<string, unknown>;
   const driverConfig = config.pluginKey === plugin.pluginKey && config.driverKey === metadata.driverKey
     ? (config.driverConfig as Record<string, unknown> | undefined) ?? {} : {};
+  if (operation.kind === "submit" && activeProbe) {
+    const remainingMs = Number(probe.expiresAtMs) - Date.now();
+    if (remainingMs <= 0 || !operation.launch) throw new Error("Plugin-provided Runner probe lease is not active");
+    // Runner itself must stop if Core disappears during a setup probe.
+    operation.launch.maxLifetimeMs = operation.launch.maxLifetimeMs && operation.launch.maxLifetimeMs > 0
+      ? Math.min(operation.launch.maxLifetimeMs, remainingMs) : remainingMs;
+  }
   if (operation.kind === "submit") {
     // No ticket, headers, environment values, or launch paths belong in metadata.
     const marked = await db.update(environmentLeases).set({

@@ -10101,7 +10101,7 @@ describe("runnerd provider runtime wiring", () => {
     await mkdir(instructionRoot, { recursive: true, mode: 0o700 });
     await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
     const runtimeContext = nativeRuntimeContextFixture();
-    runtimeContext.instructions.workingCopy = { rootPath: instructionRoot } as never;
+    runtimeContext.instructions.workingCopy = { rootPath: instructionRoot, kind: "agent_files", entryPath: "AGENTS.md" } as never;
     const taskExecution = { ...execution, runtimeContext };
     const launcher = vi.fn();
     const registration = vi.fn();
@@ -10116,7 +10116,8 @@ describe("runnerd provider runtime wiring", () => {
       await expect(createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution,
         runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
       await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
-        runnerExecutionTarget: target, runnerIngressAuthorized: true });
+        runnerExecutionTarget: target, runnerIngressAuthorized: true,
+        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/github-wrappers", PATH: "/controller/github-wrappers:/usr/bin" } });
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
       expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
@@ -10130,6 +10131,17 @@ describe("runnerd provider runtime wiring", () => {
         environment: expect.objectContaining({ HOME: "/state/codex-home", PAPERCLIP_RUNNER_EXTERNAL_SANDBOX: "1" }),
       }));
       expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["project-one", "project-two"] }));
+      const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {
+        runnerRuntimeContext: { instructions: { workingCopy: { rootPath: string } } }; environment: NodeJS.ProcessEnv;
+      };
+      expect(options.runnerRuntimeContext.instructions.workingCopy.rootPath).toBe("/state/context/instruction-working-copy");
+      expect(state.createBackend.mock.calls.at(-1)![0]).toMatchObject({ runtimeContext: { instructions: { workingCopy: { rootPath: "/state/context/instruction-working-copy" } } } });
+      expect(options.environment).toMatchObject({ AGENT_HOME: "/state/context/instruction-working-copy", PATH: "/state/github-launchers:/usr/bin",
+        PAPERCLIP_GITHUB_LAUNCHER_DIR: "/state/github-launchers", GH_CONFIG_DIR: "/state/github-config" });
+      expect(owner.mock.calls.at(-1)![0].assets!()).toEqual(expect.arrayContaining([
+        { sourcePath: instructionRoot, targetPath: "/state/context/instruction-working-copy" },
+        { sourcePath: "/controller/github-wrappers", targetPath: "/state/github-launchers" },
+      ]));
       const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
       await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
       await writeFile(join(root, "codex-home/auth.json"), "preserved-private-fixture");
@@ -10142,7 +10154,7 @@ describe("runnerd provider runtime wiring", () => {
       task.mockImplementation(async (operation: any) => {
         for (const item of operation.exports ?? []) {
           await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
-          if (item.sourcePath === instructionRoot) {
+          if (item.sourcePath === "/state/context/instruction-working-copy") {
             expect(dirname(dirname(item.targetPath))).toBe(dirname(instructionRoot));
             await writeFile(join(item.targetPath, "AGENTS.md"), "exported instructions");
           }

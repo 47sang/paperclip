@@ -125,7 +125,19 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       .resolves.toMatchObject({ kind: "project_auth", conflict: false });
     const [probeLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, probe.executionTarget.leaseId!));
     expect(probeLease.heartbeatRunId).toBeNull();
-    await probe.release(); released.mockClear();
+    await probe.executionTarget.runnerTask!({ kind: "submit", bootstrapTicket: "synthetic-probe-ticket", projectIds: [],
+      runner: { protocolMin: 1, protocolMax: 3, harness: "codex", runnerId: "probe-runner", leaseId: probeLease.id,
+        runId: probe.executionTarget.runnerTaskProbe.runId, sessionId: probe.executionTarget.runnerTaskProbe.sessionId, turnId: "probe-turn", itemId: "probe-item" },
+      launch: { stateDirectory: "/state/runner", runnerExecutable: "/runner", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
+        connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 43127, listenPath: "/probe" },
+        maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0,
+        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, environment: {}, assets: [] },
+    });
+    const probeSubmit = calls.find((op): op is Extract<PluginEnvironmentTaskOperation, { kind: "submit" }> => op.kind === "submit")!;
+    expect(probeSubmit.launch?.maxLifetimeMs).toBeGreaterThan(0);
+    expect(probeSubmit.launch?.maxLifetimeMs).toBeLessThanOrEqual(120_000);
+    executionStopped = true;
+    await probe.release(); released.mockClear(); complete.mockClear(); calls.length = 0;
     const orchestrator = environmentRunOrchestrator(db, { environmentRuntime: runtime });
     const acquired = await orchestrator.acquireForRun({ companyId, selectedEnvironmentId: environmentId, localEnvironmentId: randomUUID(),
       agentId, issueId: null, heartbeatRunId: runId, persistedExecutionWorkspace: null,

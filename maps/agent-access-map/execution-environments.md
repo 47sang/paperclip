@@ -191,3 +191,5 @@ read-only Runner hello. Managed project-auth inspection stays in the task API.
 [Setup probe coverage](../../server/src/services/native-runtime/plugin-runner-probe.test.ts)
 uses the real Runner and a synthetic Codex provider through loopback PRP; TLS
 termination is replaced by the fixture. It does not qualify a live plugin provider.
+
+Core maps task assets and environment paths into the plugin-declared Runner filesystem; the guest does not reproduce Core's host paths.

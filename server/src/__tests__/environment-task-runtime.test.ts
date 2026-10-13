@@ -35,10 +35,17 @@ describe("plugin-provided Runner execution", () => {
     const value = row();
     Object.assign(value.lease, { heartbeatRunId: null, issueId: null }); value.run = null;
     Object.assign(value.lease.metadata, { runnerTaskProbe: { runId: "probe-run", sessionId: "probe-session", expiresAtMs: Date.now() + 60_000 } });
-    const operation = { ...submit, projectIds: [], runner: { ...submit.runner, runId: "probe-run", sessionId: "probe-session" } };
+    const operation = { ...submit, projectIds: [], runner: { ...submit.runner, runId: "probe-run", sessionId: "probe-session" },
+      launch: { stateDirectory: "/state/runner", runnerExecutable: "/runner", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
+        connection: { mode: "listen" as const, listenAddress: "0.0.0.0" as const, listenPort: 43127, listenPath: "/connect" },
+        maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0, maxLifetimeMs: 0,
+        lifecyclePolicy: { mode: "per_turn" as const, idleTimeoutMs: null }, environment: {}, assets: [],
+      } };
     const workers = worker();
     await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation })).resolves.toMatchObject({ kind: "accepted" });
     expect(workers.call).toHaveBeenCalledWith("original", "environmentTask", expect.objectContaining({ runId: "probe-run", projectIds: [] }), 15_000);
+    const lifetime = (workers.call.mock.calls[0] as unknown as [string, string, { operation: typeof operation }])[2].operation.launch.maxLifetimeMs;
+    expect(lifetime).toBeGreaterThan(0); expect(lifetime).toBeLessThanOrEqual(60_000);
     for (const invalid of [{ ...operation, projectIds: [projectId] }, { ...operation, runner: { ...operation.runner, sessionId: "other" } }, submit]) {
       await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation: invalid })).rejects.toThrow("identity mismatch");
     }

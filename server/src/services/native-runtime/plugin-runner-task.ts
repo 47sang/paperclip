@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import type { RunnerIngressEndpoint } from "@paperclipai/adapter-utils/runner-connectivity";
@@ -66,7 +67,7 @@ export function createPluginRunnerTaskOwner(input: {
         maxRuntimeMs: native.maxRuntimeMs, maxLifetimeMs: native.maxLifetimeMs,
         reconnectGraceMs: native.reconnectGraceMs, lifecyclePolicy: native.lifecyclePolicy,
         acpxLaunchProfile: native.acpxLaunchProfile, opencodeLaunchProfile: native.opencodeLaunchProfile,
-        diagnosticsDirectory: native.diagnosticsDirectory,
+        diagnosticsDirectory: native.diagnosticsDirectory ? posix.join(native.stateDirectory, "diagnostics") : undefined,
         environment: Object.fromEntries(Object.entries(spec.environment).filter(([key, value]) =>
           value !== undefined && key !== "PAPERCLIP_RUNNER_BOOTSTRAP_TICKET")),
       },
@@ -118,6 +119,9 @@ export function createPluginRunnerTaskOwner(input: {
   const registration = async (authority: DurablePrpControlPlane, runId: string, signal?: AbortSignal) => {
     let outbound: ReturnType<typeof connectRunnerPrpIngress> | null = null;
     let activation: Promise<void> | null = null;
+    let rejectFailure!: (error: unknown) => void;
+    const failure = new Promise<never>((_resolve, reject) => { rejectFailure = reject; });
+    void failure.catch(() => undefined);
     const endpoint = async (): Promise<RunnerIngressEndpoint> => {
       const result = await call({ kind: "connection" });
       if (result.kind !== "connection") throw new Error("Plugin Runner connection unavailable");
@@ -134,12 +138,13 @@ export function createPluginRunnerTaskOwner(input: {
           const ingress = await endpoint();
           if (released || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
           outbound = connectRunnerPrpIngress({ authority, endpoint: ingress });
+          void outbound.failure?.catch(rejectFailure);
           await outbound.ready;
         })();
         void activation.catch(() => undefined);
       },
       ready: async () => { await activation; },
-      get failure() { return outbound?.failure; },
+      failure,
       checkpoint: async (settlement: "settled" | "unsettled") => {
         if (submitted) { stopRequested = true; await stopAndConfirm(); }
         await input.checkpoint(settlement);

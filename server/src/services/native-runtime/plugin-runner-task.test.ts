@@ -9,6 +9,7 @@ function launchSpec(connection: NonNullable<RunnerProcessLaunchSpec["nativeRunne
   return { command: "unused", args: [], cwd: "/unused", environment: {}, nativeRunner: {
     connection, identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run",
       normalizedSessionId: "session", turnId: "turn", itemId: "item" }, ticket: "synthetic-ticket",
+    diagnosticsDirectory: "/controller/private/diagnostics",
     stateDirectory: "/state", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
     maxOutboxBytes: 262144, p0ReserveBytes: 65536, lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
   } };
@@ -28,6 +29,22 @@ function provider() {
 }
 
 describe("plugin native Runner ownership", () => {
+  it("exposes connection failure before activation and forwards late recovery exhaustion", async () => {
+    const { task } = provider();
+    let fail!: (error: Error) => void;
+    const failure = new Promise<never>((_resolve, reject) => { fail = reject; });
+    ingress.connect.mockReturnValue({ ready: Promise.resolve(), failure, close: async () => {} });
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", runnerExecutable: "/runner",
+      prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+    const registration = await owner.registration({} as never, "run");
+    const observed = registration.failure.catch(error => error);
+    const handle = owner.launcher(launchSpec(registration.connection));
+    registration.activate(); await registration.ready();
+    const error = new Error("runner ingress recovery exhausted"); fail(error);
+    expect(await observed).toBe(error);
+    expect(task.mock.calls.find(([op]) => op.kind === "stop")).toBeUndefined();
+    await registration.release(); await registration.checkpoint("settled"); await handle.completion;
+  });
   it("reconciles a lost submit reply without launching another attempt", async () => {
     const { task } = provider();
     task.mockRejectedValueOnce(new Error("lost submit reply"));
@@ -39,6 +56,7 @@ describe("plugin native Runner ownership", () => {
     try {
       registration.activate(); await registration.ready();
       expect(task.mock.calls.filter(([operation]) => operation.kind === "submit")).toHaveLength(1);
+      expect(task.mock.calls.find(([operation]) => operation.kind === "submit")?.[0].launch.diagnosticsDirectory).toBe("/state/diagnostics");
       expect(() => owner.launcher(launchSpec(registration.connection))).toThrow("new task lease");
       await registration.release(); await registration.checkpoint("settled"); await process.completion;
       expect(task.mock.calls.filter(([operation]) => operation.kind === "complete")).toHaveLength(1);

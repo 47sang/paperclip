@@ -11500,24 +11500,35 @@ async function createRunnerdBackendWithinSessionClaim(
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_TOKEN;
     }
     const sourceContext = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+    const guestWorkingCopyRoot = posix.join(guestRoot, "context/instruction-working-copy");
+    if (sourceContext?.instructions.workingCopy?.kind === "agent_files") taskEnvironment.AGENT_HOME = guestWorkingCopyRoot;
+    const sourceLauncherDirectory = input.runnerEnvironment?.PAPERCLIP_GITHUB_LAUNCHER_DIR;
+    const guestLauncherDirectory = posix.join(guestRoot, "github-launchers");
+    if (sourceLauncherDirectory) {
+      taskEnvironment.PATH = taskEnvironment.PATH?.split(":").map(entry => entry === sourceLauncherDirectory ? guestLauncherDirectory : entry).join(":");
+      taskEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR = guestLauncherDirectory;
+      taskEnvironment.GH_CONFIG_DIR = posix.join(guestRoot, "github-config");
+    }
     const guestContext = sourceContext ? { ...sourceContext,
       instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle,
-        rootPath: posix.join(guestRoot, "context/instructions") } },
+        rootPath: posix.join(guestRoot, "context/instructions") },
+        ...(sourceContext.instructions.workingCopy ? { workingCopy: { ...sourceContext.instructions.workingCopy, rootPath: guestWorkingCopyRoot } } : {}),
+      },
       skills: sourceContext.skills.map((skill, index) => ({ ...skill, bundle: { ...skill.bundle,
         rootPath: posix.join(guestRoot, "context/skills", String(index)) } })),
     } : null;
     const assets = () => [
       ...["runtime-context.json", "codex-home", "acpx", "opencode"].filter(name => existsSync(join(root, name)))
         .map(name => ({ sourcePath: join(root, name), targetPath: posix.join(guestRoot, name) })),
-      ...(input.runnerEnvironment?.PAPERCLIP_GITHUB_LAUNCHER_DIR ? [{
-        sourcePath: input.runnerEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR,
-        targetPath: input.runnerEnvironment.PAPERCLIP_GITHUB_LAUNCHER_DIR,
+      ...(sourceLauncherDirectory ? [{
+        sourcePath: sourceLauncherDirectory,
+        targetPath: guestLauncherDirectory,
       }] : []),
       ...(sourceContext && guestContext ? [
         { sourcePath: sourceContext.instructions.bundle.rootPath, targetPath: guestContext.instructions.bundle.rootPath },
         ...sourceContext.skills.map((skill, index) => ({ sourcePath: skill.bundle.rootPath, targetPath: guestContext.skills[index]!.bundle.rootPath })),
         ...(sourceContext.instructions.workingCopy ? [{ sourcePath: sourceContext.instructions.workingCopy.rootPath,
-          targetPath: sourceContext.instructions.workingCopy.rootPath }] : []),
+          targetPath: guestWorkingCopyRoot }] : []),
       ] : []),
     ];
     const checkpoint = async (exports: { sourcePath: string; targetPath: string }[] = [], archive?: unknown) => {
@@ -11533,7 +11544,7 @@ async function createRunnerdBackendWithinSessionClaim(
         const directories = [...(provider.kind === "acpx" ? ["acpx"] : provider.kind === "opencode" ? ["opencode"] : ["codex-home"]), "runner"]
           .map(name => ({ name, sourcePath: posix.join(guestRoot, name), targetPath: join(root, name) }));
         if (sourceContext?.instructions.workingCopy) directories.push({ name: "instruction-working-copy",
-          sourcePath: sourceContext.instructions.workingCopy.rootPath, targetPath: sourceContext.instructions.workingCopy.rootPath });
+          sourcePath: guestWorkingCopyRoot, targetPath: sourceContext.instructions.workingCopy.rootPath });
         // Each swap must stay on the destination filesystem, including agent files.
         const staged: (typeof directories[number] & { pending: string })[] = [];
         const replaced: typeof staged = [];
@@ -11577,7 +11588,11 @@ async function createRunnerdBackendWithinSessionClaim(
       if (!current) throw new Error("native_session_tool_authority_unavailable");
       return current.execute(call);
     };
-    const backend = createNativeSessionBackend({ ...input.execution, workspace: { ...input.execution.workspace, cwd: remoteTarget.remoteCwd } }, {
+    const backend = createNativeSessionBackend({ ...input.execution, workspace: { ...input.execution.workspace, cwd: remoteTarget.remoteCwd },
+      ...(sourceContext && guestContext ? { runtimeContext: { ...sourceContext,
+        instructions: { ...sourceContext.instructions, ...(guestContext.instructions.workingCopy ? { workingCopy: guestContext.instructions.workingCopy } : {}) },
+      } } : {}),
+    }, {
       runnerInstanceId: effectiveRunnerInstanceId, environment: taskEnvironment,
       workingDirectoryAuthority: "remote_runner", dynamicTools, dynamicToolHandler: executeTool,
       completionFeedback: async result => { await authorityEpoch.definitions(); return nativeCompletionFeedback(input.db, input.execution.binding.runId, result); },
