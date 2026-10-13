@@ -1,3 +1,12 @@
+import { createChatPublicationResolution } from "./chat-channels/publications/resolution.js";
+import { createChatPublicationRequests } from "./chat-channels/publications/requests.js";
+import { createTeamsBoardSendPreparation } from "./chat-channels/microsoft-teams/board-send-preparation.js";
+import { createInboundWakeAuthority, inboundWakeScope } from "./chat-channels/inbound/wakeup-authorization.js";
+import { createInboundWakeups } from "./chat-channels/inbound/wakeups.js";
+import { createInboundWakeNotices } from "./chat-channels/inbound/wakeup-notices.js";
+import { createDiscordRuntimeReconciliation } from "./chat-channels/discord/runtime-reconciliation.js";
+import { createPhotonRuntimeCallbacks } from "./chat-channels/imessage-photon/runtime-callbacks.js";
+import { createChatReceiverOwnership } from "./chat-channels/runtime/ownership.js";
 import { createGitHubWebhookScope } from "./chat-channels/github/webhook-scope.js";
 import { createGitHubWebhookAuthentication, retryableGitHubWebhookResponse } from "./chat-channels/github/webhook-authentication.js";
 import { createSlackWebhookCallbacks } from "./chat-channels/slack/webhook-callbacks.js";
@@ -16,7 +25,7 @@ import type { LiveInboundMessage } from "./chat-channels/runtime-types.js";
 import { DELIVERY_PROCESSING_STALE_MS, normalizedDeliveryThreadId, normalizedLifecycleEffect, deliveryReady, pendingInboundWakeupCondition, lifecycleRuntimeFence, normalizedLifecycleWithRuntimeFence } from "./chat-channels/inbound/delivery-ledger.js";
 import { createChatMessageLifecycle } from "./chat-channels/inbound/lifecycle.js";
 import { createChatConversationDeliveryQueue } from "./chat-channels/inbound/conversation-queue.js";
-import { publicationTransportOrderKey } from "./chat-channels/publications/order.js";
+
 import { createChatPublicationTaskControl } from "./chat-channels/publications/task-control.js";
 import { createChatPublicationTransport } from "./chat-channels/publications/transport.js";
 import { createChatPublicationAuthorization } from "./chat-channels/publications/authorization.js";
@@ -45,26 +54,19 @@ import { createTeamsFileDelivery } from "./chat-channels/microsoft-teams/file-de
 import { createGitHubSetupSecret } from "./chat-channels/github/setup-secret.js";
 import { createSlackInventory } from "./chat-channels/slack/inventory.js";
 
-
-
-
-
-
 import { REQUIRED_GITHUB_EVENTS, UNAVOIDABLE_GITHUB_EVENTS } from "./chat-channels/github/credentials.js";
-
 
 import { createPhotonCredentialChecks } from "./chat-channels/imessage-photon/credentials.js";
 import { slackTestMessageService } from "./connectors/slack/test-message.js";
 import type { SlackSetupOptions } from "./connectors/slack/setup/registration.js";
 
 import { createSetupProbes } from "./chat-channels/setup-probes.js";
-import { createChatActivity, publicationSummary } from "./chat-channels/activity.js";
-import { fileTransferProjectionColumns } from "./chat-channels/microsoft-teams/file-transfer-projection.js";
-import { createProviderEffects, providerEffectPayload, type ProviderEffectTarget } from "./chat-channels/provider-effects.js";
+import { createChatActivity } from "./chat-channels/activity.js";
+
+import { createProviderEffects, type ProviderEffectTarget } from "./chat-channels/provider-effects.js";
 import { createTelegramCallbackNoticeAuthority } from "./chat-channels/telegram/callback-notices.js";
 import { createOutboundAttachments } from "./chat-channels/outbound-attachments.js";
 export { hydrateOutboundAttachment } from "./chat-channels/outbound-attachments.js";
-
 
 import { createInboundAttachments } from "./chat-channels/inbound-attachments.js";
 import { createInboundReactions } from "./chat-channels/reactions.js";
@@ -89,21 +91,13 @@ import { createChatPublicationReplacement } from "./chat-channels/publication-re
 import { createChatIdentityLinks } from "./chat-channels/identity-links.js";
 import { createChatResourceReconciliation } from "./chat-channels/resource-reconciliation.js";
 
-
 import { slackResourceLabelIsFallback } from "./chat-channels/slack/resources.js";
 
 import {
   MAX_INBOUND_TEXT,
   stableExternalPrincipalId,
 } from "./chat-channels/message-lifecycle.js";
-import {
-  telegramLifecycleEventFromPayload,
-  isTelegramEditedMessageRaw,
-  isTelegramMigrationRaw,
-  telegramZeroMessageId,
-  telegramDeliveryHasZeroMessageId,
-} from "./chat-channels/telegram/messages.js";
-
+import { telegramLifecycleEventFromPayload, isTelegramEditedMessageRaw, isTelegramMigrationRaw, telegramZeroMessageId } from "./chat-channels/telegram/messages.js";
 
 import {
   microsoftTeamsLifecycleEventFromPayload,
@@ -114,8 +108,7 @@ import {
 } from "./chat-channels/github/messages.js";
 import { nextChatActionAt } from "./chat-action-work.js";
 import type { ScheduledChatAction } from "./chat-work-notifications.js";
-import { notifyChatDeliveryWork, notifyChatPublicationWork, notifyChatEndpointWork, notifyChatActionWork } from "./chat-work-notifications.js";
-
+import { notifyChatDeliveryWork, notifyChatPublicationWork } from "./chat-work-notifications.js";
 
 import { voiceSessionService } from "./voice/voice-session-service.js";
 import { createSpekoProvider } from "./voice/speko-provider.js";
@@ -123,26 +116,13 @@ import { currentVoiceCredentialFingerprint, voiceSessionStore } from "./voice/vo
 import { createChatRuntime, type ChatRuntime } from "./chat-runtime.js";
 import type { ChatEndpointRuntime } from "./voice/voice-runtime.js";
 
-
-
-import { fastResponseService, enqueueFastResponse, fastResponseSourceCurrent, fastResponseTurnQueued } from "./fast-responses.js";
+import { fastResponseService, fastResponseSourceCurrent } from "./fast-responses.js";
 import { fastResponseRequests } from "@paperclipai/db";
 import { chatCredentialMutationLease } from "./chat-credential-mutation-lease.js";
 import type { AgentAvatarRequest } from "./agent-avatars.js";
 import { slackChatRegistrationService } from "./chat-slack-registration.js";
 
-
-import { canActorReadIssuePrivacy, canPublishIssueToChatAudience } from "./authorization.js";
-
-import { mirrorSlackBoardComment } from "./slack-board-messages.js";
-
-import { assertSlackBoardWorkAllowed } from "./slack-board-resume.js";
-
-
-
-
-
-
+import { canPublishIssueToChatAudience } from "./authorization.js";
 
 import { buildChatCommunicationGuidance } from "./chat-communication-guidance.js";
 import { assertChatTaskCreationAccess, resolveChatExecutionDefaults } from "./chat-execution-defaults.js";
@@ -152,32 +132,17 @@ import { githubReviewCheckService } from "./chat-github-checks.js";
 import { githubAutomaticAdmission } from "./chat-github-events.js";
 import { githubManualMessagePrompt } from "./chat-github-review-policy.js";
 import { chatGitHubReviews } from "@paperclipai/db";
-import type { GitHubReviewEventContext, GitHubIssueEventContext, GitHubAutomaticEventContext, GitHubReviewPolicy } from "@paperclipai/shared";
+import type { GitHubReviewEventContext, GitHubIssueEventContext, GitHubReviewPolicy } from "@paperclipai/shared";
 import { githubChatReviewService } from "./chat-github-reviews.js";
 import { githubResponseCommentService } from "./chat-github-response-comments.js";
-
-
-
-
 
 import { resumeExternalConversation } from "./slack-conversation-state.js";
 
 import { runtimeCanonicalOrigin } from "./cloud-runtime-identity.js";
 
-import { writePhotonCheckpoint } from "./photon/receiver.js";
-import { PhotonState } from "./photon/state.js";
-
-
-
-
-
-
-
 import { photonReplyReference } from "./photon/adapter.js";
 
-
-
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   and,
   asc,
@@ -192,7 +157,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+
 import {
   recordChatWebhookReceipt,
   recordChatWebhookStage,
@@ -200,44 +165,11 @@ import {
 import {
   readChatControlChronology,
 } from "./chat-control-chronology.js";
-import { retryChatControlAdmission } from "./chat-control-admission-retry.js";
+
 import type { Db } from "@paperclipai/db";
-import {
-  createDurableChatWakeupRequest,
-  assertDurableChatWakeupReceipt,
-} from "./durable-chat-wakeup.js";
-import {
-  agentWakeupRequests,
-  agents,
-  assets,
-  chatActions,
-  chatConversations,
-  chatDeliveries,
-  chatEndpointLeases,
-  chatEndpointResources,
-  chatEndpoints,
-  chatExternalPrincipals,
-  chatIdentityLinks,
-  chatMessageLinks,
-  chatPublications,
-  chatTeamsFileTransfers,
-  companyMemberships,
-  heartbeatRuns,
-  issueComments,
-  issueAttachments,
-  issueThreadInteractions,
-  issues,
-  toolConnections,
-} from "@paperclipai/db";
-import type {
-  ChatEventKind,
-  ChatEndpointSetupState,
-  ChatProvider,
-  ChatPublicationBatchStatus,
-  ExternalChannelBindingSummary,
-  SafeChatPublicationPayload,
-  ToolCredentialSecretRef,
-} from "@paperclipai/shared";
+
+import { agentWakeupRequests, agents, chatActions, chatConversations, chatDeliveries, chatEndpointResources, chatEndpoints, chatExternalPrincipals, chatIdentityLinks, chatMessageLinks, chatPublications, chatTeamsFileTransfers, companyMemberships, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolConnections } from "@paperclipai/db";
+import type { ChatEventKind, ChatEndpointSetupState, ChatProvider, ExternalChannelBindingSummary, SafeChatPublicationPayload, ToolCredentialSecretRef } from "@paperclipai/shared";
 import {
   isUuidLike,
   LOW_TRUST_REVIEW_PRESET,
@@ -245,35 +177,13 @@ import {
   LOW_TRUST_REVIEW_RAW_OUTPUT_DISPOSITION,
 } from "@paperclipai/shared";
 
-
-
 import {
   type TeamsFileTransferOptions,
 } from "./chat-teams-file-transfers.js";
 
-
-import {
-  projectChatFileTransfer,
-  projectChatPublicationBatch,
-} from "./chat-publication-batches.js";
-
-
-
-
-
-
-
-
 import { parseChatWebhookPublicBaseUrl } from "../chat-webhook-public-url.js";
 
-import {
-  badRequest,
-  HttpError,
-  conflict,
-  forbidden,
-  notFound,
-  unprocessable,
-} from "../errors.js";
+import { HttpError, conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { redactSensitiveText } from "../redaction.js";
 import type { StorageService } from "../storage/types.js";
@@ -285,16 +195,12 @@ import {
   type DiscordGatewayCallbackEvent,
 } from "./chat-sdk-runtime.js";
 
-
 import {
   logActivity,
   publishActivity,
   type ActivityPublication,
 } from "./activity-log.js";
-import {
-  queueIssueAssignmentWakeup,
-  type IssueAssignmentWakeupDeps,
-} from "./issue-assignment-wakeup.js";
+import { type IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
 import { issueService } from "./issues.js";
 import {
   NativeChatReviewPresentationContentionError,
@@ -302,13 +208,10 @@ import {
 import { isExternalChatWaitAuthorizationContention } from "./native-runtime/chat-attachment-reuse.js";
 import { projectSafeChatPublication } from "./chat-publication-projection.js";
 
-
 import {
   githubAttachmentLimitOmissions,
 } from "./chat-github-attachments.js";
 import { getExternalChannelBindingSummary } from "./chat-channel-binding.js";
-
-
 
 import {
   readRegisteredDiscordCommandRegistration,
@@ -323,18 +226,7 @@ import {
   type ChatProviderLifecycleEffect,
 } from "./chat-provider-lifecycle.js";
 
-
-
-
-import {
-  inboundWakePublicationKey,
-  inboundWakePublicationText,
-  parseInboundWakePublicationKey,
-  resolveInboundWakeReceipt,
-} from "./chat-inbound-wakeup-publications.js";
-
-
-
+import { parseInboundWakePublicationKey } from "./chat-inbound-wakeup-publications.js";
 
 import {
   questionResponseDeliveryService,
@@ -392,10 +284,9 @@ const DELIVERY_DRAIN_LIMIT = 100;
 const ORPHAN_FOLLOW_UP_GRACE_MS = 5_000;
 const ORPHAN_FOLLOW_UP_MAX_ATTEMPTS = 12;
 const PUBLICATION_ENDPOINT_CONCURRENCY = 4;
-const DISCORD_GATEWAY_LEASE_KEY = "discord_gateway_runtime";
+
 function leasedChatProvider(provider: string): boolean { return provider === "discord" || provider === "imessage-photon"; }
-const DISCORD_GATEWAY_LEASE_TTL_MS = 15_000;
-const DISCORD_GATEWAY_LEASE_WAIT_MS = 20_000;
+
 const DISCORD_GATEWAY_LEASE_POLL_MS = 100;
 const PROVIDER_CREDENTIAL_CHECK_TIMEOUT_MS = 25_000;
 const GITHUB_WEBHOOK_RESPONSE_BUDGET_MS = 8_000;
@@ -443,7 +334,6 @@ function credentialFingerprint(refs: ToolCredentialSecretRef[]): string {
 }
 type ConversationRow = typeof chatConversations.$inferSelect;
 type DeliveryRow = typeof chatDeliveries.$inferSelect;
-
 
 export interface ChatChannelServiceOptions {
   /**
@@ -699,356 +589,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   const discordGatewayOwnerships = new Map<string, DiscordGatewayOwnership>();
   const discordGatewayStopTasks = new Set<Promise<void>>();
   let shuttingDown = false;
-
-  function discordGatewayNotOwnedError() {
-    return conflict(
-      "Another Paperclip server owns this Discord Gateway connection; retry shortly",
-      { code: "chat_discord_gateway_not_owned" },
-    );
-  }
-
-  function isDiscordGatewayNotOwnedError(error: unknown): boolean {
-    return Boolean(
-      error &&
-      typeof error === "object" &&
-      "details" in error &&
-      error.details &&
-      typeof error.details === "object" &&
-      "code" in error.details &&
-      error.details.code === "chat_discord_gateway_not_owned",
-    );
-  }
-
-  async function releaseDiscordGatewayLeaseRow(
-    ownership: DiscordGatewayOwnership,
-  ): Promise<void> {
-    await db
-      .delete(chatEndpointLeases)
-      .where(
-        and(
-          eq(chatEndpointLeases.companyId, ownership.companyId),
-          eq(chatEndpointLeases.endpointId, ownership.endpointId),
-          eq(chatEndpointLeases.leaseKey, ownership.leaseKey),
-          eq(chatEndpointLeases.token, ownership.token),
-        ),
-      )
-      .catch((error) => {
-        logger.warn(
-          {
-            endpointId: ownership.endpointId,
-            error: redactError(error),
-          },
-          "could not release Discord Gateway ownership lease",
-        );
-      });
-  }
-
-  async function stopDiscordGatewayOwnership(
-    ownership: DiscordGatewayOwnership,
-    removeRuntime = true,
-  ): Promise<void> {
-    if (ownership.stopPromise) return ownership.stopPromise;
-    ownership.stopping = true;
-    if (ownership.renewTimer) {
-      clearInterval(ownership.renewTimer);
-      ownership.renewTimer = null;
-    }
-    if (discordGatewayOwnerships.get(ownership.endpointId) === ownership) {
-      discordGatewayOwnerships.delete(ownership.endpointId);
-    }
-    ownership.stopPromise = (async () => {
-      if (
-        removeRuntime &&
-        ownership.context.endpointRuntime &&
-        runtime.get(ownership.endpointId) === ownership.context.endpointRuntime
-      ) {
-        runtimeVersions.delete(ownership.endpointId);
-        await runtime.removeEndpoint(ownership.endpointId).catch((error) => {
-          logger.warn(
-            {
-              endpointId: ownership.endpointId,
-              error: redactError(error),
-            },
-            "could not stop Discord Gateway after ownership loss",
-          );
-        });
-      }
-      // The listener is stopped before the lease is released. A standby can
-      // therefore acquire immediately without overlapping Gateway sessions.
-      await releaseDiscordGatewayLeaseRow(ownership);
-    })();
-    discordGatewayStopTasks.add(ownership.stopPromise);
-    void ownership.stopPromise.finally(() => {
-      if (ownership.stopPromise) {
-        discordGatewayStopTasks.delete(ownership.stopPromise);
-      }
-    });
-    return ownership.stopPromise;
-  }
-
-  async function renewDiscordGatewayOwnership(
-    ownership: DiscordGatewayOwnership,
-  ): Promise<boolean> {
-    if (
-      shuttingDown ||
-      ownership.stopping ||
-      discordGatewayOwnerships.get(ownership.endpointId) !== ownership ||
-      ownership.context.discordGatewayOwned !== true ||
-      ownership.context.endpointRuntime === undefined ||
-      runtime.get(ownership.endpointId) !== ownership.context.endpointRuntime
-    ) {
-      return false;
-    }
-    const proposedExpiresAt = new Date(
-      Date.now() +
-        (options.discordGatewayLeaseTtlMs ?? DISCORD_GATEWAY_LEASE_TTL_MS),
-    );
-    if (
-      options.renewDiscordGatewayLease &&
-      !(await options.renewDiscordGatewayLease({
-        companyId: ownership.companyId,
-        credentialFingerprint: ownership.context.credentialFingerprint,
-        endpointId: ownership.endpointId,
-        expiresAt: proposedExpiresAt,
-        generation: ownership.context.generation,
-        leaseKey: ownership.leaseKey,
-        token: ownership.token,
-      }))
-    ) {
-      return false;
-    }
-    return db.transaction(async (tx) => {
-      const now = new Date();
-      const current = await runtimeCallbackEndpoint(
-        tx,
-        ownership.endpointId,
-        {
-          credentialFingerprint: ownership.context.credentialFingerprint,
-          generation: ownership.context.generation,
-        },
-        ["verifying", "active", "attention"],
-      );
-      if (!current || !leasedChatProvider(current.provider)) return false;
-      const expiresAt = new Date(
-        now.getTime() +
-          (options.discordGatewayLeaseTtlMs ?? DISCORD_GATEWAY_LEASE_TTL_MS),
-      );
-      const renewed = await tx
-        .update(chatEndpointLeases)
-        .set({ expiresAt, updatedAt: now })
-        .where(
-          and(
-            eq(chatEndpointLeases.companyId, ownership.companyId),
-            eq(chatEndpointLeases.endpointId, ownership.endpointId),
-            eq(chatEndpointLeases.leaseKey, ownership.leaseKey),
-            eq(chatEndpointLeases.token, ownership.token),
-          ),
-        )
-        .returning({ id: chatEndpointLeases.id });
-      if (!renewed.length) return false;
-      ownership.expiresAt = expiresAt;
-      return true;
-    });
-  }
-
-  async function renewDiscordGatewayOwnershipForMessageAdmission(
-    tx: DbTransaction,
-    endpointId: string,
-    context: InboundRuntimeContext,
-  ): Promise<
-    | {
-        kind: "owned";
-        expiresAt: Date;
-        ownership: DiscordGatewayOwnership;
-      }
-    | { kind: "lost"; ownership: DiscordGatewayOwnership | null }
-  > {
-    const ownership = discordGatewayOwnerships.get(endpointId);
-    if (
-      !ownership ||
-      ownership.stopping ||
-      ownership.context !== context ||
-      context.discordGatewayOwned !== true ||
-      context.endpointRuntime === undefined ||
-      runtime.get(endpointId) !== context.endpointRuntime
-    ) {
-      return {
-        kind: "lost",
-        ownership: ownership?.context === context ? ownership : null,
-      };
-    }
-    const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() +
-        (options.discordGatewayLeaseTtlMs ?? DISCORD_GATEWAY_LEASE_TTL_MS),
-    );
-    const renewed = await tx
-      .update(chatEndpointLeases)
-      .set({ expiresAt, updatedAt: now })
-      .where(
-        and(
-          eq(chatEndpointLeases.companyId, ownership.companyId),
-          eq(chatEndpointLeases.endpointId, ownership.endpointId),
-          eq(chatEndpointLeases.leaseKey, ownership.leaseKey),
-          eq(chatEndpointLeases.token, ownership.token),
-        ),
-      )
-      .returning({ id: chatEndpointLeases.id });
-    return renewed.length
-      ? { kind: "owned", expiresAt, ownership }
-      : { kind: "lost", ownership };
-  }
-
-  function refreshDiscordGatewayOwnership(
-    ownership: DiscordGatewayOwnership,
-  ): Promise<void> {
-    if (ownership.renewal) return ownership.renewal;
-    ownership.renewal = renewDiscordGatewayOwnership(ownership)
-      .then((owned) => {
-        if (owned) return;
-        logger.warn(
-          { endpointId: ownership.endpointId },
-          "lost Discord Gateway ownership; stopping the local listener",
-        );
-        // A Gateway lifecycle callback can be the caller that discovers the
-        // lost token. Fence it synchronously, but do not make that callback
-        // await the Gateway task whose adapter notification may be waiting on
-        // the callback itself. The tracked stop task is joined at shutdown.
-        void stopDiscordGatewayOwnership(ownership);
-      })
-      .catch((error) => {
-        logger.warn(
-          {
-            endpointId: ownership.endpointId,
-            error: redactError(error),
-          },
-          "Discord Gateway ownership renewal failed; stopping the local listener",
-        );
-        void stopDiscordGatewayOwnership(ownership);
-      })
-      .finally(() => {
-        ownership.renewal = null;
-      });
-    return ownership.renewal;
-  }
-
-  async function ensureDiscordGatewayRuntimeIsCurrent(
-    endpointId: string,
-    context: RuntimeContext,
-  ): Promise<boolean> {
-    const ownership = discordGatewayOwnerships.get(endpointId);
-    if (
-      !ownership ||
-      ownership.stopping ||
-      ownership.context !== context ||
-      context.discordGatewayOwned !== true ||
-      context.endpointRuntime === undefined ||
-      runtime.get(endpointId) !== context.endpointRuntime
-    ) {
-      return false;
-    }
-    if (ownership.expiresAt.getTime() <= Date.now()) {
-      // A host can resume after the local TTL while its durable token is still
-      // authoritative. Reclaim that exact token before accepting buffered
-      // callbacks. A standby takeover changes the token, so the CAS fails and
-      // the old listener remains fenced.
-      await refreshDiscordGatewayOwnership(ownership);
-    }
-    return discordGatewayRuntimeIsCurrent(endpointId, context);
-  }
-
-  function startDiscordGatewayLeaseRenewal(
-    ownership: DiscordGatewayOwnership,
-  ): void {
-    ownership.renewTimer = setInterval(
-      () => {
-        if (ownership.renewal || ownership.stopping) return;
-        void refreshDiscordGatewayOwnership(ownership);
-      },
-      options.discordGatewayLeaseRenewalIntervalMs ??
-        (options.discordGatewayLeaseTtlMs ?? DISCORD_GATEWAY_LEASE_TTL_MS) / 3,
-    );
-    ownership.renewTimer.unref?.();
-  }
-
-  async function acquireDiscordGatewayOwnership(
-    endpoint: EndpointRow,
-    context: RuntimeContext,
-    waitForOwnership: boolean,
-  ): Promise<DiscordGatewayOwnership | null> {
-    const receiverLeaseKey = endpoint.provider === "imessage-photon" ? "photon_receiver_runtime" : DISCORD_GATEWAY_LEASE_KEY;
-    const local = discordGatewayOwnerships.get(endpoint.id);
-    if (
-      local &&
-      !local.stopping &&
-      local.context.version === context.version &&
-      local.expiresAt.getTime() > Date.now()
-    ) {
-      return local;
-    }
-    if (local) await stopDiscordGatewayOwnership(local);
-
-    const token = randomUUID();
-    const deadline =
-      Date.now() +
-      (waitForOwnership
-        ? (options.discordGatewayLeaseWaitMs ?? DISCORD_GATEWAY_LEASE_WAIT_MS)
-        : 0);
-    for (;;) {
-      if (shuttingDown) return null;
-      const now = new Date();
-      const expiresAt = new Date(
-        now.getTime() +
-          (options.discordGatewayLeaseTtlMs ?? DISCORD_GATEWAY_LEASE_TTL_MS),
-      );
-      const inserted = await db
-        .insert(chatEndpointLeases)
-        .values({
-          companyId: endpoint.companyId,
-          endpointId: endpoint.id,
-          leaseKey: receiverLeaseKey,
-          token,
-          expiresAt,
-        })
-        .onConflictDoNothing()
-        .returning({ id: chatEndpointLeases.id });
-      const reclaimed = inserted.length
-        ? inserted
-        : await db
-            .update(chatEndpointLeases)
-            .set({ token, expiresAt, updatedAt: now })
-            .where(
-              and(
-                eq(chatEndpointLeases.companyId, endpoint.companyId),
-                eq(chatEndpointLeases.endpointId, endpoint.id),
-                eq(chatEndpointLeases.leaseKey, receiverLeaseKey),
-                lte(chatEndpointLeases.expiresAt, now),
-              ),
-            )
-            .returning({ id: chatEndpointLeases.id });
-      if (reclaimed.length) {
-        const ownership: DiscordGatewayOwnership = {
-          companyId: endpoint.companyId,
-          context,
-          endpointId: endpoint.id,
-          expiresAt,
-          leaseKey: receiverLeaseKey,
-          renewal: null,
-          renewTimer: null,
-          stopPromise: null,
-          stopping: false,
-          token,
-        };
-        discordGatewayOwnerships.set(endpoint.id, ownership);
-        startDiscordGatewayLeaseRenewal(ownership);
-        return ownership;
-      }
-      if (Date.now() >= deadline) return null;
-      await new Promise((resolve) =>
-        setTimeout(resolve, DISCORD_GATEWAY_LEASE_POLL_MS),
-      );
-    }
-  }
+  const { discordGatewayNotOwnedError, isDiscordGatewayNotOwnedError, releaseDiscordGatewayLeaseRow, stopDiscordGatewayOwnership, renewDiscordGatewayOwnershipForMessageAdmission, ensureDiscordGatewayRuntimeIsCurrent, acquireDiscordGatewayOwnership, discordGatewayRuntimeIsCurrent } = createChatReceiverOwnership(db, { runtime, runtimeVersions, runtimeCallbackEndpoint, redactError, leasedChatProvider, discordGatewayOwnerships, discordGatewayStopTasks, isShuttingDown: () => shuttingDown, get discordGatewayLeaseTtlMs() { return options.discordGatewayLeaseTtlMs; }, get discordGatewayLeaseRenewalIntervalMs() { return options.discordGatewayLeaseRenewalIntervalMs; }, get discordGatewayLeaseWaitMs() { return options.discordGatewayLeaseWaitMs; }, get renewDiscordGatewayLease() { return options.renewDiscordGatewayLease; } });
 
   function localRuntimeEpoch(endpointId: string): number {
     return runtimeLocalEpochs.get(endpointId) ?? 0;
@@ -1099,8 +640,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       return pending;
     });
   }
-
-
 
   function conversationDrainKey(endpointId: string, threadId: string) {
     return `${endpointId}:${createHash("sha256").update(durableExternalThreadIdentity(threadId)).digest("hex")}`;
@@ -1307,22 +846,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       : null;
   }
 
-  function discordGatewayRuntimeIsCurrent(
-    endpointId: string,
-    context: RuntimeContext,
-  ): boolean {
-    const ownership = discordGatewayOwnerships.get(endpointId);
-    return (
-      ownership !== undefined &&
-      !ownership.stopping &&
-      ownership.context === context &&
-      ownership.expiresAt.getTime() > Date.now() &&
-      context.discordGatewayOwned === true &&
-      context.endpointRuntime !== undefined &&
-      runtime.get(endpointId) === context.endpointRuntime
-    );
-  }
-
   const withCredentialMutationLease = chatCredentialMutationLease(db, options);
   const { list, get, create, update } = createChatEndpoints(db, {
     endpointRecord, CAPABILITIES, PROVIDER_LABELS, withCredentialMutationLease,
@@ -1341,7 +864,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   const { lockTelegramCallbackNoticeAuthority } = createTelegramCallbackNoticeAuthority({ nonDirectDestinationAllowed, lockCurrentPrincipalAuthorization });
   const { stageProviderEffect, processProviderEffect, processPendingProviderEffects } = createProviderEffects(db, { endpointRecord, runtimeCallbackEndpoint, withCredentialMutationLease, runtimeFor, invalidateRuntime, lockCurrentPrincipalAuthorization, redactError, MAX_ERROR_TEXT, nonDirectDestinationAllowed, lockTelegramCallbackNoticeAuthority });
   const { publicationFiles } = createOutboundAttachments(db, { get storage() { return options.storage; } });
+  const { authorizeInboundWakeup, authorizeInboundWorkStart, authorizeFastResponse } = createInboundWakeAuthority(db, { runtimeCallbackEndpoint, lockCurrentPrincipalAuthorization });
   const { ingestAttachments, attachmentOmissionDetail } = createInboundAttachments(db, { authorizeInboundWakeup, lifecycleRuntimeFence, sanitizeFilename, issuesSvc, isExternalActionAuthorizationChange, redactError, get storage() { return options.storage; } });
+  const { stageInboundWakeup, acceptInboundWakeup, settleRejectedInboundWakeups, processInboundWakeup } = createInboundWakeups(db, { authorizeInboundWakeup, authorizeInboundWorkStart, attachmentOmissionDetail, isExternalActionAuthorizationChange, redactError, fetchImpl, get heartbeat() { return options.heartbeat; } });
   const { settleTelegramAttachmentOnlyFailure } = createTelegramAttachmentFailure(db, {
     attachmentOmissionDetail, runtimeContextForRecord, endpointRecord, stageProviderEffect, scheduleProviderEffect,
   });
@@ -1377,9 +902,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
 
   const { handleGitHubWebhookEvent } = createGitHubWebhookEvents(db, { processMessage, recordLifecycleDelivery: (...args) => recordLifecycleDelivery(...args), githubAutomaticMessages, githubIssueMessages, fetchImpl, runtimeCallbackEndpoint });
 
-
   const { authenticateGitHubWebhook } = createGitHubWebhookAuthentication(db, { endpointRecord, runtimeContextForRecord, withCredentialMutationLease, resolveCredentials, reconcileGitHubWebhookRepository, stageGitHubWebhookIngress, processGitHubWebhookIngress, githubIngressAcceptedResponse, scheduleMessageProcessing, backgroundMessageTasks, redactError, get githubWebhookAuthenticationBarrier() { return options.githubWebhookAuthenticationBarrier; }, get deferWebhookProcessing() { return options.deferWebhookProcessing; } });
   const { inspectSlackWebhookScope, recordSlackWebhookCallback } = createSlackWebhookCallbacks(db, { resolveCredentials, runtimeCallbackEndpoint, getWebhookPublicBaseUrl, scheduleMessageProcessing, slackRegistration: { notifyVerified: (endpointId) => slackRegistration.notifyVerified(endpointId) } });
+
+  const { reconcileDiscordRuntime } = createDiscordRuntimeReconciliation(db, { reconcileDiscordCommands, endpointRecord, runtimeContexts, invalidateRuntime, runtimeFor, runtime, runtimeCallbackEndpoint, credentialFingerprint, discordGatewayRuntimeIsCurrent });
 
   async function runtimeFor(
     endpoint: EndpointRow,
@@ -1524,29 +1050,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             enableDiscordGateway: discordOwnership !== null,
             callbacks: {
               onMessage: (event) => handleSdkMessage(event, context),
-              onPhotonAssertOwned: async (activeThreadId) => {
-                if (!(await runtimeCallbackRecord(endpoint.id, context, ["verifying", "active", "attention"]))) throw new Error("Photon receiver ownership changed");
-                if (activeThreadId) {
-                  const working = await db.select({ id: heartbeatRuns.id }).from(chatConversations).innerJoin(heartbeatRuns, and(
-                    eq(heartbeatRuns.companyId, chatConversations.companyId), eq(heartbeatRuns.agentId, record.endpoint.assignedAgentId),
-                    eq(sql<string>`${heartbeatRuns.contextSnapshot}->>'issueId'`, sql<string>`${chatConversations.issueId}::text`), inArray(heartbeatRuns.status, ["queued", "running"]),
-                  )).where(and(eq(chatConversations.companyId, record.endpoint.companyId), eq(chatConversations.endpointId, endpoint.id), eq(chatConversations.externalThreadId, activeThreadId), inArray(chatConversations.state, ["active", "waiting"]))).limit(1);
-                  if (!working.length) throw new Error("Photon conversation has no active agent work");
-                }
-                await db.transaction(async (tx) => {
-                  const current = await runtimeCallbackEndpoint(tx, endpoint.id, context, ["attention"]);
-                  if (!current) return;
-                  const connection = await tx.select().from(toolConnections).where(eq(toolConnections.id, current.connectionId)).then((rows) => rows[0]);
-                  if (!connection?.enabled) throw new Error("Photon endpoint requires operator recovery");
-                  await notifyChatEndpointWork(tx, endpoint.connectionId);
-                  await tx.update(chatEndpoints).set({ status: current.setup.step === "complete" ? "active" : "verifying", healthMessage: "Photon receiver connected", lastError: null, updatedAt: new Date() }).where(eq(chatEndpoints.id, endpoint.id));
-                });
-              },
-              onPhotonCheckpoint: (sequence) => db.transaction(async (tx) => {
-                if (!(await runtimeCallbackEndpoint(tx, endpoint.id, context, ["verifying", "active"]))) throw new Error("Photon receiver is no longer current");
-                if ((await renewDiscordGatewayOwnershipForMessageAdmission(tx, endpoint.id, context)).kind !== "owned") throw new Error("Photon receiver lease was replaced");
-                await writePhotonCheckpoint(new PhotonState({ companyId: record.endpoint.companyId, endpointId: endpoint.id }, createChatSdkStatePersistence(tx as unknown as Db)), credentials.lineId, sequence);
-              }),
+              ...createPhotonRuntimeCallbacks(db, { endpointId: endpoint.id, connectionId: endpoint.connectionId, companyId: record.endpoint.companyId, assignedAgentId: record.endpoint.assignedAgentId, context, lineId: credentials.lineId, runtimeCallbackRecord, runtimeCallbackEndpoint, renewDiscordGatewayOwnershipForMessageAdmission }),
               onPhotonEvent: (event) => handlePhotonEvent(endpoint.id, event, context),
               onPhotonFailure: (error) => handlePhotonFailure(endpoint.id, error, context),
               onDiscordRootMentionAdmission:
@@ -1694,94 +1198,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         let instance = await runtimeFor(record.endpoint, {
           requireDiscordOwnership: true,
         });
-        await reconcileDiscordCommands(row.endpointId);
-        const afterCommands = await endpointRecord(row.endpointId);
-        const desiredCommands =
-          afterCommands?.endpoint.capabilities.slashCommands &&
-          afterCommands.endpoint.botExternalId &&
-          afterCommands.endpoint.providerAccountId
-            ? await readRegisteredDiscordCommandRegistration(db, {
-                companyId: afterCommands.endpoint.companyId,
-                endpointId: row.endpointId,
-                applicationId: afterCommands.endpoint.botExternalId,
-                guildId: afterCommands.endpoint.providerAccountId,
-              })
-            : null;
-        // A missing command handler needs a new runtime only on upgrade.
-        // Loss of registration is denied by the existing callback's current
-        // durable checks; optional REST maintenance must not tear down a
-        // healthy Gateway used for ordinary mentions and thread messages.
-        if (
-          afterCommands &&
-          desiredCommands &&
-          runtimeContexts.get(instance as object)?.discordCommandId !==
-            desiredCommands.receipt.commandId
-        ) {
-          await invalidateRuntime(row.endpointId);
-          instance = await runtimeFor(afterCommands.endpoint, {
-            requireDiscordOwnership: true,
-          });
-        }
-        const context = runtimeContexts.get(instance as object);
-        if (
-          CAPABILITIES.discord.modals &&
-          context &&
-          runtime.get(row.endpointId) === instance
-        ) {
-          // Existing connected endpoints acquire the new implementation
-          // capability only after the pinned runtime initialized successfully.
-          // No reconnect, policy/reach change, credential rotation, or runtime
-          // generation change is needed: its Discord handler is registered
-          // even while the persisted capability remains disabled.
-          await db.transaction(async (tx) => {
-            const current = await runtimeCallbackEndpoint(
-              tx,
-              row.endpointId,
-              context,
-              ["verifying", "active", "attention"],
-            );
-            if (
-              !current ||
-              current.provider !== "discord" ||
-              current.capabilities.modals === true ||
-              runtime.get(row.endpointId) !== instance
-            )
-              return;
-            const connection = await tx
-              .select({
-                enabled: toolConnections.enabled,
-                status: toolConnections.status,
-                refs: toolConnections.credentialSecretRefs,
-              })
-              .from(toolConnections)
-              .where(
-                and(
-                  eq(toolConnections.companyId, current.companyId),
-                  eq(toolConnections.id, current.connectionId),
-                ),
-              )
-              .for("no key update")
-              .then((rows) => rows[0]);
-            if (
-              !connection?.enabled ||
-              connection.status !== "active" ||
-              credentialFingerprint(connection.refs) !==
-                context.credentialFingerprint ||
-              runtime.get(row.endpointId) !== instance ||
-              !discordGatewayRuntimeIsCurrent(row.endpointId, context)
-            )
-              return;
-            await tx
-              .update(chatEndpoints)
-              .set({ capabilities: { ...current.capabilities, modals: true } })
-              .where(
-                and(
-                  eq(chatEndpoints.companyId, current.companyId),
-                  eq(chatEndpoints.id, current.id),
-                ),
-              );
-          });
-        }
+        await reconcileDiscordRuntime(row.endpointId, instance);
         local += 1;
       } catch (error) {
         if (isDiscordGatewayNotOwnedError(error)) {
@@ -1801,241 +1218,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       ownedElsewhere,
       failed,
     };
-  }
-
-  async function stageInboundWakeup(
-    tx: DbOrTransaction,
-    input: {
-      endpoint: EndpointRow;
-      deliveryId: string;
-      conversation: typeof chatConversations.$inferSelect;
-      commentId: string;
-      principalId: string;
-      actorUserId: string | null;
-    },
-  ) {
-    await tx
-      .insert(chatActions)
-      .values({
-        companyId: input.endpoint.companyId,
-        endpointId: input.endpoint.id,
-        deliveryId: input.deliveryId,
-        conversationId: input.conversation.id,
-        principalId: input.principalId,
-        kind: "inbound_wakeup",
-        providerActionId: `inbound_wakeup:${input.deliveryId}`,
-        status: "preparing",
-        payload: {
-          version: 1,
-          issueId: input.conversation.issueId,
-          agentId: input.endpoint.assignedAgentId,
-          commentId: input.commentId,
-          sessionGeneration: input.conversation.sessionGeneration,
-          requestedByActorType: input.actorUserId ? "user" : "system",
-          requestedByActorId: input.actorUserId ?? input.principalId,
-        },
-      })
-      .onConflictDoNothing();
-  }
-
-  async function authorizeInboundWakeup(
-    tx: DbOrTransaction,
-    action: typeof chatActions.$inferSelect,
-    notice?: { nonblocking: true; terminal: boolean },
-  ) {
-    const payload = action.payload;
-    const deny = () =>
-      forbidden(
-        "This accepted chat message is no longer authorized to start work",
-        { code: "chat_action_authorization_changed" },
-      );
-    if (
-      payload.version !== 1 ||
-      typeof payload.issueId !== "string" ||
-      typeof payload.agentId !== "string" ||
-      typeof payload.commentId !== "string" ||
-      !action.conversationId ||
-      !action.principalId ||
-      !action.deliveryId ||
-      !["user", "system"].includes(String(payload.requestedByActorType)) ||
-      typeof payload.requestedByActorId !== "string"
-    )
-      throw deny();
-    const issue = await tx
-      .select()
-      .from(issues)
-      .where(
-        and(
-          eq(issues.companyId, action.companyId),
-          eq(issues.id, payload.issueId),
-        ),
-      )
-      .for("update", notice ? { noWait: true } : undefined)
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !issue ||
-      issue.assigneeAgentId !== payload.agentId ||
-      (!notice?.terminal &&
-        ["backlog", "done", "cancelled"].includes(issue.status))
-    )
-      throw deny();
-    // The scheduler already owns the issue lock. Do not wait in the opposite
-    // order behind an ingress transaction which owns the endpoint first.
-    const endpoint = await tx
-      .select()
-      .from(chatEndpoints)
-      .where(
-        and(
-          eq(chatEndpoints.companyId, action.companyId),
-          eq(chatEndpoints.id, action.endpointId),
-        ),
-      )
-      .for("no key update", { noWait: true })
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    const delivery = await tx
-      .select()
-      .from(chatDeliveries)
-      .where(
-        and(
-          eq(chatDeliveries.companyId, action.companyId),
-          eq(chatDeliveries.id, action.deliveryId),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    const fence = delivery ? lifecycleRuntimeFence(delivery) : null;
-    if (
-      !endpoint ||
-      endpoint.assignedAgentId !== payload.agentId ||
-      !delivery ||
-      telegramDeliveryHasZeroMessageId(delivery, endpoint.provider) ||
-      delivery.endpointId !== endpoint.id ||
-      delivery.conversationId !== action.conversationId ||
-      delivery.principalId !== action.principalId ||
-      !fence ||
-      !(await runtimeCallbackEndpoint(tx as unknown as DbTransaction, endpoint.id, fence, [
-        "verifying",
-        "active",
-      ]))
-    )
-      throw deny();
-    const conversation = await tx
-      .select()
-      .from(chatConversations)
-      .where(
-        and(
-          eq(chatConversations.companyId, action.companyId),
-          eq(chatConversations.id, action.conversationId),
-        ),
-      )
-      .for("update")
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !conversation ||
-      conversation.endpointId !== endpoint.id ||
-      conversation.issueId !== issue.id ||
-      conversation.sessionGeneration !== payload.sessionGeneration ||
-      !["active", "waiting"].includes(conversation.state)
-    )
-      throw deny();
-    const resource = conversation.resourceId
-      ? await tx
-          .select()
-          .from(chatEndpointResources)
-          .where(
-            and(
-              eq(chatEndpointResources.endpointId, endpoint.id),
-              eq(chatEndpointResources.id, conversation.resourceId),
-            ),
-          )
-          .for("update")
-          .limit(1)
-          .then((rows) => rows[0] ?? null)
-      : null;
-    const authorization = await lockCurrentPrincipalAuthorization(
-      tx,
-      endpoint,
-      action.principalId,
-    );
-    const automatic = (delivery.normalizedEvent.githubAutomatic ?? delivery.normalizedEvent.githubIssue) as { context: GitHubAutomaticEventContext } | undefined;
-    if (endpoint.provider === "github" && automatic) {
-      const admission = await githubAutomaticAdmission(tx, endpoint, automatic.context);
-      if (!admission?.allowed) throw deny();
-      authorization.userId = admission.responsibleUserId ?? null;
-    }
-    if (!(await canActorReadIssuePrivacy(tx, authorization.userId
-      ? { type: "board", userId: authorization.userId }
-      : { type: "none" }, issue))) throw deny();
-    const expectedUserId =
-      payload.requestedByActorType === "user"
-        ? payload.requestedByActorId
-        : null;
-    if (
-      !(conversation.isDirectMessage
-        ? endpoint.allowDirectMessages
-        : nonDirectDestinationAllowed(endpoint, resource)) ||
-      !authorization.allowed ||
-      authorization.userId !== expectedUserId ||
-      (payload.requestedByActorType === "system" &&
-        payload.requestedByActorId !== action.principalId)
-    )
-      throw deny();
-    const source = await tx
-      .select({
-        authorUserId: issueComments.authorUserId,
-        deletedAt: issueComments.deletedAt,
-      })
-      .from(chatMessageLinks)
-      .innerJoin(
-        issueComments,
-        and(
-          eq(issueComments.id, chatMessageLinks.commentId),
-          eq(issueComments.companyId, action.companyId),
-          eq(issueComments.issueId, issue.id),
-        ),
-      )
-      .where(
-        and(
-          eq(chatMessageLinks.companyId, action.companyId),
-          eq(chatMessageLinks.endpointId, endpoint.id),
-          eq(chatMessageLinks.conversationId, conversation.id),
-          eq(chatMessageLinks.deliveryId, delivery.id),
-          eq(chatMessageLinks.commentId, payload.commentId),
-          eq(chatMessageLinks.direction, "inbound"),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !source ||
-      (source.deletedAt && !notice?.terminal) ||
-      source.authorUserId !== expectedUserId
-    )
-      throw deny();
-    return { issue, delivery, endpoint, conversation };
-  }
-
-  function inboundWakeScope(action: typeof chatActions.$inferSelect) {
-    return JSON.stringify([
-      action.companyId,
-      action.endpointId,
-      action.conversationId,
-      action.deliveryId,
-      action.principalId,
-      action.kind,
-      ...[
-        "version",
-        "issueId",
-        "agentId",
-        "commentId",
-        "sessionGeneration",
-        "requestedByActorType",
-        "requestedByActorId",
-      ].map((key) => action.payload[key]),
-    ]);
   }
 
   const {
@@ -2071,6 +1253,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     withCredentialMutationLease, teamsFileRetryAfter, isShuttingDown: () => shuttingDown,
     get teamsFileUploadRequest() { return options.teamsFileUploadRequest; },
   });
+  const { enqueueInboundWakeupPublications, authorizeInboundWakePublication } = createInboundWakeNotices(db, { authorizeInboundWakeup, enqueueFailedChatRetryPublications, authorizeRetainedChatSourcePublication, isExternalActionAuthorizationChange, isShuttingDown: () => shuttingDown });
+
   async function authorizeRetainedChatSourcePublication(
     tx: DbOrTransaction,
     publication: typeof chatPublications.$inferSelect,
@@ -2226,748 +1410,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       )
         return false;
       throw error;
-    }
-  }
-
-  async function currentInboundWakeNotice(
-    tx: DbOrTransaction,
-    action: typeof chatActions.$inferSelect,
-    terminal: boolean,
-  ) {
-    const identityLock = await tx.execute(
-      sql`select pg_try_advisory_xact_lock(hashtextextended(${`chat-identity:${action.companyId}:${action.principalId}`}, 0)) as locked`,
-    );
-    if (!identityLock[0]?.locked)
-      throw new NativeChatReviewPresentationContentionError();
-    const authorized = await authorizeInboundWakeup(tx, action, {
-      nonblocking: true,
-      terminal,
-    });
-    // The policy locks above serialize destination/identity changes. Re-read
-    // both receipts under NOWAIT locks: cancellation can update them without
-    // taking the policy locks, and must win if it committed first.
-    const [delivery] = await tx
-      .select()
-      .from(chatDeliveries)
-      .where(eq(chatDeliveries.id, action.deliveryId!))
-      .for("update", { noWait: true });
-    const [currentAction] = await tx
-      .select()
-      .from(chatActions)
-      .where(eq(chatActions.id, action.id))
-      .for("update", { noWait: true });
-    if (
-      !currentAction ||
-      inboundWakeScope(currentAction) !== inboundWakeScope(action) ||
-      !["processed", "failed"].includes(currentAction.status) ||
-      !delivery ||
-      delivery.state !== "processed" ||
-      delivery.companyId !== action.companyId ||
-      delivery.endpointId !== action.endpointId ||
-      delivery.conversationId !== action.conversationId ||
-      delivery.principalId !== action.principalId
-    )
-      return null;
-    const [comment] = await tx
-      .select()
-      .from(issueComments)
-      .where(
-        and(
-          eq(issueComments.id, String(action.payload.commentId)),
-          eq(issueComments.companyId, action.companyId),
-          eq(issueComments.issueId, authorized.issue.id),
-        ),
-      )
-      .for("share", { noWait: true });
-    if (
-      !comment ||
-      (comment.deletedAt && !terminal) ||
-      comment.authorUserId !==
-        (action.payload.requestedByActorType === "user"
-          ? action.payload.requestedByActorId
-          : null)
-    )
-      return null;
-    const [receipt] = await tx
-      .select()
-      .from(agentWakeupRequests)
-      .where(eq(agentWakeupRequests.id, action.id))
-      .for("update", { noWait: true });
-    const ownerId =
-      receipt?.payload?.coalescedIntoWakeupRequestId ?? receipt?.id;
-    if (typeof ownerId !== "string" || !isUuidLike(ownerId)) return null;
-    const owner =
-      ownerId === receipt?.id
-        ? receipt
-        : await tx
-            .select()
-            .from(agentWakeupRequests)
-            .where(eq(agentWakeupRequests.id, ownerId))
-            .for("update", { noWait: true })
-            .then((rows) => rows[0]);
-    const resolved = resolveInboundWakeReceipt(
-      currentAction,
-      receipt ?? null,
-      owner ?? null,
-      terminal && comment.deletedAt !== null,
-    );
-    return resolved ? { ...resolved, ...authorized } : null;
-  }
-
-  let inboundWakeNoticeCursor: { createdAt: Date; id: string } | null = null;
-
-  async function inboundQueueNoticeStillVisible(
-    tx: DbOrTransaction,
-    publication: typeof chatPublications.$inferSelect,
-  ) {
-    if (publication.state !== "published" || !publication.providerMessageId)
-      return false;
-    const [link] = await tx
-      .select({ id: chatMessageLinks.id })
-      .from(chatMessageLinks)
-      .where(
-        and(
-          eq(chatMessageLinks.companyId, publication.companyId),
-          eq(chatMessageLinks.endpointId, publication.endpointId),
-          eq(chatMessageLinks.conversationId, publication.conversationId),
-          eq(chatMessageLinks.publicationId, publication.id),
-          eq(chatMessageLinks.providerMessageId, publication.providerMessageId),
-          eq(chatMessageLinks.direction, "outbound"),
-          isNull(chatMessageLinks.commentId),
-        ),
-      )
-      .for("update", { noWait: true });
-    return Boolean(link);
-  }
-
-  async function enqueueInboundWakeupPublications(limit = 50): Promise<number> {
-    if (shuttingDown) return 0;
-    const retryInserted = await enqueueFailedChatRetryPublications(limit);
-    const owner = alias(agentWakeupRequests, "chat_notice_owner");
-    const cursor = inboundWakeNoticeCursor;
-    const sourceRemoved = sql`exists (select 1 from issue_comments removed_comment
-      where removed_comment.company_id = ${chatActions.companyId}
-        and removed_comment.issue_id::text = ${chatActions.payload}->>'issueId'
-        and removed_comment.id::text = ${chatActions.payload}->>'commentId'
-        and removed_comment.deleted_at is not null)`;
-    const hasVisibleQueue = sql`exists (select 1 from chat_publications queued_notice
-      join chat_message_links visible_queue on visible_queue.publication_id = queued_notice.id
-        and visible_queue.company_id = queued_notice.company_id
-        and visible_queue.endpoint_id = queued_notice.endpoint_id
-        and visible_queue.conversation_id = queued_notice.conversation_id
-        and visible_queue.provider_message_id = queued_notice.provider_message_id
-        and visible_queue.direction = 'outbound' and visible_queue.comment_id is null
-      where queued_notice.company_id = ${chatActions.companyId}
-        and queued_notice.comment_id::text = ${chatActions.payload}->>'commentId'
-        and queued_notice.state = 'published'
-        and queued_notice.idempotency_key = 'wake:' || ${owner.id}::text || ':queued:' ||
-          ${chatActions.endpointId}::text || ':' || ${chatActions.conversationId}::text)`;
-    // A bounded keyset sweep, not an in-memory work queue. Advancing even past
-    // revoked candidates prevents an inaccessible old message starving others.
-    const candidates = await db
-      .select({ action: chatActions })
-      .from(chatActions)
-      .innerJoin(
-        agentWakeupRequests,
-        eq(agentWakeupRequests.id, chatActions.id),
-      )
-      .innerJoin(
-        owner,
-        sql`${owner.id}::text = coalesce(${agentWakeupRequests.payload}->>'coalescedIntoWakeupRequestId', ${agentWakeupRequests.id}::text)`,
-      )
-      .where(
-        and(
-          eq(chatActions.kind, "inbound_wakeup"),
-          inArray(chatActions.status, ["processed", "failed"]),
-          eq(owner.companyId, chatActions.companyId),
-          or(
-            and(
-              isNull(owner.runId),
-              inArray(owner.status, [
-                "deferred_issue_execution",
-                "cancelled",
-                "failed",
-                "skipped",
-              ]),
-            ),
-            and(sourceRemoved, hasVisibleQueue),
-          ),
-          sql`(( ${owner.status} = 'deferred_issue_execution'
-          and ${agentWakeupRequests.status} not in ('cancelled','failed','skipped') and not (${sourceRemoved}))
-          or ${hasVisibleQueue})`,
-          cursor
-            ? sql`(${chatActions.createdAt}, ${chatActions.id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`
-            : undefined,
-          sql`not exists (select 1 from chat_publications notice
-          where notice.company_id = ${chatActions.companyId}
-            and notice.idempotency_key = 'wake:' || ${owner.id}::text || ':' ||
-              (case when ${sourceRemoved} then 'removed' when ${owner.status} = 'deferred_issue_execution'
-                and ${agentWakeupRequests.status} not in ('cancelled','failed','skipped')
-                then 'queued' else 'not_started' end) || ':' ||
-              ${chatActions.endpointId}::text || ':' || ${chatActions.conversationId}::text)`,
-        ),
-      )
-      .orderBy(asc(chatActions.createdAt), asc(chatActions.id))
-      .limit(Math.max(1, Math.min(limit, 200)));
-    const last = candidates.at(-1)?.action;
-    inboundWakeNoticeCursor =
-      candidates.length >= Math.max(1, Math.min(limit, 200)) && last
-        ? { createdAt: last.createdAt, id: last.id }
-        : null;
-    let inserted = retryInserted;
-    for (const { action } of candidates) {
-      try {
-        inserted += await db.transaction(async (tx) => {
-          const [receipt] = await tx
-            .select()
-            .from(agentWakeupRequests)
-            .where(eq(agentWakeupRequests.id, action.id));
-          const ownerId =
-            receipt?.payload?.coalescedIntoWakeupRequestId ?? receipt?.id;
-          if (
-            typeof ownerId !== "string" ||
-            !isUuidLike(ownerId) ||
-            !action.conversationId
-          )
-            return 0;
-          const queuedKey = inboundWakePublicationKey(
-            ownerId,
-            "queued",
-            action.endpointId,
-            action.conversationId,
-          );
-          const [prior] = await tx
-            .select()
-            .from(chatPublications)
-            .where(
-              and(
-                eq(chatPublications.companyId, action.companyId),
-                eq(chatPublications.idempotencyKey, queuedKey),
-              ),
-            );
-          // Only the exact original notice may be retired; never post a failure
-          // notice for input which never received a provider queue acknowledgement.
-          if (
-            prior &&
-            (prior.state !== "published" ||
-              prior.commentId !== action.payload.commentId)
-          )
-            return 0;
-          const context = await currentInboundWakeNotice(
-            tx,
-            action,
-            Boolean(prior),
-          );
-          if (
-            !context ||
-            context.ownerId !== ownerId ||
-            context.state === "promoted" ||
-            (context.state !== "queued" && !prior) ||
-            (context.state === "queued" && prior)
-          )
-            return 0;
-          if (prior && !(await inboundQueueNoticeStillVisible(tx, prior)))
-            return 0;
-          await notifyChatPublicationWork(tx);
-          const rows = await tx
-            .insert(chatPublications)
-            .values({
-              companyId: action.companyId,
-              endpointId: action.endpointId,
-              conversationId: action.conversationId,
-              issueId: context.issue.id,
-              commentId: String(action.payload.commentId),
-              idempotencyKey: inboundWakePublicationKey(
-                ownerId,
-                context.state,
-                action.endpointId,
-                action.conversationId,
-              ),
-              payload: projectSafeChatPublication({
-                classification: "external",
-                source: "safe_milestone",
-                text: inboundWakePublicationText(context.state),
-                progressState: context.state === "queued" ? "queued" : "failed",
-              }),
-            })
-            .onConflictDoNothing()
-            .returning({ id: chatPublications.id });
-          return rows.length;
-        });
-      } catch (error) {
-        if (
-          !isExternalActionAuthorizationChange(error) &&
-          !isExternalChatWaitAuthorizationContention(error) &&
-          !(error instanceof NativeChatReviewPresentationContentionError)
-        )
-          throw error;
-      }
-    }
-    return inserted;
-  }
-
-  async function authorizeInboundWakePublication(
-    tx: DbOrTransaction,
-    publication: typeof chatPublications.$inferSelect,
-  ) {
-    const key = parseInboundWakePublicationKey(publication.idempotencyKey);
-    if (key) {
-      const [retry] = await tx
-        .select({ kind: chatActions.kind })
-        .from(chatActions)
-        .where(
-          and(
-            eq(chatActions.id, key.wakeId),
-            eq(chatActions.companyId, publication.companyId),
-          ),
-        );
-      if (retry?.kind === "failed_run_retry")
-        return authorizeRetainedChatSourcePublication(tx, publication);
-    }
-    if (
-      !key ||
-      key.endpointId !== publication.endpointId ||
-      key.conversationId !== publication.conversationId ||
-      !publication.commentId
-    )
-      return false;
-    const actions = await tx
-      .select()
-      .from(chatActions)
-      .where(
-        and(
-          eq(chatActions.companyId, publication.companyId),
-          eq(chatActions.endpointId, publication.endpointId),
-          eq(chatActions.conversationId, publication.conversationId),
-          eq(chatActions.kind, "inbound_wakeup"),
-          sql`${chatActions.payload}->>'issueId' = ${publication.issueId}`,
-          sql`${chatActions.payload}->>'commentId' = ${publication.commentId}`,
-        ),
-      )
-      .limit(2);
-    if (actions.length !== 1) return false;
-    if (key.state !== "queued") {
-      const [prior] = await tx
-        .select()
-        .from(chatPublications)
-        .where(
-          and(
-            eq(chatPublications.companyId, publication.companyId),
-            eq(chatPublications.commentId, publication.commentId),
-            eq(chatPublications.state, "published"),
-            eq(
-              chatPublications.idempotencyKey,
-              inboundWakePublicationKey(
-                key.wakeId,
-                "queued",
-                key.endpointId,
-                key.conversationId,
-              ),
-            ),
-          ),
-        );
-      if (!prior || !(await inboundQueueNoticeStillVisible(tx, prior)))
-        return false;
-    }
-    try {
-      const context = await currentInboundWakeNotice(
-        tx,
-        actions[0]!,
-        key.state !== "queued",
-      );
-      return context?.ownerId === key.wakeId && context.state === key.state;
-    } catch (error) {
-      if (isExternalActionAuthorizationChange(error)) return false;
-      if (isExternalChatWaitAuthorizationContention(error))
-        throw new NativeChatReviewPresentationContentionError();
-      throw error;
-    }
-  }
-
-  async function acceptInboundWakeup(
-    deliveryId: string,
-    attachmentResult: Awaited<ReturnType<typeof ingestAttachments>>,
-  ) {
-    // Retry the rolled-back authorization/admission transaction only. A
-    // concurrent ingress may briefly own the endpoint lock; provider I/O
-    // and task creation have already completed and must not be repeated.
-    await retryChatControlAdmission(() =>
-      db.transaction(async (tx) => {
-        const action = await tx
-          .select()
-          .from(chatActions)
-          .where(
-            and(
-              eq(chatActions.deliveryId, deliveryId),
-              eq(chatActions.kind, "inbound_wakeup"),
-            ),
-          )
-          .limit(1)
-          .then((rows) => rows[0] ?? null);
-        if (!action) throw new Error("chat_inbound_wakeup_intent_missing");
-        const { delivery } = await authorizeInboundWakeup(tx, action);
-        if (delivery.state === "processed") return;
-        if (delivery.state !== "processing")
-          throw new Error("chat_inbound_wakeup_delivery_claim_lost");
-        if (action.status !== "preparing") {
-          const existingReceipt = await tx
-            .select()
-            .from(agentWakeupRequests)
-            .where(eq(agentWakeupRequests.id, action.id))
-            .limit(1)
-            .then((rows) => rows[0] ?? null);
-          if (!existingReceipt)
-            throw new Error("chat_inbound_wakeup_action_claim_lost");
-          assertDurableChatWakeupReceipt(
-            createDurableChatWakeupRequest({
-              id: action.id,
-              companyId: action.companyId,
-              agentId: String(action.payload.agentId),
-              issueId: String(action.payload.issueId),
-              commentId: String(action.payload.commentId),
-              requestedByActorType: action.payload.requestedByActorType as
-                "user" | "system",
-              requestedByActorId: String(action.payload.requestedByActorId),
-              requestedAt: action.createdAt,
-              authorize: async () => {},
-            }),
-            existingReceipt,
-          );
-        }
-        await notifyChatDeliveryWork(tx);
-        const acceptedAt = new Date();
-        const accepted = await tx
-          .update(chatDeliveries)
-          .set({
-            state: "processed",
-            processedAt: acceptedAt,
-            redactedError: attachmentOmissionDetail(attachmentResult),
-            nextAttemptAt: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(chatDeliveries.id, deliveryId),
-              eq(chatDeliveries.state, "processing"),
-              eq(chatDeliveries.updatedAt, delivery.updatedAt),
-            ),
-          )
-          .returning({ id: chatDeliveries.id });
-        if (accepted.length !== 1)
-          throw new Error("chat_inbound_wakeup_delivery_claim_lost");
-        // An operator can repair a failed delivery ledger after its wake was
-        // already committed. Keep the immutable receipt and never admit twice.
-        if (action.status !== "preparing") return;
-        await notifyChatDeliveryWork(tx);
-        const issued = await tx
-          .update(chatActions)
-          .set({
-            status: "issued",
-            payload: {
-              ...action.payload,
-              attachmentOmissionReasons: attachmentResult.omissionReasons,
-            },
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(chatActions.id, action.id),
-              eq(chatActions.status, "preparing"),
-            ),
-          )
-          .returning({ id: chatActions.id });
-        if (issued.length !== 1)
-          throw new Error("chat_inbound_wakeup_action_claim_lost");
-        const source = delivery.normalizedEvent as { githubAutomatic?: unknown; principal?: { isBot?: boolean }; message?: { text?: string } };
-        if (!source.githubAutomatic && !source.principal?.isBot && !/^\s*\//.test(source.message?.text ?? "")) {
-          await enqueueFastResponse(tx as unknown as Db, { companyId: action.companyId, issueId: String(action.payload.issueId), agentId: String(action.payload.agentId),
-            sourceCommentId: String(action.payload.commentId), sourceKey: `comment:${action.payload.commentId}`, acceptedAt,
-            responsibleUserId: action.payload.requestedByActorType === "user" ? String(action.payload.requestedByActorId) : null,
-            sponsored: action.payload.requestedByActorType !== "user", endpointId: action.endpointId, conversationId: action.conversationId, deliveryId: action.deliveryId });
-        }
-      }),
-    );
-  }
-
-  async function settleRejectedInboundWakeups(onlyDeliveryId?: string) {
-    await db
-      .update(chatActions)
-      .set({
-        status: "failed",
-        result: { code: "inbound_wakeup_delivery_rejected" },
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(chatActions.kind, "inbound_wakeup"),
-          eq(chatActions.status, "preparing"),
-          onlyDeliveryId
-            ? eq(chatActions.deliveryId, onlyDeliveryId)
-            : undefined,
-          sql`exists (select 1 from ${chatDeliveries}
-            where ${chatDeliveries.id} = ${chatActions.deliveryId}
-              and ${chatDeliveries.companyId} = ${chatActions.companyId}
-              and ${chatDeliveries.endpointId} = ${chatActions.endpointId}
-              and ${chatDeliveries.state} in ('filtered', 'failed'))`,
-        ),
-      );
-  }
-
-  async function authorizeInboundWorkStart(
-    tx: DbOrTransaction,
-    action: typeof chatActions.$inferSelect,
-  ) {
-    const current = await authorizeInboundWakeup(tx, action);
-    if (
-      current.endpoint.provider === "slack" &&
-      current.endpoint.requireAtMention &&
-      !current.conversation.isDirectMessage &&
-      current.delivery.normalizedEvent.trigger !== "mention" &&
-      (current.delivery.normalizedEvent.message as { mentionedBot?: boolean } | undefined)?.mentionedBot !== true
-    ) {
-      throw forbidden("Message did not @mention the bot", {
-        code: "chat_action_authorization_changed",
-      });
-    }
-    return current;
-  }
-
-  async function authorizeFastResponse(tx: Db, request: typeof fastResponseRequests.$inferSelect) {
-    const [action] = await tx.select().from(chatActions).where(and(eq(chatActions.companyId, request.companyId), eq(chatActions.deliveryId, request.deliveryId!), eq(chatActions.kind, "inbound_wakeup")));
-    if (!action || action.endpointId !== request.endpointId || action.conversationId !== request.conversationId || action.payload.commentId !== request.sourceCommentId || action.payload.agentId !== request.agentId || action.payload.issueId !== request.issueId) throw forbidden();
-    const current = await authorizeInboundWorkStart(tx, action);
-    const normalized = current.delivery.normalizedEvent as { message?: { text?: string; attachments?: Array<{ name?: string; mimeType?: string }> }; principal?: { isBot?: boolean } };
-    if (normalized.principal?.isBot || current.delivery.normalizedEvent.githubAutomatic || current.delivery.state !== "processed") throw forbidden();
-    if ((action.payload.requestedByActorType === "user" ? action.payload.requestedByActorId : null) !== request.responsibleUserId) throw forbidden();
-    const [agent] = await tx.select({ name: agents.name }).from(agents).where(and(eq(agents.id, request.agentId!), eq(agents.companyId, request.companyId)));
-    const [receipt] = await tx.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, action.id));
-    if (receipt && ["skipped", "cancelled", "failed"].includes(receipt.status)) throw forbidden();
-    return { agentName: agent?.name ?? "Assistant", message: normalized.message?.text ?? "Shared an attachment.", queued: !receipt?.runId || await fastResponseTurnQueued(tx, request),
-      attachments: normalized.message?.attachments?.map(a => `${a.name ?? "Attachment"} (${a.mimeType ?? "unknown type"})`) };
-  }
-
-  async function processInboundWakeup(deliveryId: string): Promise<boolean> {
-    const now = new Date();
-    const candidate = await db
-      .select()
-      .from(chatActions)
-      .where(
-        and(
-          eq(chatActions.deliveryId, deliveryId),
-          eq(chatActions.kind, "inbound_wakeup"),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !candidate ||
-      !["preparing", "issued", "processing"].includes(candidate.status)
-    )
-      return true;
-    if (
-      candidate.status === "preparing" ||
-      (candidate.status === "processing" &&
-        candidate.updatedAt.getTime() >
-          now.getTime() - DELIVERY_PROCESSING_STALE_MS) ||
-      (typeof candidate.result?.retryAt === "string" &&
-        Date.parse(candidate.result.retryAt) > now.getTime())
-    )
-      return false;
-    const claimed = await db.transaction(async (tx) => {
-      await notifyChatDeliveryWork(tx);
-      return tx
-        .update(chatActions)
-        .set({ status: "processing", updatedAt: now })
-        .where(
-          and(
-            eq(chatActions.id, candidate.id),
-            eq(chatActions.status, candidate.status),
-            eq(chatActions.updatedAt, candidate.updatedAt),
-          ),
-        )
-        .returning()
-        .then((rows) => rows[0] ?? null);
-    });
-    if (!claimed) return false;
-    const attemptCount = Number(candidate.result?.attemptCount ?? 0) + 1;
-    const receiptDeclined = (row: typeof agentWakeupRequests.$inferSelect) =>
-      ["skipped", "cancelled", "failed"].includes(row.status);
-    const settle = async (status: string, result: Record<string, unknown>) => {
-      const changed = await db.transaction(async (tx) => {
-        await notifyChatDeliveryWork(tx);
-        const changed = await tx
-          .update(chatActions)
-          .set({ status, result, updatedAt: new Date() })
-          .where(
-            and(
-              eq(chatActions.id, claimed.id),
-              eq(chatActions.status, "processing"),
-              eq(chatActions.updatedAt, now),
-            ),
-          )
-          .returning({ id: chatActions.id });
-        if (changed.length && status === "failed") {
-          await tx
-            .update(chatDeliveries)
-            .set({
-              redactedError:
-                result.code === "inbound_wakeup_authorization_changed"
-                  ? "Input saved. Work was not scheduled because current chat access no longer permits it."
-                  : "Input saved. Its work request was skipped, cancelled, or failed; no automatic replay was performed.",
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(chatDeliveries.id, deliveryId),
-                eq(chatDeliveries.companyId, claimed.companyId),
-                eq(chatDeliveries.state, "processed"),
-              ),
-            );
-        }
-        return changed.length > 0;
-      });
-      // A durable scheduler receipt must accept the work before GitHub shows
-      // it as working. This also covers acceptance after a maintenance retry.
-      if (changed && status === "processed") {
-        const [endpoint] = await db.select({ provider: chatEndpoints.provider })
-          .from(chatEndpoints).where(and(eq(chatEndpoints.id, claimed.endpointId),
-            eq(chatEndpoints.companyId, claimed.companyId)));
-        if (endpoint?.provider === "github")
-          await githubResponseCommentService(db, fetchImpl).tryAcknowledge(deliveryId);
-      }
-    };
-    let request: ReturnType<typeof createDurableChatWakeupRequest> | null =
-      null;
-    const receipt = async () => {
-      const row = await db
-        .select()
-        .from(agentWakeupRequests)
-        .where(eq(agentWakeupRequests.id, claimed.id))
-        .limit(1)
-        .then((rows) => rows[0] ?? null);
-      if (row && request) assertDurableChatWakeupReceipt(request, row);
-      return row;
-    };
-    try {
-      if (
-        claimed.payload.version !== 1 ||
-        typeof claimed.payload.agentId !== "string" ||
-        typeof claimed.payload.issueId !== "string" ||
-        typeof claimed.payload.commentId !== "string" ||
-        typeof claimed.payload.requestedByActorId !== "string" ||
-        !["user", "system"].includes(
-          String(claimed.payload.requestedByActorType),
-        )
-      ) {
-        throw forbidden("Invalid durable inbound chat source", {
-          code: "chat_action_authorization_changed",
-        });
-      }
-      request = createDurableChatWakeupRequest({
-        id: claimed.id,
-        companyId: claimed.companyId,
-        agentId: claimed.payload.agentId,
-        issueId: claimed.payload.issueId,
-        commentId: claimed.payload.commentId,
-        requestedByActorType: claimed.payload.requestedByActorType as
-          | "user"
-          | "system",
-        requestedByActorId: String(claimed.payload.requestedByActorId),
-        requestedAt: claimed.createdAt,
-        authorize: async (tx) => {
-          const current = await authorizeInboundWorkStart(tx, claimed);
-          if (current.delivery.state !== "processed")
-            throw new Error("chat_inbound_wakeup_acceptance_not_committed");
-        },
-      });
-      const priorReceipt = await receipt();
-      if (priorReceipt) {
-        await settle(receiptDeclined(priorReceipt) ? "failed" : "processed", {
-          code: receiptDeclined(priorReceipt)
-            ? `inbound_wakeup_${priorReceipt.status}`
-            : "inbound_wakeup_already_durable",
-          wakeupRequestId: priorReceipt.id,
-          runId: priorReceipt.runId,
-          receiptStatus: priorReceipt.status,
-          attemptCount,
-        });
-        return true;
-      }
-      const context = await db.transaction((tx) =>
-        authorizeInboundWorkStart(tx, claimed),
-      );
-      if (context.delivery.state !== "processed")
-        throw new Error("chat_inbound_wakeup_acceptance_not_committed");
-      await queueIssueAssignmentWakeup({
-        heartbeat: options.heartbeat,
-        issue: context.issue,
-        reason: "External chat message received",
-        mutation: "chat_message_received",
-        contextSource: `chat:${context.endpoint.provider}`,
-        requestedByActorType: request.requestedByActorType,
-        requestedByActorId: request.requestedByActorId,
-        taskKey: context.issue.identifier,
-        wakeCommentId: request.commentId,
-        attachmentOmissionReasons: claimed.payload.attachmentOmissionReasons as
-          | Record<string, number>
-          | undefined,
-        durableChatRequest: request,
-        rethrowOnError: true,
-      });
-      const durable = await receipt();
-      if (!durable) throw new Error("chat_inbound_wakeup_receipt_missing");
-      await settle(receiptDeclined(durable) ? "failed" : "processed", {
-        code: receiptDeclined(durable)
-          ? `inbound_wakeup_${durable.status}`
-          : "inbound_wakeup_durable",
-        wakeupRequestId: durable.id,
-        runId: durable.runId,
-        receiptStatus: durable.status,
-        ...(durable.status === "skipped" ? { reason: durable.reason } : {}),
-        attemptCount,
-      });
-      return true;
-    } catch (error) {
-      const conflictingReceipt =
-        error instanceof Error &&
-        error.message === "chat_inbound_wakeup_receipt_conflict";
-      const durable = request && !conflictingReceipt ? await receipt() : null;
-      if (durable) {
-        await settle(receiptDeclined(durable) ? "failed" : "processed", {
-          code: receiptDeclined(durable)
-            ? `inbound_wakeup_${durable.status}`
-            : "inbound_wakeup_already_durable",
-          wakeupRequestId: durable.id,
-          runId: durable.runId,
-          receiptStatus: durable.status,
-          attemptCount,
-        });
-        return true;
-      }
-      const denied =
-        conflictingReceipt || isExternalActionAuthorizationChange(error);
-      await settle(denied ? "failed" : "issued", {
-        code: conflictingReceipt
-          ? "inbound_wakeup_receipt_conflict"
-          : denied
-            ? "inbound_wakeup_authorization_changed"
-            : "inbound_wakeup_retry",
-        attemptCount,
-        ...(!denied
-          ? {
-              retryAt: new Date(
-                Date.now() +
-                  Math.min(30_000, 1000 * 2 ** Math.min(attemptCount, 5)),
-              ).toISOString(),
-            }
-          : {}),
-      });
-      if (!denied)
-        logger.warn(
-          { deliveryId, error: redactError(error) },
-          "accepted inbound chat wakeup will retry",
-        );
-      return denied;
     }
   }
 
@@ -4425,7 +2867,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     return conversationDeliveryQueue.drainConversationDeliveries(...args);
   }
 
-
   async function handleSdkMessage(
     event: ChatSdkMessageCallbackEvent,
     runtimeContext?: RuntimeContext,
@@ -4476,7 +2917,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   async function handleMessageDeleted(...args: Parameters<ReturnType<typeof createChatMessageLifecycle>["handleMessageDeleted"]>) {
     return messageLifecycle.handleMessageDeleted(...args);
   }
-
 
   async function handleSlashCommand(
     event: ChatSdkCallbackEvent<SlashCommandEvent>,
@@ -4986,7 +3426,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
    * or no-longer-available files are omitted without losing the text turn.
    */
 
-
   async function processPendingChatMaintenance(limit = 25) {
     return Promise.allSettled([
       processPendingTelegramMaintenance(limit),
@@ -5135,8 +3574,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     return reactionCount + rows.length;
   }
 
-
-
   async function replayDelivery(endpointId: string, deliveryId: string) {
     const delivery = await db
       .select()
@@ -5232,766 +3669,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     }
   }
 
-  async function replayPublication(endpointId: string, publicationId: string) {
-    const publication = await db
-      .select()
-      .from(chatPublications)
-      .where(
-        and(
-          eq(chatPublications.endpointId, endpointId),
-          eq(chatPublications.id, publicationId),
-        ),
-      )
-      .then((rows) => rows[0] ?? null);
-    if (!publication) throw notFound("Publication not found");
-    if (publication.state !== "failed") {
-      throw conflict("Only a failed publication can be replayed", {
-        code:
-          publication.state === "delivery_unknown"
-            ? "chat_publication_resolution_required"
-            : "chat_publication_not_replayable",
-      });
-    }
-    const interactionId = publication.payload.interactionId;
-    const isInteractionPrompt =
-      Boolean(interactionId) &&
-      publication.idempotencyKey ===
-        `interaction:${interactionId}:${publication.endpointId}`;
-    if (isInteractionPrompt) {
-      if (!publication.issueId || !interactionId) {
-        throw conflict(
-          "This interaction prompt is missing its authoritative task binding and cannot be replayed safely",
-          { code: "chat_terminal_interaction_publication_not_replayable" },
-        );
-      }
-      const interaction = await db
-        .select({ status: issueThreadInteractions.status })
-        .from(issueThreadInteractions)
-        .where(
-          and(
-            eq(issueThreadInteractions.id, interactionId),
-            eq(issueThreadInteractions.companyId, publication.companyId),
-            eq(issueThreadInteractions.issueId, publication.issueId),
-          ),
-        )
-        .then((rows) => rows[0] ?? null);
-      if (!interaction || interaction.status !== "pending") {
-        throw conflict(
-          "A resolved interaction prompt cannot be replayed into the provider",
-          { code: "chat_terminal_interaction_publication_not_replayable" },
-        );
-      }
-    }
-    const claimed = await db.transaction(async (tx) => {
-      const current = await tx
-        .select()
-        .from(chatPublications)
-        .where(
-          and(
-            eq(chatPublications.companyId, publication.companyId),
-            eq(chatPublications.endpointId, endpointId),
-            eq(chatPublications.id, publication.id),
-          ),
-        )
-        .for("update")
-        .then((rows) => rows[0]);
-      if (
-        !current ||
-        current.state !== publication.state ||
-        current.attempts !== publication.attempts
-      )
-        return [];
-      // Lock the publication before checking the transfer lane: issue() takes
-      // the same lock, so a concurrent consent/upload cannot slip into replay.
-      const transfer = await tx
-        .select({ id: chatTeamsFileTransfers.id })
-        .from(chatTeamsFileTransfers)
-        .where(
-          and(
-            eq(chatTeamsFileTransfers.companyId, current.companyId),
-            eq(chatTeamsFileTransfers.publicationId, current.id),
-          ),
-        )
-        .then((rows) => rows[0]);
-      if (transfer)
-        throw conflict(
-          "File delivery requires a stage-specific operator resolution",
-          {
-            code: "chat_file_transfer_resolution_required",
-          },
-        );
-      await notifyChatPublicationWork(tx);
-      return tx
-        .update(chatPublications)
-        .set({
-          state: "retry",
-          nextAttemptAt: new Date(),
-          redactedError: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(chatPublications.id, publication.id),
-            eq(chatPublications.state, publication.state),
-            eq(chatPublications.attempts, publication.attempts),
-          ),
-        )
-        .returning({ id: chatPublications.id });
-    });
-    if (!claimed.length) {
-      throw conflict("This publication is already being replayed", {
-        code: "chat_publication_replay_conflict",
-      });
-    }
-    await processPendingPublications(1);
-  }
-
-  async function resolvePublication(
-    endpointId: string,
-    publicationId: string,
-    action: "mark_delivered" | "retry_anyway" | "cancel",
-    userId: string,
-    fileTransfer?: {
-      phase: import("@paperclipai/shared").ChatFileTransferPhase;
-      version: number;
-    },
-  ) {
-    const initialRecord = await endpointRecord(endpointId);
-    if (!initialRecord) throw notFound("Chat endpoint not found");
-    await withCredentialMutationLease(
-      initialRecord.endpoint,
-      (credentialLease) =>
-        db.transaction(async (tx) => {
-          await credentialLease.assertOwned(tx);
-          const publication = await tx
-            .select()
-            .from(chatPublications)
-            .where(
-              and(
-                eq(chatPublications.endpointId, endpointId),
-                eq(chatPublications.id, publicationId),
-              ),
-            )
-            .for("update")
-            .then((rows) => rows[0] ?? null);
-          if (!publication) throw notFound("Publication not found");
-          const transfer = await tx
-            .select({
-              id: chatTeamsFileTransfers.id,
-              endpointId: chatTeamsFileTransfers.endpointId,
-              conversationId: chatTeamsFileTransfers.conversationId,
-              phase: chatTeamsFileTransfers.phase,
-              version: chatTeamsFileTransfers.version,
-            })
-            .from(chatTeamsFileTransfers)
-            .where(
-              and(
-                eq(chatTeamsFileTransfers.companyId, publication.companyId),
-                eq(chatTeamsFileTransfers.publicationId, publication.id),
-              ),
-            )
-            .then((rows) => rows[0]);
-          if (transfer || fileTransfer) {
-            const resolutionRequired = () =>
-              conflict(
-                "File delivery requires its current stage-specific resolution",
-                { code: "chat_file_transfer_resolution_required" },
-              );
-            if (
-              !transfer ||
-              !fileTransfer ||
-              publication.state !== "delivery_unknown" ||
-              transfer.endpointId !== publication.endpointId ||
-              transfer.conversationId !== publication.conversationId ||
-              transfer.phase !== fileTransfer.phase ||
-              transfer.version !== fileTransfer.version ||
-              ![
-                "consent_unknown",
-                "upload_unknown",
-                "file_info_unknown",
-                "conflict",
-              ].includes(transfer.phase)
-            )
-              throw resolutionRequired();
-            let result;
-            try {
-              result = await teamsTransferProtocol({
-                credentialLease,
-              }).resolveInTransaction(tx, {
-                companyId: publication.companyId,
-                publicationId: publication.id,
-                transferId: transfer.id,
-                expectedVersion: fileTransfer.version,
-                expectedPhase: fileTransfer.phase as
-                  | "consent_unknown"
-                  | "upload_unknown"
-                  | "file_info_unknown"
-                  | "conflict",
-                action,
-              });
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                error.message ===
-                  "Teams file transfer authority or state changed"
-              )
-                throw resolutionRequired();
-              throw error;
-            }
-            await logActivity(tx as unknown as Db, {
-              companyId: publication.companyId,
-              actorType: "user",
-              actorId: userId,
-              action: `chat.publication_${action}`,
-              entityType: "chat_publication",
-              entityId: publication.id,
-              issueId: publication.issueId,
-              details: {
-                endpointId,
-                conversationId: publication.conversationId,
-                transferId: transfer.id,
-                previousPhase: fileTransfer.phase,
-                previousVersion: fileTransfer.version,
-                nextPhase: result.phase,
-                nextVersion: result.version,
-                duplicateRiskAcknowledged: action === "retry_anyway",
-              },
-            });
-            await credentialLease.assertOwned(tx);
-            return;
-          }
-          if (publication.state !== "delivery_unknown") {
-            throw conflict(
-              "Only an unconfirmed publication needs an operator resolution",
-              {
-                code: "chat_publication_resolution_not_required",
-              },
-            );
-          }
-
-          const interactionId = publication.payload.interactionId;
-          const isInteractionPrompt =
-            Boolean(interactionId) &&
-            publication.idempotencyKey ===
-              `interaction:${interactionId}:${publication.endpointId}`;
-          if (action === "retry_anyway" && isInteractionPrompt) {
-            if (!publication.issueId || !interactionId) {
-              throw conflict(
-                "This interaction prompt is missing its authoritative task binding and cannot be retried safely",
-                {
-                  code: "chat_terminal_interaction_publication_not_replayable",
-                },
-              );
-            }
-            const interaction = await tx
-              .select({ status: issueThreadInteractions.status })
-              .from(issueThreadInteractions)
-              .where(
-                and(
-                  eq(issueThreadInteractions.id, interactionId),
-                  eq(issueThreadInteractions.companyId, publication.companyId),
-                  eq(issueThreadInteractions.issueId, publication.issueId),
-                ),
-              )
-              .then((rows) => rows[0] ?? null);
-            if (!interaction || interaction.status !== "pending") {
-              throw conflict(
-                "A resolved interaction prompt cannot be retried with stale provider actions; mark it delivered or cancel it instead",
-                {
-                  code: "chat_terminal_interaction_publication_not_replayable",
-                },
-              );
-            }
-          }
-
-          if (
-            initialRecord.endpoint.provider === "imessage-photon" &&
-            action === "retry_anyway"
-          ) {
-            await tx
-              .insert(chatActions)
-              .values({
-                companyId: publication.companyId,
-                endpointId,
-                conversationId: publication.conversationId,
-                kind: "photon_publication_retry",
-                providerActionId: `photon-retry:${publication.id}:${publication.attempts + 1}`,
-                payload: {
-                  publicationId: publication.id,
-                  attempt: publication.attempts + 1,
-                },
-                result: { authorizedByUserId: userId },
-                status: "processed",
-              })
-              .onConflictDoNothing();
-          }
-          const now = new Date();
-          await notifyChatPublicationWork(tx);
-          await tx
-            .update(chatPublications)
-            .set(
-              action === "mark_delivered"
-                ? {
-                    state: "published",
-                    publishedAt: now,
-                    nextAttemptAt: null,
-                    redactedError: null,
-                    updatedAt: now,
-                  }
-                : action === "retry_anyway"
-                  ? {
-                      state: "retry",
-                      nextAttemptAt: now,
-                      redactedError: null,
-                      updatedAt: now,
-                    }
-                  : {
-                      state: "cancelled",
-                      nextAttemptAt: null,
-                      redactedError:
-                        "Cancelled by an operator after an unconfirmed provider delivery",
-                      updatedAt: now,
-                    },
-            )
-            .where(
-              and(
-                eq(chatPublications.id, publication.id),
-                eq(chatPublications.state, "delivery_unknown"),
-              ),
-            );
-          const receiptProviderActionId = `slack-file-receipt:${publication.id}:${publication.attempts}`;
-          if (action === "mark_delivered") {
-            await tx
-              .update(chatActions)
-              .set({
-                result: sql`coalesce(${chatActions.result}, '{}'::jsonb) || jsonb_build_object(
-                  'operatorConfirmedPublicationId', ${publication.id}::text,
-                  'operatorConfirmedAttempt', ${publication.attempts}::integer,
-                  'operatorConfirmedAt', ${now.toISOString()}::text
-                )`,
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(chatActions.companyId, publication.companyId),
-                  eq(chatActions.endpointId, publication.endpointId),
-                  eq(chatActions.conversationId, publication.conversationId),
-                  eq(chatActions.kind, "slack_file_upload_receipt"),
-                  eq(chatActions.providerActionId, receiptProviderActionId),
-                  inArray(chatActions.status, [
-                    "received",
-                    "failed",
-                    "processing",
-                  ]),
-                  sql`(${chatActions.payload}->>'publicationId')::uuid = ${publication.id}`,
-                  sql`(${chatActions.payload}->>'publicationAttempt')::int = ${publication.attempts}`,
-                ),
-              );
-          } else {
-            await tx
-              .update(chatActions)
-              .set({
-                status: "cancelled",
-                result: {
-                  code:
-                    action === "retry_anyway"
-                      ? "slack_file_upload_receipt_retry_superseded"
-                      : "slack_file_upload_receipt_cancelled_by_operator",
-                },
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(chatActions.companyId, publication.companyId),
-                  eq(chatActions.endpointId, publication.endpointId),
-                  eq(chatActions.conversationId, publication.conversationId),
-                  eq(chatActions.kind, "slack_file_upload_receipt"),
-                  eq(chatActions.providerActionId, receiptProviderActionId),
-                  inArray(chatActions.status, [
-                    "received",
-                    "failed",
-                    "processing",
-                  ]),
-                  sql`(${chatActions.payload}->>'publicationId')::uuid = ${publication.id}`,
-                  sql`(${chatActions.payload}->>'publicationAttempt')::int = ${publication.attempts}`,
-                ),
-              );
-          }
-          if (publication.idempotencyKey.startsWith("control:")) {
-            await tx
-              .update(chatActions)
-              .set({
-                status:
-                  action === "mark_delivered"
-                    ? "processed"
-                    : action === "retry_anyway"
-                      ? "issued"
-                      : "cancelled",
-                result: {
-                  code:
-                    action === "mark_delivered"
-                      ? "task_control_marked_delivered_by_operator"
-                      : action === "retry_anyway"
-                        ? "task_control_retry_requested"
-                        : "task_control_cancelled_by_operator",
-                },
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(chatActions.endpointId, publication.endpointId),
-                  eq(
-                    chatActions.providerActionId,
-                    `task-control-authorization:${publication.id}`,
-                  ),
-                  inArray(chatActions.status, [
-                    "issued",
-                    "processing",
-                    "delivery_unknown",
-                  ]),
-                ),
-              );
-          }
-          if (action === "mark_delivered") {
-            await tx
-              .update(chatEndpoints)
-              .set({ lastPublicationAt: now, updatedAt: now })
-              .where(eq(chatEndpoints.id, endpointId));
-            await commitTaskControlCompletion(
-              tx as unknown as Db,
-              publication,
-              now,
-            );
-          }
-          await logActivity(tx as unknown as Db, {
-            companyId: publication.companyId,
-            actorType: "user",
-            actorId: userId,
-            action: `chat.publication_${action}`,
-            entityType: "chat_publication",
-            entityId: publication.id,
-            issueId: publication.issueId,
-            details: {
-              endpointId,
-              conversationId: publication.conversationId,
-              previousState: "delivery_unknown",
-              nextState:
-                action === "mark_delivered"
-                  ? "published"
-                  : action === "retry_anyway"
-                    ? "retry"
-                    : "cancelled",
-              duplicateRiskAccepted: action === "retry_anyway",
-            },
-          });
-          await credentialLease.assertOwned(tx);
-        }),
-    );
-    await processPendingPublications();
-  }
-
-  async function resolveProviderEffect(
-    endpointId: string,
-    actionId: string,
-    resolution: "mark_delivered" | "retry_anyway" | "cancel",
-    userId: string,
-  ) {
-    const initialRecord = await endpointRecord(endpointId);
-    if (!initialRecord) throw notFound("Chat endpoint not found");
-
-    if (resolution === "retry_anyway") {
-      await withCredentialMutationLease(
-        initialRecord.endpoint,
-        async (credentialLease) => {
-          const currentRecord = await endpointRecord(endpointId);
-          if (
-            !currentRecord ||
-            !["verifying", "active"].includes(currentRecord.endpoint.status)
-          ) {
-            throw conflict(
-              "The chat connection must be active before retrying this provider reply",
-              {
-                code: "chat_action_endpoint_unavailable",
-              },
-            );
-          }
-          await db.transaction(async (tx) => {
-            await credentialLease.assertOwned(tx);
-            const action = await tx
-              .select()
-              .from(chatActions)
-              .where(
-                and(
-                  eq(chatActions.endpointId, endpointId),
-                  eq(chatActions.id, actionId),
-                  eq(chatActions.kind, "provider_effect"),
-                ),
-              )
-              .for("update")
-              .then((rows) => rows[0] ?? null);
-            if (!action) throw notFound("Provider action not found");
-            if (action.status !== "delivery_unknown") {
-              throw conflict(
-                "Only an unconfirmed provider action needs operator resolution",
-                {
-                  code: "chat_action_resolution_not_required",
-                },
-              );
-            }
-            const payload = providerEffectPayload(action.payload);
-            if (!payload) {
-              throw conflict("This provider action cannot be retried safely", {
-                code: "chat_action_retry_context_missing",
-              });
-            }
-            const delivery =
-              payload.settleDelivery && action.deliveryId
-                ? await tx
-                    .select({ state: chatDeliveries.state })
-                    .from(chatDeliveries)
-                    .where(
-                      and(
-                        eq(chatDeliveries.endpointId, endpointId),
-                        eq(chatDeliveries.id, action.deliveryId),
-                      ),
-                    )
-                    .for("update")
-                    .then((rows) => rows[0] ?? null)
-                : null;
-            if (payload.settleDelivery && action.deliveryId) {
-              if (!delivery || delivery.state !== "failed") {
-                throw conflict(
-                  "The provider action's delivery is no longer awaiting resolution",
-                  {
-                    code: "chat_action_delivery_resolution_conflict",
-                  },
-                );
-              }
-              await notifyChatDeliveryWork(tx);
-              await tx
-                .update(chatDeliveries)
-                .set({
-                  state: "processing",
-                  nextAttemptAt: null,
-                  redactedError: null,
-                  updatedAt: new Date(),
-                })
-                .where(
-                  and(
-                    eq(chatDeliveries.id, action.deliveryId),
-                    eq(chatDeliveries.state, "failed"),
-                  ),
-                );
-            }
-            const now = new Date();
-            await notifyChatActionWork(tx, "provider_effect");
-            const [claimed] = await tx
-              .update(chatActions)
-              .set({
-                status: "received",
-                result: {
-                  ...(action.result ?? {}),
-                  code: "provider_effect_retry_requested",
-                  retryable: false,
-                  retryAt: null,
-                },
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(chatActions.id, action.id),
-                  eq(chatActions.status, "delivery_unknown"),
-                ),
-              )
-              .returning({ id: chatActions.id });
-            if (!claimed) {
-              throw conflict("This provider action is already being resolved", {
-                code: "chat_action_resolution_conflict",
-              });
-            }
-            await logActivity(tx as unknown as Db, {
-              companyId: action.companyId,
-              actorType: "user",
-              actorId: userId,
-              action: "chat.provider_effect_retry_anyway",
-              entityType: "chat_action",
-              entityId: action.id,
-              details: {
-                endpointId,
-                conversationId: action.conversationId,
-                deliveryId: action.deliveryId,
-                previousState: "delivery_unknown",
-                nextState: "received",
-                duplicateRiskAccepted: true,
-              },
-            });
-          });
-        },
-      );
-      // The audited retry request is durable before the new transport claim.
-      // Do not keep the endpoint mutation lease across provider I/O.
-      await processProviderEffect(actionId);
-      return;
-    }
-
-    await withCredentialMutationLease(
-      initialRecord.endpoint,
-      (credentialLease) =>
-        db.transaction(async (tx) => {
-          await credentialLease.assertOwned(tx);
-          const action = await tx
-            .select()
-            .from(chatActions)
-            .where(
-              and(
-                eq(chatActions.endpointId, endpointId),
-                eq(chatActions.id, actionId),
-                eq(chatActions.kind, "provider_effect"),
-              ),
-            )
-            .for("update")
-            .then((rows) => rows[0] ?? null);
-          if (!action) throw notFound("Provider action not found");
-          if (action.status !== "delivery_unknown") {
-            throw conflict(
-              "Only an unconfirmed provider action needs operator resolution",
-              {
-                code: "chat_action_resolution_not_required",
-              },
-            );
-          }
-          const payload = providerEffectPayload(action.payload);
-          if (!payload) {
-            throw conflict("This provider action cannot be resolved safely", {
-              code: "chat_action_resolution_context_missing",
-            });
-          }
-          const delivery =
-            payload.settleDelivery && action.deliveryId
-              ? await tx
-                  .select({ state: chatDeliveries.state })
-                  .from(chatDeliveries)
-                  .where(
-                    and(
-                      eq(chatDeliveries.endpointId, endpointId),
-                      eq(chatDeliveries.id, action.deliveryId),
-                    ),
-                  )
-                  .for("update")
-                  .then((rows) => rows[0] ?? null)
-              : null;
-          if (
-            payload.settleDelivery &&
-            action.deliveryId &&
-            (!delivery || delivery.state !== "failed")
-          ) {
-            throw conflict(
-              "The provider action's delivery is no longer awaiting resolution",
-              {
-                code: "chat_action_delivery_resolution_conflict",
-              },
-            );
-          }
-
-          const now = new Date();
-          const nextStatus =
-            resolution === "mark_delivered" ? "processed" : "cancelled";
-          await notifyChatActionWork(tx, "provider_effect");
-          const [resolved] = await tx
-            .update(chatActions)
-            .set({
-              status: nextStatus,
-              result: {
-                ...(action.result ?? {}),
-                code:
-                  resolution === "mark_delivered"
-                    ? "provider_effect_marked_delivered_by_operator"
-                    : "provider_effect_cancelled_by_operator",
-                retryable: false,
-                retryAt: null,
-              },
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(chatActions.id, action.id),
-                eq(chatActions.status, "delivery_unknown"),
-              ),
-            )
-            .returning({ id: chatActions.id });
-          if (!resolved) {
-            throw conflict("This provider action is already being resolved", {
-              code: "chat_action_resolution_conflict",
-            });
-          }
-          if (payload.settleDelivery && action.deliveryId) {
-            await notifyChatDeliveryWork(tx);
-            await tx
-              .update(chatDeliveries)
-              .set(
-                resolution === "mark_delivered"
-                  ? {
-                      state: "processed",
-                      processedAt: now,
-                      nextAttemptAt: null,
-                      redactedError: null,
-                      updatedAt: now,
-                    }
-                  : {
-                      state: "filtered",
-                      processedAt: now,
-                      nextAttemptAt: null,
-                      redactedError:
-                        "Cancelled by an operator after an unconfirmed provider reply",
-                      updatedAt: now,
-                    },
-              )
-              .where(
-                and(
-                  eq(chatDeliveries.id, action.deliveryId),
-                  eq(chatDeliveries.state, "failed"),
-                ),
-              );
-          }
-          if (resolution === "mark_delivered") {
-            if (payload.completeConversationId) {
-              await tx
-                .update(chatConversations)
-                .set({ state: "completed", updatedAt: now })
-                .where(
-                  and(
-                    eq(chatConversations.id, payload.completeConversationId),
-                    eq(chatConversations.endpointId, endpointId),
-                  ),
-                );
-            }
-            await tx
-              .update(chatEndpoints)
-              .set({ lastEventAt: now, updatedAt: now })
-              .where(eq(chatEndpoints.id, endpointId));
-          }
-          await logActivity(tx as unknown as Db, {
-            companyId: action.companyId,
-            actorType: "user",
-            actorId: userId,
-            action: `chat.provider_effect_${resolution}`,
-            entityType: "chat_action",
-            entityId: action.id,
-            details: {
-              endpointId,
-              conversationId: action.conversationId,
-              deliveryId: action.deliveryId,
-              completeConversationId: payload.completeConversationId ?? null,
-              previousState: "delivery_unknown",
-              nextState: nextStatus,
-              duplicateRiskAccepted: false,
-            },
-          });
-          await credentialLease.assertOwned(tx);
-        }),
-    );
-  }
-
   async function resolveAction(
     endpointId: string,
     actionId: string,
@@ -6018,487 +3695,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     return resolveSlackTaskStart(endpointId, actionId, resolution, userId, initialRecord);
   }
 
-  async function getPublicationBatchStatus(
-    endpointId: string,
-    conversationId: string,
-    publicationId: string,
-  ): Promise<ChatPublicationBatchStatus> {
-    if (![endpointId, conversationId, publicationId].every(isUuidLike)) {
-      throw badRequest(
-        "Valid endpoint, conversation, and publication IDs are required",
-      );
-    }
-    const anchor = await db
-      .select()
-      .from(chatPublications)
-      .where(
-        and(
-          eq(chatPublications.id, publicationId),
-          eq(chatPublications.endpointId, endpointId),
-          eq(chatPublications.conversationId, conversationId),
-        ),
-      )
-      .then((rows) => rows[0]);
-    if (!anchor) throw notFound("Chat publication not found");
-    // An explicit Board send and every durable text/file transport part share
-    // its comment. Read all parts without Activity's history limit; never
-    // advance the worker or replay a provider side effect from this GET.
-    // Join public receipts and private transfer facts in one database snapshot.
-    // A concurrent consent or file receipt cannot produce a mixed-time batch.
-    const batch = await db
-      .select({
-        publication: chatPublications,
-        transfer: fileTransferProjectionColumns,
-      })
-      .from(chatPublications)
-      .leftJoin(
-        chatTeamsFileTransfers,
-        and(
-          eq(chatTeamsFileTransfers.companyId, chatPublications.companyId),
-          eq(chatTeamsFileTransfers.endpointId, chatPublications.endpointId),
-          eq(
-            chatTeamsFileTransfers.conversationId,
-            chatPublications.conversationId,
-          ),
-          eq(chatTeamsFileTransfers.publicationId, chatPublications.id),
-        ),
-      )
-      .where(
-        and(
-          eq(chatPublications.companyId, anchor.companyId),
-          eq(chatPublications.endpointId, endpointId),
-          eq(chatPublications.conversationId, conversationId),
-          anchor.commentId
-            ? eq(chatPublications.commentId, anchor.commentId)
-            : eq(chatPublications.id, anchor.id),
-        ),
-      )
-      .orderBy(
-        asc(chatPublications.createdAt),
-        asc(publicationTransportOrderKey(chatPublications)),
-      );
-    if (!batch.length) throw notFound("Chat publication not found");
-    return projectChatPublicationBatch(
-      batch.map(({ publication, transfer }) =>
-        projectChatFileTransfer(
-          publicationSummary(publication),
-          transfer?.publicationId ? transfer : undefined,
-        ),
-      ),
-    );
-  }
-
-  async function publishComment(
-    endpointId: string,
-    conversationId: string,
-    commentId: string,
-  ) {
-    const emailBoundary = await endpointRecord(endpointId);
-    if (emailBoundary?.endpoint.publicationMode === "explicit")
-      throw badRequest("Use an explicit email send action");
-    const conversation = await db
-      .select()
-      .from(chatConversations)
-      .where(
-        and(
-          eq(chatConversations.id, conversationId),
-          eq(chatConversations.endpointId, endpointId),
-        ),
-      )
-      .then((rows) => rows[0] ?? null);
-    if (!conversation) throw notFound("Conversation not found");
-    const comment = await db
-      .select()
-      .from(issueComments)
-      .where(
-        and(
-          eq(issueComments.id, commentId),
-          eq(issueComments.issueId, conversation.issueId),
-          isNull(issueComments.deletedAt),
-        ),
-      )
-      .then((rows) => rows[0] ?? null);
-    if (!comment) throw notFound("Task comment not found");
-    const [publication] = await db.transaction(async (tx) => {
-      await notifyChatPublicationWork(tx);
-      return tx
-        .insert(chatPublications)
-        .values({
-          companyId: conversation.companyId,
-          endpointId,
-          conversationId,
-          issueId: conversation.issueId,
-          commentId,
-          idempotencyKey: `explicit:${commentId}:${endpointId}`,
-          payload: projectSafeChatPublication({
-            classification: "external",
-            source: "explicit_board_send",
-            text: comment.body,
-          }),
-          state: "pending",
-        })
-        .onConflictDoNothing()
-        .returning();
-    });
-    await processPendingPublications();
-    const batch = await db
-      .select()
-      .from(chatPublications)
-      .where(
-        and(
-          eq(chatPublications.companyId, conversation.companyId),
-          eq(chatPublications.endpointId, endpointId),
-          eq(chatPublications.conversationId, conversationId),
-          eq(chatPublications.commentId, commentId),
-        ),
-      )
-      .orderBy(
-        asc(chatPublications.createdAt),
-        asc(publicationTransportOrderKey(chatPublications)),
-      );
-    return (
-      batch.find((candidate) => candidate.state !== "published") ??
-      batch.at(-1) ??
-      publication
-    );
-  }
-
-  async function publishBoardMessage(
-    endpointId: string,
-    conversationId: string,
-    body: string,
-    clientIdempotencyKey: string,
-    userId: string,
-    attachmentIds: string[] = [],
-  ) {
-    const emailBoundary = await endpointRecord(endpointId);
-    if (emailBoundary?.endpoint.publicationMode === "explicit")
-      throw badRequest("Use an explicit email send action");
-    // Browser request IDs are only unique within the conversation that issued
-    // them. Include that durable task boundary so a retried key from another
-    // conversation can neither suppress its send nor return the first task's
-    // publication.
-    const idempotencyKey = `explicit-board:${endpointId}:${conversationId}:${clientIdempotencyKey}`;
-    const rejectionActionId = `board-send-rejected:${conversationId}:${clientIdempotencyKey}`;
-    const rejectionCode = "chat_board_send_attachments_already_bound";
-    const rejectionDetails = (ids: string[]) => ({
-      code: rejectionCode,
-      endpointId,
-      conversationId,
-      idempotencyKey: clientIdempotencyKey,
-      attachmentIds: ids,
-    });
-    const validRejectedIds = (value: unknown): value is string[] =>
-      Array.isArray(value) &&
-      value.length > 0 &&
-      value.length <= 20 &&
-      value.every((id) => typeof id === "string" && isUuidLike(id)) &&
-      new Set(value).size === value.length;
-    if (attachmentIds.length > 0) {
-      const record = await endpointRecord(endpointId);
-      if (
-        record?.endpoint.provider === "microsoft-teams" &&
-        record.endpoint.status === "active"
-      ) {
-        const [existing] = await db
-          .select({ id: chatPublications.id })
-          .from(chatPublications)
-          .where(
-            and(
-              eq(chatPublications.companyId, record.endpoint.companyId),
-              eq(chatPublications.endpointId, endpointId),
-              eq(chatPublications.conversationId, conversationId),
-              eq(chatPublications.idempotencyKey, idempotencyKey),
-            ),
-          )
-          .limit(1);
-        // A cold service must not permanently choose the task-link fallback
-        // merely because runtime reconciliation has not run yet. Initialize
-        // outside all Board/source locks, then recheck the full scope below.
-        // A repeated send identity needs only its existing durable receipt.
-        const [rejected] = existing
-          ? []
-          : await db
-              .select({ id: chatActions.id })
-              .from(chatActions)
-              .where(
-                and(
-                  eq(chatActions.companyId, record.endpoint.companyId),
-                  eq(chatActions.endpointId, endpointId),
-                  eq(chatActions.providerActionId, rejectionActionId),
-                ),
-              )
-              .limit(1);
-        if (!existing && !rejected) await runtimeFor(record.endpoint);
-      }
-    }
-    const publication = await db.transaction(async (tx) => {
-      const conversation = await tx
-        .select()
-        .from(chatConversations)
-        .where(
-          and(
-            eq(chatConversations.id, conversationId),
-            eq(chatConversations.endpointId, endpointId),
-          ),
-        )
-        .for("update")
-        .then((rows) => rows[0] ?? null);
-      if (!conversation) throw notFound("Conversation not found");
-
-      const existing = await tx
-        .select()
-        .from(chatPublications)
-        .where(
-          and(
-            eq(chatPublications.companyId, conversation.companyId),
-            eq(chatPublications.idempotencyKey, idempotencyKey),
-          ),
-        )
-        .then((rows) => rows[0] ?? null);
-      if (existing) {
-        const batch = await tx
-          .select()
-          .from(chatPublications)
-          .where(
-            and(
-              eq(chatPublications.endpointId, endpointId),
-              eq(chatPublications.conversationId, conversationId),
-              eq(chatPublications.commentId, existing.commentId!),
-            ),
-          )
-          .orderBy(
-            asc(chatPublications.createdAt),
-            asc(publicationTransportOrderKey(chatPublications)),
-          );
-        return (
-          batch.find((candidate) => candidate.state !== "published") ??
-          batch.at(-1) ??
-          existing
-        );
-      }
-
-      const [rejected] = await tx
-        .select()
-        .from(chatActions)
-        .where(
-          and(
-            eq(chatActions.companyId, conversation.companyId),
-            eq(chatActions.endpointId, endpointId),
-            eq(chatActions.providerActionId, rejectionActionId),
-          ),
-        )
-        .limit(1);
-      if (rejected) {
-        const payload = rejected.payload;
-        if (
-          rejected.kind !== "board_send_rejected" ||
-          rejected.status !== "processed" ||
-          rejected.conversationId !== conversation.id ||
-          payload.schemaVersion !== 1 ||
-          payload.issueId !== conversation.issueId ||
-          payload.idempotencyKey !== clientIdempotencyKey ||
-          rejected.result?.code !== rejectionCode ||
-          !validRejectedIds(payload.attachmentIds)
-        ) {
-          throw conflict("Board send rejection receipt is unavailable");
-        }
-        // The negative receipt is immutable, including when the caller retries
-        // with different content or the previous owner comment was deleted.
-        return { rejection: rejectionDetails(payload.attachmentIds) };
-      }
-
-      let comment: Awaited<
-        ReturnType<ReturnType<typeof issueService>["addComment"]>
-      >;
-      try {
-        // addComment inserts before binding attachments. Roll back that insert
-        // in a savepoint, then commit only the exact terminal rejection below.
-        comment = await tx.transaction((inner) =>
-          issueService(inner as unknown as Db).addComment(
-            conversation.issueId,
-            body,
-            { userId },
-            { authorType: "user", attachmentIds },
-            inner,
-          ),
-        );
-      } catch (error) {
-        const details =
-          error instanceof HttpError &&
-          error.status === 409 &&
-          error.details &&
-          typeof error.details === "object" &&
-          !Array.isArray(error.details)
-            ? (error.details as Record<string, unknown>)
-            : null;
-        if (
-          details?.code !== "issue_comment_attachments_already_bound" ||
-          details.companyId !== conversation.companyId ||
-          details.issueId !== conversation.issueId ||
-          !validRejectedIds(details.attachmentIds) ||
-          !details.attachmentIds.every((id) => attachmentIds.includes(id))
-        )
-          throw error;
-        const invalidIds = attachmentIds.filter((id) =>
-          (details.attachmentIds as string[]).includes(id),
-        );
-        await tx.insert(chatActions).values({
-          companyId: conversation.companyId,
-          endpointId,
-          conversationId,
-          kind: "board_send_rejected",
-          providerActionId: rejectionActionId,
-          payload: {
-            schemaVersion: 1,
-            issueId: conversation.issueId,
-            requestedByUserId: userId,
-            idempotencyKey: clientIdempotencyKey,
-            attachmentIds: invalidIds,
-          },
-          status: "processed",
-          result: { code: rejectionCode },
-        });
-        return { rejection: rejectionDetails(invalidIds) };
-      }
-      if (emailBoundary?.endpoint.provider === "slack") {
-        const [issue] = await tx.select().from(issues).where(and(eq(issues.id, conversation.issueId), eq(issues.companyId, conversation.companyId)));
-        if (!issue) throw notFound("Task not found");
-        await assertSlackBoardWorkAllowed(tx as unknown as Db, issue);
-        await mirrorSlackBoardComment(tx, comment, { publicationKey: idempotencyKey, wakeAgent: true, endpointId, conversationId, attachmentIds });
-        const [created] = await tx.select().from(chatPublications).where(and(eq(chatPublications.companyId, conversation.companyId), eq(chatPublications.idempotencyKey, idempotencyKey)));
-        if (!created) throw conflict("This Slack task is no longer assigned to the connected agent");
-        return created;
-      }
-      const attachedFiles = attachmentIds.length
-        ? await tx
-            .select({
-              id: issueAttachments.id,
-              originalFilename: assets.originalFilename,
-            })
-            .from(issueAttachments)
-            .innerJoin(assets, eq(issueAttachments.assetId, assets.id))
-            .where(
-              and(
-                eq(issueAttachments.companyId, conversation.companyId),
-                eq(issueAttachments.issueId, conversation.issueId),
-                eq(issueAttachments.issueCommentId, comment.id),
-                inArray(issueAttachments.id, attachmentIds),
-              ),
-            )
-        : [];
-      const attachedFileById = new Map(
-        attachedFiles.map((file) => [file.id, file]),
-      );
-      const orderedFiles = attachmentIds.map(
-        (attachmentId) => attachedFileById.get(attachmentId)!,
-      );
-      const publicationCreatedAt = new Date();
-      await notifyChatPublicationWork(tx);
-      const [created] = await tx
-        .insert(chatPublications)
-        .values({
-          companyId: conversation.companyId,
-          endpointId,
-          conversationId,
-          issueId: conversation.issueId,
-          commentId: comment.id,
-          idempotencyKey,
-          payload: projectSafeChatPublication({
-            classification: "external",
-            source: "explicit_board_send",
-            text: comment.body,
-          }),
-          state: "pending",
-          createdAt: publicationCreatedAt,
-          updatedAt: publicationCreatedAt,
-        })
-        .returning();
-      let terminalPublication = created;
-      for (const [index, file] of orderedFiles.entries()) {
-        const attachmentCreatedAt = new Date(
-          publicationCreatedAt.getTime() + index + 1,
-        );
-        await notifyChatPublicationWork(tx);
-        const [attachmentPublication] = await tx
-          .insert(chatPublications)
-          .values({
-            companyId: conversation.companyId,
-            endpointId,
-            conversationId,
-            issueId: conversation.issueId,
-            commentId: comment.id,
-            idempotencyKey: `${idempotencyKey}:attachment:${file.id}`,
-            payload: projectSafeChatPublication({
-              classification: "external",
-              source: "explicit_board_send",
-              text: `Shared ${file.originalFilename ?? "a file"}.`,
-              attachmentIds: [file.id],
-            }),
-            state: "pending",
-            createdAt: attachmentCreatedAt,
-            updatedAt: attachmentCreatedAt,
-          })
-          .returning();
-        await stageTeamsBoardFileIntent(
-          tx,
-          attachmentPublication,
-          userId,
-          conversation,
-        );
-        terminalPublication = attachmentPublication;
-      }
-      await logActivity(tx as unknown as Db, {
-        companyId: conversation.companyId,
-        actorType: "user",
-        actorId: userId,
-        action: "chat.publication_requested",
-        entityType: "chat_publication",
-        entityId: created.id,
-        issueId: conversation.issueId,
-        details: {
-          endpointId,
-          conversationId,
-          commentId: comment.id,
-          source: "explicit_board_send",
-        },
-      });
-      return terminalPublication;
-    });
-    if ("rejection" in publication) {
-      throw conflict(
-        "Selected attachments are already bound to another comment",
-        publication.rejection,
-      );
-    }
-    if (emailBoundary?.endpoint.provider === "slack") await processPendingSlackBoardMessages();
-    await processPendingPublications();
-    const batch = publication.commentId
-      ? await db
-          .select()
-          .from(chatPublications)
-          .where(
-            and(
-              eq(chatPublications.endpointId, endpointId),
-              eq(chatPublications.conversationId, conversationId),
-              eq(chatPublications.commentId, publication.commentId),
-            ),
-          )
-          .orderBy(
-            asc(chatPublications.createdAt),
-            asc(publicationTransportOrderKey(chatPublications)),
-          )
-      : [publication];
-    // A multi-part send is successful only when every ordered publication is
-    // published. Surface the first blocking row so the UI points operators at
-    // the actual retry/duplicate-risk resolution instead of a later pending
-    // attachment that cannot advance past it.
-    return (
-      batch.find((candidate) => candidate.state !== "published") ??
-      batch.at(-1) ??
-      publication
-    );
-  }
   async function recordExactOutboundPublicationLink(...args: Parameters<ReturnType<typeof createChatPublicationTransport>["recordExactOutboundPublicationLink"]>) {
     return publicationTransport.recordExactOutboundPublicationLink(...args);
   }
@@ -6510,7 +3706,6 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   async function processPendingPublications(...args: Parameters<ReturnType<typeof createChatPublicationQueue>["processPendingPublications"]>) {
     return publicationQueue.processPendingPublications(...args);
   }
-
 
   let githubMaintenancePending = false;
   function scheduleGitHubMaintenance() {
@@ -6759,7 +3954,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   const { publicationEligibility } = publicationQueue;
   const { unregisterSlackTaskAuthority } = createSlackTaskAuthorityRegistration(db, { authorizeInboundWakeup, resolveCredentials });
 
-  return {
+  const { replayPublication, resolvePublication, resolveProviderEffect } = createChatPublicationResolution(db, { endpointRecord, withCredentialMutationLease, teamsTransferProtocol, commitTaskControlCompletion, processPendingPublications, processProviderEffect });
+  const { prepareTeamsBoardSend } = createTeamsBoardSendPreparation(db, { endpointRecord, runtimeFor });
+  const { getPublicationBatchStatus, publishComment, publishBoardMessage } = createChatPublicationRequests(db, { endpointRecord, stageTeamsBoardFileIntent, processPendingSlackBoardMessages, processPendingPublications, prepareTeamsBoardSend });
+return {
     voice,
     authorizeFastResponse,
     slackRegistration,
