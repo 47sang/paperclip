@@ -1033,3 +1033,15 @@ The live preview remains the unmodified ad5875fa installed package; the runtime
 lookup repair and this UI change still need a new cloud-qualified package and
 real API task/revision acceptance. Full repository checks and PR review must run
 on the reconciled delivery heads before a PR-ready claim.
+
+
+The managed setup checkpoint is attached to the same isolated acceptance task
+as work product `894e1e67-ba80-40e0-80b3-e5e0723788dc`, attachment
+`df4dde66-0c0a-4553-a3a2-170ded6663e9`. Independent download verifies
+8,085 bytes and SHA-256
+`01783ff0aca0f4514df75aead60c511553cb8c407339dd047282a1e9248a4c85`.
+[Download managed setup checkpoint](http://127.0.0.1:3105/api/attachments/df4dde66-0c0a-4553-a3a2-170ded6663e9/content?download=1).
+It records behavior commit `6ea47e5480ca17e8e634c203964e99d5614db1dc`
+and the platform composition at attachment time; it does not claim a final
+packaged runtime or completed live managed acceptance. Receipt:
+`/private/tmp/claude-managed-checkpoint-20261013-upload.json`.
