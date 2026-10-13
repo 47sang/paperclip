@@ -1151,3 +1151,34 @@ The served controller is ad5875fa with the recorded 52486d6b lookup repair and
 Full workspace typecheck/tests/build and final packaged acceptance remain
 unrun on the reconciled head; they belong to the still pending cloud/full-check
 handoff after dependency and local acceptance gates are satisfied.
+
+
+## Published prerequisite evidence remains separate — 2026-10-13
+
+The source owner reports public canary `2026.1013.0-canary.6` on
+`60bc0d5fee9a6e48db08fc016521fee3d9f57d67`, following merged prerequisite
+d67e3507. The 60bc object is available locally and its own commit changes only
+the release workflow and its verification tests (#16149). This checkpoint does
+not merge that later master into the Claude branches or run a new workflow.
+The source owner reports four native producers, publication and real onboarding
+smoke passing, plus clean Apple Silicon installation and two native Codex task
+runs through the supported API. Its fresh staging pair remains separately bound
+to literal d67/cloud38392212140-1 and reuses its provider session.
+
+Those are prerequisite/Codex measurements, not qualification of our untested
+Claude package. The source owner's published saved-account Connect UI still
+uses a Legacy CLI probe that fails on its clean local PATH; its private Codex
+#15683 fix remains separate. Its released gpt-5.6-luna costs are unpriced, and
+an additional positive-budget control correctly fails closed. Restoring its
+budget to default zero changed the configuration revision/session; local same
+provider-session reuse is therefore not claimed. Four authorized Codex turns
+were used, its QA agents are paused, and physical sandbox teardown/invoices
+remain unconfirmed. None of its $25 allowance funds this Claude lane.
+
+Our public heads remain c60bf4b/4440df2/173a73e, with newer reconciled fixes
+committed locally. Claude budget-check/retry approval is still pending; no new
+paid check, retry, hold release, foreign process cleanup or borrowed environment
+was performed. Current-source broad checks, final packages, local useful-task
+and revision proof and fresh PR review remain gates. The old source merge timer
+was canceled by its human; this chat has no authority to recreate it or promote
+production defaults.
