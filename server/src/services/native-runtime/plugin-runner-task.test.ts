@@ -40,9 +40,23 @@ describe("plugin native Runner ownership", () => {
       registration.activate(); await registration.ready();
       expect(task.mock.calls.filter(([operation]) => operation.kind === "submit")).toHaveLength(1);
       expect(() => owner.launcher(launchSpec(registration.connection))).toThrow("new task lease");
-      await registration.release(); await process.completion;
+      await registration.release(); await registration.checkpoint("settled"); await process.completion;
       expect(task.mock.calls.filter(([operation]) => operation.kind === "complete")).toHaveLength(1);
     } finally { process.child.kill(); await process.completion.catch(() => {}); }
+  });
+
+  it("retains task grants when checkpoint export fails after route release", async () => {
+    const { task } = provider();
+    ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", runnerExecutable: "/runner",
+      prepare: async () => {}, checkpoint: async () => { throw new Error("export failed"); }, pollMs: 1 });
+    const registration = await owner.registration({} as never, "run");
+    const process = owner.launcher(launchSpec(registration.connection));
+    registration.activate(); await registration.ready(); await registration.release();
+    expect(task.mock.calls.some(([operation]) => operation.kind === "complete")).toBe(false);
+    await expect(registration.checkpoint("settled")).rejects.toThrow("export failed");
+    await process.completion;
+    expect(task.mock.calls.some(([operation]) => operation.kind === "complete")).toBe(false);
   });
 
   it("detaches a controller without stopping its durable task", async () => {
@@ -86,7 +100,7 @@ describe("plugin native Runner ownership", () => {
       await expect(registration.ready()).rejects.toThrow("cancelled");
       expect(task.mock.calls.filter(([operation]) => operation.kind === "connection")).toHaveLength(0);
       expect(ingress.connect).not.toHaveBeenCalled();
-      await registration.release(); await process.completion;
+      await registration.release(); await registration.checkpoint("settled"); await process.completion;
     } finally { process.child.kill(); await process.completion.catch(() => {}); }
   });
 });

@@ -1,7 +1,8 @@
+import { assertPluginRunnerInstructionMirror } from "../environment-task-runtime.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
-import { environmentLeases, heartbeatRuns, type Db } from "@paperclipai/db";
+import { agentInstructionWorkingCopies, heartbeatRuns, type Db } from "@paperclipai/db";
 import { parseObject } from "../../adapters/utils.js";
 import { logger } from "../../middleware/logger.js";
 import { AgentDirectoryReuseInvalidatedError, isAgentDirectoryCopy } from "../agent-directory-working-copies.js";
@@ -80,16 +81,11 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
   // Core validates and saves a local mirror. The task owner transfers the
   // registered working copy without a shell or command bridge.
   const instructionTarget = task ? { kind: "local" as const } : executionTarget;
+  if (task && !executionTarget?.leaseId) throw new Error("Plugin Runner instruction lease unavailable");
   const checkpointTaskInstructions = async () => {
     if (!task || !instructionCopy || executionTarget?.kind !== "remote") return;
-    const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases)
-      .where(and(eq(environmentLeases.id, executionTarget.leaseId!), eq(environmentLeases.companyId, agent.companyId)));
-    // The native checkpoint exports agent files before complete revokes task
-    // grants. Never re-read a completed task or save an old local mirror.
-    if (!lease || (lease.metadata?.runnerTaskCheckpointed !== true &&
-        (lease.metadata?.runnerTaskDispatched === true || lease.metadata?.runnerTaskExecutionStopped === true))) {
-      throw new Error("Plugin Runner instruction checkpoint unavailable");
-    }
+    await assertPluginRunnerInstructionMirror(db, { companyId: agent.companyId, runId: readRun().id,
+      receipt: { runnerTaskLeaseId: executionTarget.leaseId } });
   };
   const instructionPreparationKey = createHash("sha256").update(JSON.stringify({
     adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, sessionConfigMetadata,
@@ -209,6 +205,12 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
         }
       }
       if (instructionCopy) {
+        if (task && executionTarget?.kind === "remote") {
+          const receipt = { ...instructionCopy.receipt, runnerTaskLeaseId: executionTarget.leaseId };
+          await db.update(agentInstructionWorkingCopies).set({ receipt }).where(and(
+            eq(agentInstructionWorkingCopies.companyId, agent.companyId), eq(agentInstructionWorkingCopies.runId, readRun().id)));
+          instructionCopy = { ...instructionCopy, receipt };
+        }
         const storageWarning = readNonEmptyString(instructionCopy.receipt?.storageWarning);
         if (storageWarning) {
           instructionSave = { state: "prepared", contract: "agent_files", storageWarning };

@@ -81,6 +81,8 @@ export function createPluginRunnerTaskOwner(input: {
         failReady(new Error("Plugin Runner startup cancelled"));
         return { code: 1, signal: null, stdout: "", stderr: "" };
       }
+      if (operation.kind === "submit" && operation.launch) operation.launch.assets = input.assets?.() ?? [];
+      environmentTaskOperationSchema.parse(operation);
       // Persist/mark dispatch before crossing the provider boundary. A lost reply
       // must reconcile this attempt and must never launch another task.
       await input.onDispatched?.();
@@ -89,7 +91,6 @@ export function createPluginRunnerTaskOwner(input: {
         failReady(new Error("Plugin Runner startup cancelled"));
         return { code: 1, signal: null, stdout: "", stderr: "" };
       }
-      if (operation.kind === "submit" && operation.launch) operation.launch.assets = input.assets?.() ?? [];
       submitted = true;
       try { await call(operation); } catch {
         // Submission can have succeeded remotely. Inspect the same saved task.
@@ -139,19 +140,17 @@ export function createPluginRunnerTaskOwner(input: {
       },
       ready: async () => { await activation; },
       get failure() { return outbound?.failure; },
-      checkpoint: input.checkpoint,
+      checkpoint: async (settlement: "settled" | "unsettled") => {
+        if (submitted) { stopRequested = true; await stopAndConfirm(); }
+        await input.checkpoint(settlement);
+        if (submitted) await call({ kind: "complete" });
+      },
       release: async (reason?: "detach") => {
         released = true;
-        if (reason === "detach") { detached = true; await outbound?.close(); return; }
-        try {
-          if (submitted) {
-            stopRequested = true;
-            await stopAndConfirm();
-            // Completion acknowledges provider cleanup only after native state
-            // checkpointing and an explicit process-tree termination receipt.
-            await call({ kind: "complete" });
-          }
-        } finally { await outbound?.close(); }
+        if (reason === "detach") detached = true;
+        // Native ownership release closes the PRP route before checkpointing.
+        // Keep task grants until checkpoint succeeds; lease recovery owns failures.
+        await outbound?.close();
       },
     };
   };

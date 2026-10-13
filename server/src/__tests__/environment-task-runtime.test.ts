@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import { environmentTaskOperationSchema, parseEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
-import { executeEnvironmentTask } from "../services/environment-task-runtime.js";
+import { assertPluginRunnerInstructionMirror, executeEnvironmentTask } from "../services/environment-task-runtime.js";
 
 const state = vi.hoisted(() => ({ plugin: {} as any }));
 vi.mock("../services/plugin-registry.js", () => ({ pluginRegistryService: () => ({ getById: vi.fn(async () => state.plugin) }) }));
@@ -31,6 +31,22 @@ beforeEach(() => {
   state.plugin = { id: "original", pluginKey: "test.provider", status: "ready", manifestJson: { capabilities: ["environment.drivers.register"], environmentDrivers: [{ driverKey: "tasks", supportsTasks: true }] } };
 });
 describe("plugin-provided Runner execution", () => {
+  it("fences persisted instruction mirrors until both export and stop are proved", async () => {
+    let metadata: Record<string, unknown> | undefined;
+    const where = vi.fn(async (_predicate: unknown) => metadata ? [{ metadata }] : []);
+    const db = { select: () => ({ from: () => ({ where }) }) } as unknown as Db;
+    const input = { companyId: "company", runId: "run", receipt: { runnerTaskLeaseId: leaseId } };
+    for (const value of [undefined, { runnerTaskDispatched: true }, { runnerTaskDispatched: true, runnerTaskCheckpointed: true },
+      { runnerTaskExecutionStopped: true, runnerTaskCheckpointed: false }]) {
+      metadata = value;
+      await expect(assertPluginRunnerInstructionMirror(db, input)).rejects.toThrow("instruction checkpoint unavailable");
+    }
+    for (const value of [{}, { runnerTaskExecutionStopped: true, runnerTaskCheckpointed: true }]) {
+      metadata = value; await expect(assertPluginRunnerInstructionMirror(db, input)).resolves.toBeUndefined();
+    }
+    const scope = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
+    expect(scope.params).toEqual([leaseId, "company", "run"]);
+  });
   it("dispatches with host-derived scope and a persisted attempt identity", async () => {
     const { db, query } = database(); const workers = worker();
     await expect(executeEnvironmentTask(db, workers as never, { companyId: "company", leaseId, operation: submit })).resolves.toEqual({ kind: "accepted", taskId: "attempt-1" });

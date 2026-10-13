@@ -1,3 +1,4 @@
+import { assertPluginRunnerInstructionMirror } from "./environment-task-runtime.js";
 import { agentDirectoryWorkingCopyService, isAgentDirectoryCopy } from "./agent-directory-working-copies.js";
 import { createHash } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
@@ -208,6 +209,7 @@ export function agentInstructionWorkingCopyService(db: Db, options: { environmen
   }
 
   async function readCandidate(row: Copy, target?: AdapterExecutionTarget | null) {
+    await assertPluginRunnerInstructionMirror(db, row);
     if (row.location === "local") return readInstructionBytes(row.localRoot, row.entryFile);
     if (target?.kind !== "remote") throw new Error("The original execution environment is needed to retrieve this instruction copy");
     if (row.location !== `remote:${target.environmentId ?? ""}`) throw new Error("Instruction copy execution environment changed");

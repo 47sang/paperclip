@@ -7718,14 +7718,26 @@ it("cold-restores a suspended provider session under its durable run binding", a
 
   const externalIdentity = {
     ...secondIdentity,
+    environmentLeaseId: "lease-cold-external-task",
     runId: "run-cold-external",
     turnId: "turn-cold-external",
     itemId: "item-cold-external",
   };
+  const authorizeLeaseTransition = vi.fn(async (transition) => {
+    expect(transition).toEqual({ priorIdentity: secondIdentity, desiredIdentity: externalIdentity });
+  });
+  const deniedArchive = vi.fn();
+  const deniedLeaseTransition = createCapabilityRunnerdCodexTransport({ ...options,
+    runnerStateDirectory: externallyOwnedRunnerStateDirectory, readRunnerState,
+    prepareExternalRunnerState: async () => {}, archiveExternalRunnerState: deniedArchive,
+    prpIdentity: externalIdentity });
+  await expect(deniedLeaseTransition.transport.request("thread/read", {})).rejects.toThrow("task lease transition is not authorized");
+  await deniedLeaseTransition.transport.close();
+  expect(deniedArchive).not.toHaveBeenCalled();
   const rejectedExternalRotationSteps: string[] = [];
   let externalArchiveDirectory: string | null = null;
   const rejectedExternalRotation = createCapabilityRunnerdCodexTransport({
-    ...options,
+    ...options, authorizeEnvironmentLeaseTransition: authorizeLeaseTransition,
     runnerStateDirectory: externallyOwnedRunnerStateDirectory,
     readRunnerState,
     prepareExternalRunnerState: async () => {
@@ -7776,7 +7788,7 @@ it("cold-restores a suspended provider session under its durable run binding", a
 
   const externalRotationSteps: string[] = [];
   const externallyRotated = createCapabilityRunnerdCodexTransport({
-    ...options,
+    ...options, authorizeEnvironmentLeaseTransition: authorizeLeaseTransition,
     runnerStateDirectory: externallyOwnedRunnerStateDirectory,
     readRunnerState,
     prepareExternalRunnerState: async () => {
@@ -7813,6 +7825,8 @@ it("cold-restores a suspended provider session under its durable run binding", a
       cwd: tmpdir(),
     });
     expect(externalRotationSteps).toEqual(["archived"]);
+    expect(authorizeLeaseTransition).toHaveBeenCalledTimes(2);
+    expect((await readRunnerState()).environmentLeaseId).toBe(externalIdentity.environmentLeaseId);
   } finally {
     await externallyRotated.transport.close();
   }

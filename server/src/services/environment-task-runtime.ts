@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { environmentLeases, environments, heartbeatRuns, issues, projects, type Db } from "@paperclipai/db";
 import { environmentTaskOperationSchema, parseEnvironmentTaskResult, type PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import { pluginRegistryService } from "./plugin-registry.js";
+import { remoteExecutionHasStopped } from "./remote-execution-termination.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 
 export async function pluginEnvironmentSupportsTasks(db: Db, workers: PluginWorkerManager, lease: { companyId: string; metadata: Record<string, unknown> | null }) {
@@ -68,7 +69,7 @@ export async function executeEnvironmentTask(db: Db, workers: PluginWorkerManage
   if (operation.kind === "submit") {
     // No ticket, headers, environment values, or launch paths belong in metadata.
     const marked = await db.update(environmentLeases).set({
-      metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || '{"runnerTaskDispatched":true,"runnerTaskExecutionStopped":false,"runnerTaskCheckpointed":false}'::jsonb`,
+      metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || '{"runnerTaskLease":true,"runnerTaskDispatched":true,"runnerTaskExecutionStopped":false,"runnerTaskCheckpointed":false}'::jsonb`,
     }).where(and(eq(environmentLeases.id, lease.id), eq(environmentLeases.companyId, input.companyId),
       eq(environmentLeases.status, "active"))).returning({ id: environmentLeases.id });
     if (marked.length !== 1) throw new Error("Plugin-provided Runner execution lease is not active");
@@ -117,4 +118,50 @@ export async function settleDispatchedEnvironmentTask(db: Db, workers: PluginWor
     }).where(and(eq(environmentLeases.id, lease.id), eq(environmentLeases.companyId, lease.companyId)));
     throw new Error("Plugin Runner termination is unconfirmed; the saved lease requires cleanup");
   }
+}
+
+/** A persisted task-owned mirror must remain fenced during recovery too. */
+export async function assertPluginRunnerInstructionMirror(db: Db, input: {
+  companyId: string; runId: string; receipt: Record<string, unknown> | null;
+}) {
+  const leaseId = input.receipt?.runnerTaskLeaseId;
+  if (typeof leaseId !== "string") return;
+  const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases)
+    .where(and(eq(environmentLeases.id, leaseId), eq(environmentLeases.companyId, input.companyId),
+      eq(environmentLeases.heartbeatRunId, input.runId)));
+  const metadata = lease?.metadata;
+  if (!metadata || ((metadata.runnerTaskDispatched === true || metadata.runnerTaskExecutionStopped === true) &&
+      (metadata.runnerTaskCheckpointed !== true || metadata.runnerTaskExecutionStopped !== true))) {
+    throw new Error("Plugin Runner instruction checkpoint unavailable");
+  }
+}
+
+/** Only Core can authorize a saved session to move to a newly acquired task lease. */
+export async function authorizePluginTaskLeaseTransition(db: Db, input: {
+  companyId: string;
+  priorIdentity: { runnerInstanceId: string; environmentLeaseId: string; runId: string; normalizedSessionId: string };
+  desiredIdentity: { runnerInstanceId: string; environmentLeaseId: string; runId: string; normalizedSessionId: string };
+}) {
+  const prior = input.priorIdentity, desired = input.desiredIdentity;
+  const deny = () => { throw new Error("Plugin Runner task lease transition is unproven"); };
+  if (prior.runnerInstanceId !== desired.runnerInstanceId || prior.normalizedSessionId !== desired.normalizedSessionId ||
+      prior.environmentLeaseId === desired.environmentLeaseId || prior.runId === desired.runId) return deny();
+  const rows = await db.select({ lease: environmentLeases, run: heartbeatRuns }).from(environmentLeases)
+    .innerJoin(heartbeatRuns, and(eq(heartbeatRuns.id, environmentLeases.heartbeatRunId), eq(heartbeatRuns.companyId, input.companyId)))
+    .where(and(eq(environmentLeases.companyId, input.companyId), inArray(environmentLeases.id, [prior.environmentLeaseId, desired.environmentLeaseId])));
+  const old = rows.find(row => row.lease.id === prior.environmentLeaseId);
+  const next = rows.find(row => row.lease.id === desired.environmentLeaseId);
+  if (!old || !next || old.run.id !== prior.runId || next.run.id !== desired.runId ||
+      old.run.agentId !== next.run.agentId || old.lease.issueId !== next.lease.issueId ||
+      old.lease.executionWorkspaceId !== next.lease.executionWorkspaceId ||
+      !old.lease.environmentId || old.lease.environmentId !== next.lease.environmentId ||
+      !next.lease.provider?.startsWith("plugin:") || old.lease.provider !== next.lease.provider ||
+      !old.lease.providerLeaseId || !next.lease.providerLeaseId || old.lease.providerLeaseId === next.lease.providerLeaseId ||
+      typeof next.lease.metadata?.pluginId !== "string" || typeof next.lease.metadata?.driverKey !== "string" ||
+      old.lease.metadata?.driver !== "plugin" || next.lease.metadata?.driver !== "plugin" ||
+      old.lease.metadata?.runnerTaskLease !== true || next.lease.metadata?.runnerTaskLease !== true ||
+      old.lease.metadata?.pluginId !== next.lease.metadata?.pluginId || old.lease.metadata?.driverKey !== next.lease.metadata?.driverKey ||
+      next.lease.status !== "active" || next.lease.releasedAt || next.run.status !== "running" ||
+      (next.lease.expiresAt && next.lease.expiresAt.getTime() <= Date.now()) || !["succeeded", "failed", "cancelled", "timed_out", "interrupted"].includes(old.run.status) ||
+      !await remoteExecutionHasStopped(db, input.companyId, prior.runId)) return deny();
 }

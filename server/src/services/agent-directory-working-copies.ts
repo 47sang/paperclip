@@ -1,3 +1,4 @@
+import { assertPluginRunnerInstructionMirror } from "./environment-task-runtime.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -75,6 +76,7 @@ export function agentDirectoryWorkingCopyService(db: Db, get: (companyId: string
       workspaceExclude: [".paperclip-runtime", ".paperclip-runtime/**"] });
   }
   async function observe(row: Copy, target?: AdapterExecutionTarget | null) {
+    await assertPluginRunnerInstructionMirror(db, row);
     if (row.location === "local") {
       // The same bounded program validates aliases on its actual host.
       return observeLocalAgentDirectory(row.localRoot);
@@ -229,6 +231,7 @@ export function agentDirectoryWorkingCopyService(db: Db, get: (companyId: string
   }
 
   async function retrieve(row: Copy, target?: AdapterExecutionTarget | null) {
+    await assertPluginRunnerInstructionMirror(db, row);
     if (row.location !== "local") {
       let runtime = transports.get(key(row));
       if (!runtime) {
@@ -317,6 +320,7 @@ export function agentDirectoryWorkingCopyService(db: Db, get: (companyId: string
     return adopted;
   }
   async function checkpoint(row: Copy, target?: AdapterExecutionTarget | null, stopped = false): Promise<Copy> {
+    await assertPluginRunnerInstructionMirror(db, row);
     if (!await owns(row) || row.state === "superseded") return row;
     let failure: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {

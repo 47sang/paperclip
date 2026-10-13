@@ -31,7 +31,7 @@ function fixture(target: Input["workspace"]["executionTarget"] = null) {
   const appendRunEvent = vi.fn().mockResolvedValue(undefined);
   const context = { paperclipWorkspace: { agentHome: "/canonical" } } as Record<string, unknown>;
   const controller = createHeartbeatInstructionWorkingCopy({
-    db: { select: () => ({ from: () => ({ where: async () => [taskLease] }) }) } as unknown as Input["db"], instructionCopies: copies as unknown as Input["instructionCopies"],
+    db: { select: () => ({ from: () => ({ where: async () => [taskLease] }) }), update: () => ({ set: () => ({ where: async () => [] }) }) } as unknown as Input["db"], instructionCopies: copies as unknown as Input["instructionCopies"],
     readRun: () => run,
     agent: { id: "agent", companyId: "company", adapterType: "codex_local", adapterConfig: { lifecycleMode: "warm" }, runtimeConfig: {} } as unknown as Input["agent"],
     context,
@@ -52,7 +52,7 @@ beforeEach(() => { vi.clearAllMocks(); native.claim.mockResolvedValue(null); });
 describe("instruction working-copy extraction boundary", () => {
   it("mirrors task-owned instruction files before validating and collecting edits", async () => {
     const task = vi.fn(async () => ({ kind: "checkpoint", taskId: "task", state: {} }));
-    const f = fixture({ kind: "remote", transport: "sandbox", providerKey: "plugin", remoteCwd: "/workspace",
+    const f = fixture({ kind: "remote", transport: "sandbox", providerKey: "plugin", remoteCwd: "/workspace", leaseId: "task-lease",
       runnerTask: task, runnerLifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } });
     await f.controller.prepare(f.prepare);
     expect(f.copies.prepare).toHaveBeenCalledWith(expect.objectContaining({ target: { kind: "local" }, warm: false }));

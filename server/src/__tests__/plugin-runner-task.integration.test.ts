@@ -11,6 +11,8 @@ import type { PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import type { PaperclipPluginManifestV1 } from "@paperclipai/shared";
 import { heartbeatService } from "../services/heartbeat.js";
 import { remoteExecutionHasStopped } from "../services/remote-execution-termination.js";
+import { authorizePluginTaskLeaseTransition } from "../services/environment-task-runtime.js";
+import { remoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
 import { environmentRunOrchestrator } from "../services/environment-run-orchestrator.js";
 import { createPluginRunnerTaskOwner } from "../services/native-runtime/plugin-runner-task.js";
@@ -79,12 +81,12 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     await db.insert(plugins).values({ id: pluginId, pluginKey: manifest.id, packageName: "@test/runner-tasks",
       version: "1.0.0", apiVersion: 1, categories: ["automation"], manifestJson: manifest, status: "ready" });
     const calls: PluginEnvironmentTaskOperation[] = [];
-    let executionStopped = false, stopRequested = false, acquisition = 0;
+    let executionStopped = false, stopRequested = false, acquisition = 0, releaseFailure = false;
     const released = vi.fn(), complete = vi.fn();
     const plugin = definePlugin({
       async setup() {},
       async onEnvironmentAcquireLease() { return { providerLeaseId: `attempt:fixture.${++acquisition}`, metadata: { remoteCwd: "/workspace" } }; },
-      async onEnvironmentReleaseLease() { released(); },
+      async onEnvironmentReleaseLease() { if (releaseFailure) throw new Error("synthetic release failure"); released(); },
       async onEnvironmentTask(params) {
         calls.push(params.operation);
         switch (params.operation.kind) {
@@ -123,6 +125,8 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     expect(target).toMatchObject({ kind: "remote", transport: "sandbox", remoteCwd: "/workspace", leaseId: acquired.lease.id });
     if (target?.kind !== "remote" || target.transport !== "sandbox" || !target.runnerTask) throw new Error("Missing plugin target");
     expect(target.runner).toBeUndefined();
+    await expect(target.runnerTask({ kind: "describe", sessionId: "fixture-session", harness: "codex", projectIds: [projectId] }))
+      .resolves.toMatchObject({ kind: "description", filesystemRoot: "/state", runner: { executable: "/runner" } });
     const onDispatched = vi.fn(), checkpoint = vi.fn(async () => {}), close = vi.fn(async () => {});
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close });
     const owner = createPluginRunnerTaskOwner({ task: target.runnerTask, projectIds: target.runnerTaskProjectIds ?? [], harness: "codex",
@@ -154,7 +158,8 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       await vi.waitFor(() => expect(stopRequested).toBe(true));
       await delay(10); expect(settled).toBe(false);
       executionStopped = true; await handle.completion;
-      await registration.checkpoint("settled"); await registration.release();
+      await registration.release(); expect(complete).not.toHaveBeenCalled();
+      await registration.checkpoint("settled");
       expect(checkpoint).toHaveBeenCalledWith("settled"); expect(complete).toHaveBeenCalledOnce();
       await runtime.releaseRunLeases(runId, "released");
       expect(released).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce();
@@ -175,11 +180,49 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       expect(pending).toMatchObject({ status: "pending_cleanup", metadata: { runnerTaskDispatched: true } });
       await db.delete(environments).where(eq(environments.id, environmentId));
       executionStopped = true;
-      const sweep = await heartbeatService(db, { environmentRuntime: runtime, pluginWorkerManager: workers }).sweepPendingCleanupLeases();
+      releaseFailure = true;
+      const recovery = heartbeatService(db, { environmentRuntime: runtime, pluginWorkerManager: workers });
+      expect((await recovery.sweepPendingCleanupLeases()).destroyed).toBe(0);
+      const [retryable] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, second.lease.id));
+      expect(retryable.status).toBe("pending_cleanup");
+      releaseFailure = false;
+      await db.update(environmentLeases).set({ metadata: { ...retryable.metadata, pendingCleanupRetryAfterMs: 0 } }).where(eq(environmentLeases.id, second.lease.id));
+      const sweep = await recovery.sweepPendingCleanupLeases();
+      expect(released).toHaveBeenCalledTimes(2);
       expect(sweep.destroyed).toBe(1);
       const [cleaned] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, second.lease.id));
       expect(cleaned).toMatchObject({ status: "expired", cleanupStatus: "success", environmentId: null,
         metadata: { runnerTaskDispatched: false, remoteExecutionTermination: { state: "stopped" } } });
     } finally { executionStopped = true; handle.child.kill(); await handle.completion.catch(() => {}); harness.stop(); }
   });
+  it("authorizes a new task lease only after scoped prior execution has stopped", async () => {
+    const companyId = randomUUID(), agentId = randomUUID(), environmentId = randomUUID(), pluginId = randomUUID();
+    const oldRunId = randomUUID(), nextRunId = randomUUID(), oldLeaseId = randomUUID(), nextLeaseId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Lease transition", issuePrefix: `T${companyId.slice(0, 7).replace(/-/g, "").toUpperCase()}` });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Fixture", role: "engineer", adapterType: "paperclip_runner" });
+    await db.insert(environments).values({ id: environmentId, companyId, name: "Fixture", driver: "plugin", config: {} });
+    await db.insert(heartbeatRuns).values([
+      { id: oldRunId, companyId, agentId, invocationSource: "manual", status: "succeeded" },
+      { id: nextRunId, companyId, agentId, invocationSource: "manual", status: "running" },
+    ]);
+    const pin = { driver: "plugin", pluginId, driverKey: "tasks", environmentId, runnerTaskLease: true };
+    const prior = { id: oldLeaseId, companyId, environmentId, heartbeatRunId: oldRunId, provider: "plugin:fixture:tasks", providerLeaseId: "old-task" };
+    await db.insert(environmentLeases).values([
+      { ...prior, status: "released", leasePolicy: "ephemeral", cleanupStatus: "success", releasedAt: new Date(),
+        metadata: { ...pin, remoteExecutionTermination: remoteTerminationReceipt(prior, { providerLeaseId: "old-task", state: "stopped" }) } },
+      { id: nextLeaseId, companyId, environmentId, heartbeatRunId: nextRunId, provider: prior.provider, providerLeaseId: "new-task",
+        status: "active", leasePolicy: "ephemeral", metadata: pin },
+    ]);
+    const priorIdentity = { runnerInstanceId: "runner", normalizedSessionId: "session", environmentLeaseId: oldLeaseId, runId: oldRunId };
+    const desiredIdentity = { ...priorIdentity, environmentLeaseId: nextLeaseId, runId: nextRunId };
+    const authorize = () => authorizePluginTaskLeaseTransition(db, { companyId, priorIdentity, desiredIdentity });
+    await expect(authorize()).resolves.toBeUndefined();
+    await expect(authorizePluginTaskLeaseTransition(db, { companyId: randomUUID(), priorIdentity, desiredIdentity })).rejects.toThrow("unproven");
+    await db.update(environmentLeases).set({ metadata: { ...pin, pluginId: randomUUID() } }).where(eq(environmentLeases.id, nextLeaseId));
+    await expect(authorize()).rejects.toThrow("unproven");
+    await db.update(environmentLeases).set({ metadata: pin }).where(eq(environmentLeases.id, nextLeaseId));
+    await db.update(environmentLeases).set({ cleanupStatus: "failed" }).where(eq(environmentLeases.id, oldLeaseId));
+    await expect(authorize()).rejects.toThrow("unproven");
+  });
+
 });

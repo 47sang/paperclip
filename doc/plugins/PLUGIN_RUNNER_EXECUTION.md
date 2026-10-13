@@ -62,7 +62,11 @@ PRP carries tools, provider sessions, results, and authorization. The task hook
 also supplies bounded file handoff and durable checkpoints. Thus the plugin needs
 no command endpoint and no Core fork. The integrated path supports per-turn
 workspace sessions. Warm process retention and Dot's workspace-free backend are
-not enabled for this driver. A replacement process needs a new task lease.
+not enabled for this driver. A replacement process needs a new task lease. Core authorizes a saved session's
+lease transition only after the prior run is terminal and its execution has a
+verified stop receipt. Company, agent, issue, workspace, environment, and pinned
+plugin driver must match. PRP verifies and archives the prior suspended state
+before binding the new lease. Interrupted archive steps are safe to retry.
 Managed GitHub CLI shell bridges are not installed on task providers; semantic
 Core tools retain their normal authorization.
 
@@ -76,7 +80,8 @@ export cannot be completed. Core exports provider homes and Runner/provider stat
 after verified suspension. Core validates the returned identity and lifecycle.
 It also exports the registered agent instruction working copy before task
 completion revokes grants. The existing file store then validates and saves the
-local mirror. A durable checkpoint marker prevents a stale mirror from being saved. An export failure must not become a successful
+local mirror. A persisted task lease binding and checkpoint marker prevent a stale
+mirror from being saved, including by the instruction recovery sweep. An export failure must not become a successful
 save. An export-only request can omit `stateDirectory`.
 
 For authority rotation, `checkpoint.archive` supplies an archive key and the
@@ -163,6 +168,11 @@ resubmit with a new identity. Cancellation while assets are still being prepared
 prevents a late submission. Cancellation after dispatch calls `stop` and waits for
 `executionStopped: true`; a terminal phase or an accepted stop is insufficient.
 
+Core closes the PRP route, confirms task stop, verifies and installs the native
+checkpoint, and only then sends `complete`. Failed exports keep task grants for
+cleanup recovery. Core stores the original environment identity and the intended
+lease cleanup hook. Recovery calls that pinned release or destroy hook even after
+the environment record is deleted; a hook failure remains `pending_cleanup`.
 Core checkpoints the existing native session state before completing task cleanup.
 Lease release and destroy also check the dispatch marker, so a controller failure
 does not bypass termination verification. Unconfirmed cleanup preserves the pinned

@@ -258,6 +258,7 @@ function authorityArchiveDirectory(
 function latestArchivedControlPlaneState(
   root: string,
   desired: DurableRecoveryIdentity,
+  allowLeaseTransition = false,
 ): Record<string, unknown> | null {
   const archivesRoot = resolve(root, "authority-epochs");
   if (!existsSync(archivesRoot)) return null;
@@ -280,7 +281,7 @@ function latestArchivedControlPlaneState(
     const identity = controlPlaneIdentity(state);
     if (
       identity.runnerInstanceId === desired.runnerInstanceId &&
-      identity.environmentLeaseId === desired.environmentLeaseId &&
+      (allowLeaseTransition || identity.environmentLeaseId === desired.environmentLeaseId) &&
       identity.normalizedSessionId === desired.normalizedSessionId
     ) {
       return state;
@@ -370,17 +371,21 @@ async function rotateExternalAuthorityEpoch(
     archiveKey: string;
     priorIdentity: DurableRecoveryIdentity;
   }) => Promise<Record<string, unknown>>,
+  authorizeLeaseTransition?: (input: { priorIdentity: DurableRecoveryIdentity; desiredIdentity: DurableRecoveryIdentity }) => Promise<void>,
 ): Promise<Record<string, unknown>> {
   const priorIdentity = controlPlaneIdentity(controlPlaneState);
   if (
     priorIdentity.runnerInstanceId !== desired.runnerInstanceId ||
-    priorIdentity.environmentLeaseId !== desired.environmentLeaseId ||
     priorIdentity.normalizedSessionId !== desired.normalizedSessionId ||
     priorIdentity.runId === desired.runId
   ) {
     throw new Error(
       "PRP recovery identity does not match the durable session binding",
     );
+  }
+  if (priorIdentity.environmentLeaseId !== desired.environmentLeaseId) {
+    if (!authorizeLeaseTransition) throw new Error("PRP task lease transition is not authorized");
+    await authorizeLeaseTransition({ priorIdentity, desiredIdentity: desired });
   }
   const archive = authorityArchiveDirectory(root, priorIdentity);
   const archivedControlPlane = resolve(archive, "control-plane");
@@ -1370,6 +1375,8 @@ export interface CapabilityRunnerdCodexTransportOptions {
   runnerStateDirectory?: string;
   /** Read the live durable runner state when runnerd owns a remote filesystem. */
   readRunnerState?: () => Promise<Record<string, unknown>>;
+  /** Host verifies stopped prior ownership and the current task lease before cross-lease rotation. */
+  authorizeEnvironmentLeaseTransition?: (input: { priorIdentity: DurableRecoveryIdentity; desiredIdentity: DurableRecoveryIdentity }) => Promise<void>;
   /** Materializes a verified external checkpoint before authority rotation. */
   prepareExternalRunnerState?: () => Promise<void>;
   /** Idempotently archives and returns the verified suspended runner binding. */
@@ -5347,6 +5354,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       const archivedState = latestArchivedControlPlaneState(
         this.#root,
         desiredIdentity,
+        !localStateOwner && this.options.authorizeEnvironmentLeaseTransition !== undefined,
       );
       if (!archivedState) {
         throw new Error("PRP provider resume state is unavailable");
@@ -5374,6 +5382,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           desiredIdentity,
           this.options.readRunnerState,
           this.options.archiveExternalRunnerState,
+          this.options.authorizeEnvironmentLeaseTransition,
         );
       }
       identity = desiredIdentity;
@@ -5407,6 +5416,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           desiredIdentity,
           this.options.readRunnerState,
           this.options.archiveExternalRunnerState,
+          this.options.authorizeEnvironmentLeaseTransition,
         );
       }
       identity = desiredIdentity;

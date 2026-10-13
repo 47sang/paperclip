@@ -1,3 +1,4 @@
+import { authorizePluginTaskLeaseTransition } from "../environment-task-runtime.js";
 import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
 import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
 import { configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
@@ -11587,6 +11588,9 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerStateDirectory: posix.join(guestRoot, "runner"), readRunnerState: () => checkpoint(),
         prepareExternalRunnerState: async () => { await checkpoint(); },
         archiveExternalRunnerState: archive => checkpoint([], archive),
+        authorizeEnvironmentLeaseTransition: transition => authorizePluginTaskLeaseTransition(input.db, {
+          companyId: input.execution.binding.companyId, ...transition,
+        }),
         environment: taskEnvironment,
         sourceCodexHome: resolveSourceCodexHome(resolveNativeProviderEnvironment(input.execution.provider, input.runnerEnvironment)),
         runnerProcessLauncher: owner.launcher, runnerReconnectGraceMs: 120_000,
