@@ -977,3 +977,65 @@ scope. The source owner is repairing the shared/Codex setup flow and cloud seed
 defaults. Claude must be checked against that repair before claiming fresh
 managed onboarding or final additional-platform defaults. This gap is not
 closed by the current package/image builds.
+
+## Installed-runtime checkpoint and lookup repair — 2026-10-13
+
+Campaign 38342761144 completed with all four native producers and the Apple
+Silicon, Intel Mac and Linux ARM64 clean consumers passing. Its Linux x64 public
+installation failed at a stale verifier assertion, `25 !== 24`, before the Pi
+admission probe. The 18 assembled archives were retained; independent no-follow
+hash checks pass for all 18. The raw manifest's `publicInstallationVerified`
+remains false. Protocol commit `35b811e09c` updates only the strict current Pi
+version assertion to 25; the pinned command digest and other guards are unchanged.
+This needs a corrected cloud clean-install run, not a relabeled prior pass.
+
+The same archives were installed in a fresh private Apple Silicon consumer.
+Normal daemon resolution verifies source ad5875fa and daemon hash bd55bd6f;
+sidecar SHA-256 is
+`0ef83c19d993e8a4b3cf43c5418aa7b8f7b4ec82afa325d8c53781d145e9e2a0`.
+After all six QA companies were confirmed idle, the old preview was stopped
+gracefully and its 120 MB data copied to
+`/private/tmp/claude-qa-before-ad5875-snapshot`. PostgreSQL's standard
+`hydrate-symlinks.js` hook restored links omitted by the lifecycle-disabled
+installation; no compilation or signature bypass was used. The preview at
+port 3105 now runs the supplied ad5875fa packages without controller overlays.
+Health, persisted native Claude/Opus 5.5, `enableNativeRunner=false`, disabled
+heartbeat scheduling and zero live runs are verified. Receipts:
+`/private/tmp/claude-ad5875-local-installed-identity.json` and
+`/private/tmp/claude-ad5875-preview-health-receipt.json`.
+
+The actual creation UI selected Claude Code and displayed Paperclip Runner as
+the default with the existing saved API-key account. Setup then failed before
+authentication with `acpx_runtime_unavailable`: the default installed verifier
+did not carry its owning server's package authority. The SDK and qualified
+platform dependency are present. The earlier clean-consumer probe injected
+that authority explicitly, so it did not prove ordinary discovery.
+
+Protocol repair `52486d6b8d` derives authority only from the canonical installed
+server verifier layout. It checks bounded regular owner metadata, package name,
+directory/file containment and no symlinks; existing package declarations,
+qualified version/digest/architecture checks, external overrides and source-mode
+resolution remain intact. Six filesystem controls, 15 selected installation
+controls, runner noemit and profile generation pass. In a separate APFS-cloned
+server treatment, the original installed probe fails with the recorded error;
+the repaired normal probe verifies the real pinned SDK and closes its snapshot
+lease without credentials, authority environment variables or model prompts.
+The live preview was not modified by this comparison. Receipt:
+`/private/tmp/claude-installed-authority-real-noprompt.json`.
+
+Platform commit `50659ac0e9` removes injected authority from the consumer probe
+and rejects authority overrides before invoking it. All 26 consumer controls
+pass. The runtime and strengthened consumer are composed locally, but require
+new packaged-runtime verification and API task/revision acceptance before a
+final claim. No new paid setup or task turn succeeded or was retried during
+this checkpoint; the UI failure returned before the supplementary CLI probe.
+Known estimates and all unknown-charge holds remain unchanged.
+
+Canonical parent `271d434c170e74bdedde65d0b13059a55419c943` is composed
+without separate leaf diffs for the durable-resume, authorization and credential
+quorum test repairs. The source owner reports a private explicit-Connect setup
+repair and an unresolved named Cloud snapshot binding. Those changes are not
+integrated or qualified here yet. The source-owned Codex dependency still needs
+to advance before these PR code updates meet the review file limit. GitHub CLI
+authentication expired during the source campaign; attended reauthentication is
+owned there. No alternative credentials or conflicting auth changes are used.
