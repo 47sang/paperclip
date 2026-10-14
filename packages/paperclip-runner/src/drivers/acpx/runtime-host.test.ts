@@ -264,7 +264,7 @@ describe("ACPX runtime host", () => {
     } finally { await nextOwner.close({ reason: "next owner complete" }); }
   });
 
-  it("keeps the Claude lifetime lease until an owned settings write settles after cancellation", async () => {
+  it.each([false, true])("cancels Claude startup promptly while retaining its settings write and lease (late failure: %s)", async failWrite => {
     const fixture = await hostFixture();
     const controller = new AbortController();
     let announceWrite!: () => void;
@@ -280,6 +280,7 @@ describe("ACPX runtime host", () => {
       return { ...sandbox, initializeOwnedConfiguration: async () => {
         announceWrite();
         await writePending;
+        if (failWrite) throw new Error("settings write failed after cancellation");
         await initialize?.();
       } };
     };
@@ -289,6 +290,8 @@ describe("ACPX runtime host", () => {
     try {
       await writeStarted;
       controller.abort(new Error("settings admission cancelled"));
+      await runAcpxOperationAttempt(() => rejected, Date.now() + 1_000);
+      expect(openRuntime).not.toHaveBeenCalled();
       await expect(AcpxRuntimeHost.open(options, fixture.dependencies({ openRuntime }))).rejects.toThrow("already has an active lease");
     } finally { finishWrite(); }
     await rejected;
