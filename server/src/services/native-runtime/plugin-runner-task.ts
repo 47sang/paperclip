@@ -2,7 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
 import type { RunnerIngressEndpoint } from "@paperclipai/adapter-utils/runner-connectivity";
 import { RUNNER_PRP_PROTOCOL_MIN, RUNNER_PRP_PROTOCOL_MAX, type RunnerProcessHandle, type RunnerProcessLaunchSpec,
-  type DurablePrpControlPlane } from "../../vendor/paperclip-runner/index.js";
+  type DurablePrpControlPlane, configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
 import { connectRunnerPrpIngress } from "../../realtime/runner-prp-outbound.js";
 
 /** Do not project the controller's shell, homes or installed command locations into a task. */
@@ -10,6 +10,10 @@ export function pluginRunnerEnvironment(input: NodeJS.ProcessEnv, provided: Reco
   const environment = { ...input };
   for (const key of Object.keys(environment)) {
     if (/^(PATH|HOME|USERPROFILE|CODEX_HOME|GROK_HOME|AGENT_HOME|HERMES_HOME|CLAUDE_CONFIG_DIR|OPENCODE_CONFIG(_DIR)?|AWS_SHARED_CREDENTIALS_FILE|AWS_CONFIG_FILE|AWS_WEB_IDENTITY_TOKEN_FILE|BASH_ENV|ZDOTDIR|SHELL|TMPDIR|GH_CONFIG_DIR|GIT_CONFIG_.*|GIT_SSH.*|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|PAPERCLIP_GITHUB_.*|PAPERCLIP_WORKSPACE_CWD)$/.test(key)) delete environment[key];
+  }
+  if (environment.PAPERCLIP_CONFIGURED_ENV_KEYS !== undefined) {
+    environment.PAPERCLIP_CONFIGURED_ENV_KEYS = JSON.stringify(Object.keys(configuredEnvironment(input))
+      .filter(key => key !== "PAPERCLIP_CONFIGURED_ENV_KEYS" && environment[key] !== undefined));
   }
   return { ...provided, ...environment };
 }

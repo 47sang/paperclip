@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RunnerProcessLaunchSpec } from "../../vendor/paperclip-runner/index.js";
+import { configuredEnvironment, configuredEnvironmentProjection } from "../../vendor/paperclip-runner/index.js";
 import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
 
 const ingress = vi.hoisted(() => ({ connect: vi.fn() }));
@@ -29,6 +30,15 @@ function provider() {
 }
 
 describe("plugin native Runner ownership", () => {
+  it("removes discarded controller paths from the configured environment projection", () => {
+    const input = configuredEnvironmentProjection({ OPENCODE_CONFIG_DIR: "/controller/config", RETAINED_SETTING: "configured" });
+    const providerSettings: Record<string, string>[] = [{}, { OPENCODE_CONFIG_DIR: "provider-config" }];
+    for (const provided of providerSettings) {
+      const environment = pluginRunnerEnvironment(input, provided);
+      expect(configuredEnvironment(environment)).toEqual({ RETAINED_SETTING: "configured", PAPERCLIP_CONFIGURED_ENV_KEYS: '["RETAINED_SETTING"]' });
+      expect(environment.OPENCODE_CONFIG_DIR).toBe(provided.OPENCODE_CONFIG_DIR);
+    }
+  });
   it("keeps selected execution inputs authoritative while replacing controller paths", () => {
     expect(pluginRunnerEnvironment({ OPENAI_API_KEY: "selected", XAI_API_KEY: "", PATH: "/controller/bin", HOME: "/controller/home", OPENCODE_CONFIG_DIR: "" },
       { OPENAI_API_KEY: "default", XAI_API_KEY: "default", PATH: "provider-bin", HOME: "provider-home", OPENCODE_CONFIG_DIR: "provider-config" }))
