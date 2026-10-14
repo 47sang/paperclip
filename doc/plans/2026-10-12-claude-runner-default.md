@@ -1427,3 +1427,22 @@ and pending accounting hold are retained. Cloud image alignment is the next gate
 Subscription follow-up remains unverified; remaining live acceptance uses API
 keys per human steering. No local Docker or Rust build ran. Merge and production
 deployment remain separate.
+
+### Release image artifact consumer — 2026-10-14
+
+The first current-image x64 run failed before Claude startup. The independently
+built image used a separately resolved lock and omitted the producer pack's Pi
+assets, so it could not equal the pack manifest shipped in npm. The runtime
+rejected it; its pending accounting hold stays preserved.
+
+The manual cloud image workflow now optionally consumes one successful exact-
+source Release Smoke artifact set. It validates repository/workflow/source,
+artifact archive digests, canonical paths, package authority, daemon architecture
+and daemon bytes before constructing the image. The release pack must equal the
+manifest inside the public server tarball. This mode copies the producer's pack
+and daemon over an immutable Paperclip base image without rebuilding either or
+resolving dependencies. The resulting image is read back to compare pack and
+daemon identities. Existing source-build mode remains available. Fifteen focused
+negative/positive controls and 71 existing release workflow controls pass; full
+current-head checks and fresh review run in hosted CI. The repaired image and
+x64 task/revision are still pending. No local Docker or Rust build ran.
