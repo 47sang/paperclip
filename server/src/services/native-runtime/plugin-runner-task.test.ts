@@ -30,6 +30,42 @@ function provider() {
 }
 
 describe("plugin native Runner ownership", () => {
+  it.each([false, true])("collects checkpoints after status failures (retry exhausted: %s)", async exhausted => {
+    const { task } = provider();
+    const perform = task.getMockImplementation()!;
+    let failStatus = false;
+    let clock = Date.now();
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    task.mockImplementation(async operation => {
+      if (operation.kind === "stop") failStatus = false;
+      if (operation.kind === "status" && failStatus) {
+        failStatus = exhausted;
+        if (exhausted) clock += 16_000;
+        throw new Error("status connection lost");
+      }
+      return perform(operation);
+    });
+    ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
+    const checkpoint = vi.fn(async () => {});
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", prepare: async () => {}, checkpoint, pollMs: 1,
+      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } });
+    const registration = await owner.registration({} as never, "run");
+    const handle = owner.launcher(launchSpec(registration.connection));
+    const completed = vi.fn(); void handle.completion.then(completed);
+    try {
+      registration.activate(); await registration.ready();
+      expect(handle.restart).toBeNull();
+      failStatus = true;
+      if (exhausted) await expect(registration.failure).rejects.toThrow("reconcile the saved task");
+      else await vi.waitFor(() => expect(failStatus).toBe(false));
+      expect(completed).not.toHaveBeenCalled();
+      await registration.release(); await registration.checkpoint("settled");
+      await expect(handle.completion).resolves.toMatchObject({ code: 1 });
+      expect(checkpoint).toHaveBeenCalledWith("settled");
+      expect(task.mock.calls.filter(([op]) => op.kind === "submit")).toHaveLength(1);
+      expect(task.mock.calls.filter(([op]) => op.kind === "complete")).toHaveLength(1);
+    } finally { now.mockRestore(); handle.child.kill(); }
+  });
   it("removes discarded controller paths from the configured environment projection", () => {
     const input = configuredEnvironmentProjection({ OPENCODE_CONFIG_DIR: "/controller/config", RETAINED_SETTING: "configured" });
     const providerSettings: Record<string, string>[] = [{}, { OPENCODE_CONFIG_DIR: "provider-config" }];
@@ -62,7 +98,7 @@ describe("plugin native Runner ownership", () => {
   });
   it("reconciles a lost submit reply without launching another attempt", async () => {
     const { task } = provider();
-    task.mockRejectedValueOnce(new Error("lost submit reply"));
+    task.mockRejectedValueOnce(new Error("lost submit reply")).mockRejectedValueOnce(new Error("status temporarily unavailable"));
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
       connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });

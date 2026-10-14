@@ -102,7 +102,7 @@ type Context = Pick<Params,
 | `taskId` | Persisted `lease.providerLeaseId`; opaque, nonempty string |
 | Plugin and driver | Pinned acquisition record; environment edits cannot redirect an existing lease |
 | Company, agent, issue, run | Core records |
-| `projectIds` | Core-validated company projects; maximum 64 UUIDs |
+| `projectIds` | Core-validated company projects; maximum 64 UUIDs; referenced projects require `project:read` and both multi-project flags |
 | Cleanup context | `environmentId`, `runId`, `agentId` can be `null`; `projectIds: []` |
 | Active operations | `describe`, `check_project_auth`, `submit`, `connection`, `read_file`: active, unexpired lease and authorized execution |
 | Execution authority | Running heartbeat run, or private expiring setup-probe identity |
@@ -308,6 +308,12 @@ status until running -> connection -> authenticated PRP session
 close PRP route -> stop -> status until executionStopped == true
 checkpoint -> verify and install exported state -> complete -> release/destroy lease
 ```
+
+| Core event | Core behavior |
+| --- | --- |
+| Failed status read | Bounded retry; no inference of process termination |
+| Status retries exhausted | Execution failure signal; completion remains pending until termination is confirmed |
+| Process replacement | Disabled for the task lease; a new attempt requires a new lease |
 
 | Event | Required plugin behavior |
 | --- | --- |

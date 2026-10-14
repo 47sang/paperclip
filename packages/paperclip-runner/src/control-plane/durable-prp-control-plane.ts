@@ -291,8 +291,8 @@ export interface RunnerProcessHandle {
   completion: Promise<RunnerProcessResult>;
   processGroupId?: number | null;
   startedAt?: string;
-  /** Relaunches the same immutable process specification with a fresh ticket. */
-  restart?(ticket: string): RunnerProcessHandle;
+  /** Relaunches the same immutable process specification; null forbids replacement. */
+  restart?: ((ticket: string) => RunnerProcessHandle) | null;
 }
 
 export type RunnerProcessConnection =
@@ -3629,7 +3629,7 @@ export function spawnRunner(options: {
 
   const command = options.runnerBinaryPath ?? runnerBinary;
   const environment = runnerEnvironment(options.ticket, options.identity.normalizedSessionId, options.environment, options.additionalEnvironmentKeys);
-  const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => ({
+  const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => handle.restart === null ? handle : ({
     ...handle,
     restart: (ticket) => spawnRunner({ ...options, ticket }),
   });

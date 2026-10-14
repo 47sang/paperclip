@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation } from "@paperclipai/plugin-sdk";
+import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation, type PluginEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
 import type { RunnerIngressEndpoint } from "@paperclipai/adapter-utils/runner-connectivity";
 import { RUNNER_PRP_PROTOCOL_MIN, RUNNER_PRP_PROTOCOL_MAX, type RunnerProcessHandle, type RunnerProcessLaunchSpec,
   type DurablePrpControlPlane, configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
@@ -40,6 +40,11 @@ export function createPluginRunnerTaskOwner(input: {
   let detached = false;
   let markReady!: () => void;
   let failReady!: (error: unknown) => void;
+  let confirmStopped: (code: number) => void = () => {};
+  let stoppedState: Extract<PluginEnvironmentTaskResult, { kind: "status" }> | undefined;
+  let rejectFailure!: (error: unknown) => void;
+  const failure = new Promise<never>((_resolve, reject) => { rejectFailure = reject; });
+  void failure.catch(() => undefined);
   const running = new Promise<void>((resolve, reject) => { markReady = resolve; failReady = reject; });
   void running.catch(() => undefined);
   const call = async (operation: PluginEnvironmentTaskOperation) => {
@@ -49,12 +54,29 @@ export function createPluginRunnerTaskOwner(input: {
     }
     return result;
   };
+  const readStatus = async (deadline = Date.now() + 15_000) => {
+    for (;;) {
+      if (stoppedState) return stoppedState;
+      try {
+        const state = await call({ kind: "status" });
+        if (state.kind === "status") {
+          if (state.executionStopped === true) {
+            stoppedState = state;
+            confirmStopped(state.exitCode ?? (state.phase === "completed" ? 0 : 1));
+          }
+          return state;
+        }
+      } catch { /* A failed read is not proof that execution stopped. */ }
+      if (Date.now() >= deadline) throw new Error("Plugin Runner status unavailable; reconcile the saved task");
+      await delay(pollMs);
+    }
+  };
   const stopAndConfirm = async () => {
     await call({ kind: "stop" });
     const deadline = Date.now() + 15_000;
     do {
-      const state = await call({ kind: "status" });
-      if (state.kind === "status" && state.executionStopped === true) return;
+      const state = await readStatus(deadline);
+      if (state.executionStopped === true) return;
       await delay(pollMs);
     } while (Date.now() < deadline);
     throw new Error("Plugin Runner termination is unconfirmed; retain the lease for cleanup");
@@ -83,12 +105,20 @@ export function createPluginRunnerTaskOwner(input: {
     launched = true;
     const child: RunnerProcessHandle["child"] = { exitCode: null, signalCode: null,
       kill: () => { stopRequested = true; return true; } };
-    const completion = (async () => {
+    const completion = new Promise<Awaited<RunnerProcessHandle["completion"]>>(resolve => {
+      confirmStopped = code => {
+        if (child.exitCode !== null) return;
+        child.exitCode = code;
+        failReady(new Error("Plugin Runner stopped before connection"));
+        resolve({ code, signal: null, stdout: "", stderr: "" });
+      };
+    });
+    void (async () => {
       await input.prepare();
       if (released || stopRequested) {
-        child.exitCode = 1;
         failReady(new Error("Plugin Runner startup cancelled"));
-        return { code: 1, signal: null, stdout: "", stderr: "" };
+        confirmStopped(1);
+        return;
       }
       if (operation.kind === "submit" && operation.launch) operation.launch.assets = input.assets?.() ?? [];
       environmentTaskOperationSchema.parse(operation);
@@ -96,40 +126,35 @@ export function createPluginRunnerTaskOwner(input: {
       // must reconcile this attempt and must never launch another task.
       await input.onDispatched?.();
       if (released || stopRequested) {
-        child.exitCode = 1;
         failReady(new Error("Plugin Runner startup cancelled"));
-        return { code: 1, signal: null, stdout: "", stderr: "" };
+        confirmStopped(1);
+        return;
       }
       submitted = true;
       try { await call(operation); } catch {
         // Submission can have succeeded remotely. Inspect the same saved task.
-        const state = await call({ kind: "status" });
-        if (state.kind !== "status") throw new Error("Plugin Runner submission could not be reconciled");
+        await readStatus();
       }
       let stopSent = false;
-      for (;;) {
-        if (detached) return await new Promise<never>(() => {});
+      while (child.exitCode === null) {
+        if (detached) return;
         if (stopRequested && !stopSent) { await call({ kind: "stop" }); stopSent = true; }
-        const state = await call({ kind: "status" });
-        if (state.kind !== "status") throw new Error("Plugin Runner status unavailable");
+        const state = await readStatus();
         if (state.phase === "running" && !stopRequested) markReady();
-        if (state.executionStopped === true) {
-          child.exitCode = state.exitCode ?? (state.phase === "completed" ? 0 : 1);
-          failReady(new Error("Plugin Runner stopped before connection"));
-          return { code: child.exitCode, signal: null, stdout: "", stderr: "" };
-        }
+        if (state.executionStopped === true) return;
         await delay(pollMs);
       }
-    })().catch(error => { failReady(error); throw new Error("Plugin Runner operation failed; reconcile the saved task"); });
-    void completion.catch(() => undefined);
-    return { child, completion };
+    })().catch(error => {
+      if (stoppedState) return;
+      failReady(error);
+      rejectFailure(new Error("Plugin Runner operation failed; reconcile the saved task"));
+      if (!submitted) confirmStopped(1);
+    });
+    return { child, completion, restart: null };
   };
   const registration = async (authority: DurablePrpControlPlane, runId: string, signal?: AbortSignal) => {
     let outbound: ReturnType<typeof connectRunnerPrpIngress> | null = null;
     let activation: Promise<void> | null = null;
-    let rejectFailure!: (error: unknown) => void;
-    const failure = new Promise<never>((_resolve, reject) => { rejectFailure = reject; });
-    void failure.catch(() => undefined);
     const endpoint = async (): Promise<RunnerIngressEndpoint> => {
       const result = await call({ kind: "connection" });
       if (result.kind !== "connection") throw new Error("Plugin Runner connection unavailable");

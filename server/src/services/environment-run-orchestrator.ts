@@ -381,6 +381,7 @@ export function environmentRunOrchestrator(
     executionWorkspace: RealizedExecutionWorkspace;
     effectiveExecutionWorkspaceMode: string | null;
     persistedExecutionWorkspace: ExecutionWorkspace | null;
+    runnerTaskProjectIds?: readonly string[];
     /**
      * The host duplex observability recorder for this run. The orchestrator threads
      * it to `resolveEnvironmentExecutionTarget`, which stamps it on the sandbox
@@ -582,6 +583,7 @@ export function environmentRunOrchestrator(
           ...executionTarget,
           ...(executionTarget.kind === "remote" && executionTarget.transport === "sandbox" && executionTarget.runnerTask
             ? { runnerTaskProjectIds: [...new Set([executionWorkspace.projectId,
+                ...input.runnerTaskProjectIds ?? [],
                 ...(executionWorkspace.additionalWorkspaces ?? []).map(workspace => workspace.projectId)]
                 .filter((id): id is string => Boolean(id)))] } : {}),
           ...(executionTarget.kind === "remote" && realizationMode === "in_place"

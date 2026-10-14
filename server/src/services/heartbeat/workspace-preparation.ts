@@ -324,6 +324,7 @@ export async function prepareHeartbeatWorkspace(db: Db, input: HeartbeatWorkspac
         ? {
             ...workspace,
             additionalWorkspaces: [],
+            runnerTaskProjectIds: undefined,
             referencedProjectFailures: [],
           }
         : workspace;
@@ -337,7 +338,7 @@ export async function prepareHeartbeatWorkspace(db: Db, input: HeartbeatWorkspac
     sourceWorkspaceId: resolvedWorkspace.workspaceId,
     boundWorkspace: reusableExistingExecutionWorkspace ?? existingExecutionWorkspace,
   });
-  const skipHostProvision = copyOnlyProvisioning || hostProvisionDriver === "sandbox" || hostProvisionDriver === "ssh";
+  const skipHostProvision = copyOnlyProvisioning || hostProvisionDriver === "sandbox" || hostProvisionDriver === "ssh" || hostProvisionDriver === "plugin";
   const hostExecutionWorkspaceConfig = isDotRun ? {} :
     stripHostWorkspaceProvision({
       config: mergedConfig,
@@ -1108,6 +1109,7 @@ export async function prepareHeartbeatWorkspace(db: Db, input: HeartbeatWorkspac
       executionWorkspace,
       effectiveExecutionWorkspaceMode,
       persistedExecutionWorkspace,
+      runnerTaskProjectIds: resolvedWorkspace.runnerTaskProjectIds,
       duplexObservabilityRecorder,
     });
     nativeRunnerPreparationSpans.push({

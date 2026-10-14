@@ -386,7 +386,7 @@ it("pins the OpenCode launch profile in runner startup arguments and restarts", 
 
 it.each([false, true])("preserves explicit OpenCode permissions and admitted plugin settings (%s)", (pluginSettings) => {
   const launches: RunnerProcessLaunchSpec[] = [];
-  spawnRunner({
+  const handle = spawnRunner({
     connection: { mode: "connect", connectUrl: "ws://127.0.0.1:43127" },
     stateDirectory: "/tmp/paperclip-runner-test",
     identity,
@@ -415,6 +415,7 @@ it.each([false, true])("preserves explicit OpenCode permissions and admitted plu
     processLauncher: (spec) => {
       launches.push(spec);
       return {
+        restart: pluginSettings ? null : undefined,
         child: {
           pid: 42,
           exitCode: null,
@@ -432,6 +433,7 @@ it.each([false, true])("preserves explicit OpenCode permissions and admitted plu
   });
 
   expect(launches).toHaveLength(1);
+  expect(handle.restart).toEqual(pluginSettings ? null : expect.any(Function));
   expect(launches[0]!.environment.OPENCODE_CONFIG_DIR).toBe(pluginSettings ? "provider-config" : undefined);
   expect(launches[0]!.environment.PROVIDER_PRIVATE_ROOT).toBe(pluginSettings ? "provider-storage" : undefined);
   expect(launches[0]!.environment.PAPERCLIP_RUNNER_BOOTSTRAP_TICKET).toBe("bootstrap-ticket");

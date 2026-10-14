@@ -23,6 +23,7 @@ import * as managedRepositoryCheckout from "../managed-repository-checkout.js";
 import { isolatedRemoteSourcePath } from "../isolated-remote-workspace-source.js";
 import { cleanupExecutionWorkspaceArtifacts } from "../workspace-runtime.js";
 import { issueService } from "../issues.js";
+import { buildProjectMentionHref } from "@paperclipai/shared";
 
 const execFile = promisify(execFileCallback);
 const support = await getEmbeddedPostgresTestSupport();
@@ -255,7 +256,7 @@ describe.skipIf(!support.supported)("heartbeat workspace preparation boundary", 
     expect(await readFile(join(privateCwd, "confidential.txt"), "utf8")).toBe("Private source must not be copied");
   });
 
-  it.each(["sandbox", "ssh", "local", null] as const)("uses the selected %s placement for controller provisioning", async driver => {
+  it.each(["sandbox", "ssh", "plugin", "local", null] as const)("uses the selected %s placement for controller provisioning", async driver => {
     const { input, source, issue, envOrchestrator } = await fixture(true);
     const marker = join(source, "host-provision-ran");
     const provisionCommand = `printf host > '${marker}'`;
@@ -268,9 +269,37 @@ describe.skipIf(!support.supported)("heartbeat workspace preparation boundary", 
     const bound = await readIssue(issue.id);
     const [workspace] = await db.select().from(executionWorkspaces).where(eq(executionWorkspaces.id, bound.executionWorkspaceId!));
     expect(await readFile(join(workspace.cwd!, "README.md"), "utf8")).toBe("source content\n");
-    if (driver === "sandbox" || driver === "ssh") await expect(readFile(marker, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    if (driver === "sandbox" || driver === "ssh" || driver === "plugin") await expect(readFile(marker, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     else expect(await readFile(marker, "utf8")).toBe("host");
     expect(input.config.mergedConfig).toEqual(originalConfig);
+  });
+
+  it.each([true, false])("forwards only authorized plugin project IDs without staging (remote enabled: %s)", async enabled => {
+    const { input, issue, envOrchestrator } = await fixture();
+    vi.stubEnv("PAPERCLIP_MULTI_PROJECT_WORKSPACE_SYNC", "true");
+    vi.stubEnv("PAPERCLIP_MULTI_PROJECT_WORKSPACE_SYNC_REMOTE", String(enabled));
+    input.agent = { ...input.agent, adapterType: "paperclip_runner" };
+    input.environment.selectedEnvironmentForConfig = { ...input.environment.localEnvironment, driver: "plugin" };
+    const [readable, privateProject] = await db.insert(projects).values([
+      { companyId: issue.companyId, name: "Readable reference" },
+      { companyId: issue.companyId, name: "Private reference", visibility: "private" },
+    ]).returning();
+    const unavailableCwd = join(home, readable.id, "must-not-stage");
+    await db.insert(projectWorkspaces).values({ companyId: issue.companyId, projectId: readable.id, name: "Provider-only storage", cwd: unavailableCwd });
+    await db.update(issues).set({ description: [readable, privateProject].map(project => `[project](${buildProjectMentionHref(project.id)})`).join(" ") }).where(eq(issues.id, issue.id));
+    const stopped = new Error("Fixture reached plugin realization");
+    const realize = vi.spyOn(envOrchestrator, "realizeForRun").mockRejectedValue(stopped);
+    try {
+      await expect(prepareHeartbeatWorkspace(db, input)).rejects.toBe(stopped);
+      expect(realize).toHaveBeenCalledWith(expect.objectContaining({
+        runnerTaskProjectIds: enabled ? [issue.projectId, readable.id] : undefined,
+        executionWorkspace: expect.objectContaining({ additionalWorkspaces: [] }),
+      }));
+      await expect(access(unavailableCwd)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      vi.stubEnv("PAPERCLIP_MULTI_PROJECT_WORKSPACE_SYNC", "true");
+      vi.stubEnv("PAPERCLIP_MULTI_PROJECT_WORKSPACE_SYNC_REMOTE", "true");
+    }
   });
 
   it("checks physical root admission before publishing configured sibling repositories", async () => {
