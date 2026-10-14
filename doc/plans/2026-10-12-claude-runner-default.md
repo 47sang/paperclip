@@ -1374,3 +1374,56 @@ zero live runs; four remain paused with pending accounting, and an older policy
 is unavailable. Historical reservations remain conservative. No hold, limit or
 paid run was changed. The two previously colliding foreign port listeners remain
 present and untouched; retrying that exact old session is not execution proof.
+
+### Installed API-key acceptance — 2026-10-14
+
+The full frozen package campaign [38610086180](https://github.com/paperclipai/paperclip/actions/runs/38610086180)
+passed all four native producers and clean consumers, including default installed
+Claude authority on Apple Silicon, Intel Mac and Linux ARM64. Linux x64 passed
+its existing clean public-install controls; that lane does not separately run
+the Claude authority probe. Runtime source remains
+`2646b94533bac1eae0d30b11d3774b104eeaf981`. Behavior `06258a283c` and platforms
+`bddff3c5e9` have green CI and 5/5 reviews, with executable comment equivalence
+recorded above. Subsequent evidence or packaging-tooling edits do not relabel
+these runtime bytes.
+
+The retained preview now runs that installed package at http://127.0.0.1:3115,
+with no JavaScript overlays, daemon overrides, development provider pack or
+ambient provider credentials. Native Runner experiment and timer heartbeats
+are disabled. The compiled server identity is 2646b94533; the health page's Git
+context reports checkout 06258a283c. Both identities are recorded. The old data
+has a private cold backup. Normal embedded-Postgres symlink hydration and a
+QA-local dangling Claude CLI link were repaired; the system CLI was unchanged.
+
+Ordinary browser onboarding selected Claude Code and its saved personal API-key
+connection, left runner/model defaults intact, and saved native Claude/Opus 5.5.
+One useful task and its revision succeeded after a controlled controller restart.
+Independent downloads matched 160 and 214 byte oracles, and the original remained
+available after reload. Task, provider and backend sessions were identical across
+turns; High effort was requested and acknowledged in both. API usage settled at
+$0.183214600 and $0.287600400 estimated rate-card cost, not invoice charges.
+Report: `/private/tmp/claude-2646-mac-api-acceptance.json`.
+Preview: http://127.0.0.1:3115/CLAAAAAA/issues/CLAAAAAA-2.
+
+Linux ARM64 also passed a fresh API-key task/revision on the installed SSH host,
+using ordinary API creation with neither runner nor model overrides. The current
+pack was discovered at its standard host location, not an explicit development
+path; its source/digest and staged ARM daemon matched the frozen release.
+Independent files matched 156 and 203 bytes, all three sessions persisted, and
+High effort was acknowledged before both turns. Settled estimates are
+$0.209004800 and $0.128238000. The old SSH port had reached an interactive
+Tailscale login; the isolated fixture uses the authorized key on port 22222.
+Report: `/private/tmp/claude-2646-arm-api-acceptance.json`.
+Preview: http://127.0.0.1:3115/CLAAAAAA/issues/CLAAAAAA-3.
+
+These four turns used the existing healthy $2 company cap, serialized with timer
+heartbeats disabled. After both Mac turns settled below 30 cents each, its
+per-turn reservation changed from $1 to $0.50 while the $2 hard cap and unknown-
+usage blocking remained intact. Historical failed records/holds and the separate
+setup reservation remain preserved. No automatic paid retries were enabled.
+The next x64 attempt was rejected before provider startup because its independently
+rebuilt image pack differed from the npm release authority; its failed record
+and pending accounting hold are retained. Cloud image alignment is the next gate.
+Subscription follow-up remains unverified; remaining live acceptance uses API
+keys per human steering. No local Docker or Rust build ran. Merge and production
+deployment remain separate.
