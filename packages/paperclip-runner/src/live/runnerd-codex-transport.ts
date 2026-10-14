@@ -3313,7 +3313,12 @@ export function createCapabilityRunnerdProviderEnvironment(input: {
       ...(input.provider === "acpx" && input.options.acpxAgent === "grok" && input.options.environment?.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET
         ? { PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET: input.options.environment.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET } : {}),
       ...(binding === undefined ? {} : { [ACPX_CREDENTIAL_BINDING_ENV]: binding }),
-      ...(input.provider === "opencode" ? { PAPERCLIP_OPENCODE_PERMISSION_MODE: input.options.opencodePermissionMode ?? "allow" } : {}),
+      ...(input.provider === "opencode" ? {
+        PAPERCLIP_OPENCODE_PERMISSION_MODE: input.options.opencodePermissionMode ?? "allow",
+        ...(input.options.opencodeRuntimeDirectory === undefined ? {} : {
+          PAPERCLIP_OPENCODE_RUNTIME_DIR: input.options.opencodeRuntimeDirectory,
+        }),
+      } : {}),
     };
   }
   if (input.provider === "opencode") {

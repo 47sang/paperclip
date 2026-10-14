@@ -8466,6 +8466,7 @@ it.each(["codex", "opencode", "acpx"] as const)("preserves provider-owned paths 
   const provided = { HOME: "V:\\account", PATH: "V:\\bin;W:\\tools", PROVIDER_PRIVATE_ROOT: "W:\\runtime" };
   const environment = createCapabilityRunnerdProviderEnvironment({ provider,
     options: { provider, acpxAgent: "pi", environment: { OPENAI_API_KEY: "selected", PAPERCLIP_AI_PROVIDER_KEY: "selected", DATABASE_URL: "must-not-cross", PAPERCLIP_API_KEY: "must-not-cross" },
+      opencodeRuntimeDirectory: "provider-state/opencode",
       runnerRuntimePaths: { codexHome: "V:\\account", runtimeContext: "W:\\input.json", skillEntries: {}, environment: { ...provided,
         ...(provider === "codex" ? { PAPERCLIP_AI_PROVIDER_KEY: "provider-default" } : {}) } } },
     identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run", normalizedSessionId: "session", turnId: "turn", itemId: "item" },
@@ -8475,6 +8476,7 @@ it.each(["codex", "opencode", "acpx"] as const)("preserves provider-owned paths 
   expect(environment.DATABASE_URL).toBeUndefined(); expect(environment.PAPERCLIP_API_KEY).toBeUndefined();
   expect(environment.CODEX_HOME).toBeUndefined();
   if (provider === "codex") expect(environment.PAPERCLIP_AI_PROVIDER_KEY).toBe("selected");
+  if (provider === "opencode") expect(environment.PAPERCLIP_OPENCODE_RUNTIME_DIR).toBe("provider-state/opencode");
   if (provider === "acpx") expect(createAcpxSidecarHostEnvironment(environment, "pi", "session").OPENAI_API_KEY).toBe("selected");
 });
 
