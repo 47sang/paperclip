@@ -5644,8 +5644,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               runner = agentRunner(existingImportAgent.adapterType);
             }
           }
-          // The picker sends harness identity for config edits. Keep a saved
-          // native profile, including on a source-built unqualified platform.
           const retainedNative = runner === "paperclip" && ["codex_local", "claude_local"].includes(selectedHarness)
             ? [manifestAgent, existingImportAgent].find((agent) => agent?.adapterType === "paperclip_runner"
               && agentHarnessType(agent.adapterType, agent.adapterConfig) === selectedHarness)

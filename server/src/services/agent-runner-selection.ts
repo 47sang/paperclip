@@ -77,14 +77,12 @@ function resolveClaudeRunnerConfig(config: Record<string, unknown>): Record<stri
   return { ...translated, ...(effort === undefined || effort === "" ? {} : { modelReasoningEffort: effort }), provider: "acpx", acpxAgent: "claude", model, acpxPermissionMode: translated.acpxPermissionMode ?? "approve-all", lifecycleMode: config.lifecycleMode ?? "per_turn" };
 }
 
-/** Idempotent translation. Missing dependencies or credentials never select another runner. */
 export function resolveNewAgentRunner(input: AgentRunnerSelection): { adapterType: string; adapterConfig: Record<string, unknown> } {
   const adapterType = input.adapterType ?? "process";
   let config = { ...input.adapterConfig };
   const harness = agentHarnessType(adapterType, config);
   const native = adapterType === "paperclip_runner";
   if (["codex_local", "claude_local"].includes(adapterType) && getDisabledAdapterTypes().includes(adapterType)) throw unprocessable(`${adapterType === "claude_local" ? "Claude" : "Codex"} is disabled on this instance. Enable its adapter or choose another harness.`, { code: "agent_runner_unavailable" });
-  // Explicit saved native profiles (including historical provider omission) retain execution.
   if (native && (input.runner === undefined || input.runner === "paperclip" || (harness !== "codex_local" && input.runner !== "legacy"))) return { adapterType, adapterConfig: normalizeLegacyRunnerProvider(config) };
   const availability = agentRunnerAvailability(harness, input.target);
   const choice = input.runner ?? "auto";
