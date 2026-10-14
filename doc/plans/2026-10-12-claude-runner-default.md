@@ -1446,3 +1446,50 @@ daemon identities. Existing source-build mode remains available. Fifteen focused
 negative/positive controls and 71 existing release workflow controls pass; full
 current-head checks and fresh review run in hosted CI. The repaired image and
 x64 task/revision are still pending. No local Docker or Rust build ran.
+
+### Review checkpoint and GitHub access gate — 2026-10-14
+
+The Mac/ARM reports and completed-task screenshots are attached to their original
+completed preview tasks, registered as artifacts, and independently downloaded
+again with identical bytes. Mac report attachment:
+`fb6e5d1b-09a6-4c0b-980a-cde24e4c25bb`; ARM report:
+`15804e48-3338-4e8c-8f5f-0dbe36204e8a`.
+Upload receipt: `/private/tmp/claude-2646-acceptance-upload-receipt.json`.
+ARM's actual SDK executable SHA256 is
+`0292fa22ac2fd43e16be9d0e511ddd8347280d6e0ebaca744ef5b27e05d8d0f8`;
+its daemon is `4720c6a23784d3b4535329ecf852d38af8c14ae920447a662a00c4657711387a`
+and its automatically discovered pack is
+`sha256:fe4b772a2568fc9d9febac5ef37f4cb402a2f2b2448f85983afb2c54a7c367fa`.
+
+The four current successful turns add $0.808057800 of settled rate-card estimates.
+Read-only reconciliation gives $3.054638600 known estimated ledger usage, excluding
+unknown charges; the separate $1 setup reservation remains. Aggregate company
+caps remain $50. All old holds and the new pre-start x64 pending hold remain
+intact. The current company's agents are paused by its budget hold, timers are
+disabled, and there are zero live runs. The owned x64 leases report cleanup
+success. The unused 3116 Vite process was stopped; installed preview 3115 remains
+available for reviewing/downloading the finished tasks.
+Accounting: `/private/tmp/claude-qualification-accounting-20261014.json`.
+
+The cloud image consumer fix is committed locally (38cd5c95e5, d8e4c98cd5 and
+502f404794), with 15 focused controls, 71 release controls and YAML syntax checked.
+It preserves the non-root Daytona user and binds image labels to the consumed
+runtime source. GitHub rejected its push because the OAuth credential lacks
+workflow scope. Both existing SSH signing attempts failed through the configured
+1Password agent. The attempted dispatch rejected the unknown inputs on the old
+published workflow; no corrected image build or model retry started.
+
+Human intervention requested: approve GitHub SSH access or refresh the GitHub CLI
+with workflow scope. Once available, push the platform branch, dispatch the exact
+artifact consumer against producer 38610086180/runtime 2646b94533 and immutable
+base b774f547…, verify the resulting image, then run the x64 API pair. Keep the
+failed current company held. An existing $1 company allowance has zero pending or
+unpriced usage and $0.804805400 remaining; its old agent stays paused. A fresh
+x64 fixture there can retain the original aggregate $50 cap without releasing any
+hold. Do not create a new allocation or silently retry the held task.
+
+Protocol #15994 remains at dd82936c1d. Behavior #15993 now publishes the evidence-
+only 4ee0d1d444; its current-head hosted CI/review is running. Platform #15997's
+published head remains bddff3c5e9, with prior green CI and 5/5 review; the prepared
+image consumer is not published or reviewed yet. PR bodies distinguish these
+states. All remain draft. No merge or production deployment occurred.
