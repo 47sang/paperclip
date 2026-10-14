@@ -483,7 +483,19 @@ export class AcpxRuntimeHost {
         });
       }
       options.signal?.throwIfAborted();
-      await sandbox.initializeOwnedConfiguration?.();
+      const configurationLifetime = credential;
+      await runAbortableAdmissionStage(
+        options.signal,
+        async () => { await sandbox.initializeOwnedConfiguration?.(); },
+        cleanup => {
+          pendingRuntimeOwnsCredential = true;
+          const retained = cleanup.then(() => cleanupAbortedRuntimeAdmission(
+            null, configurationLifetime, "ACPX owned configuration cancelled",
+          ));
+          retainRuntimeHostCleanup(retained);
+          dependencies.retainAdmissionCleanup?.(retained);
+        },
+      );
       options.signal?.throwIfAborted();
       assertAcpxProfileEnvironment(options.agent, sandbox.launchEnvironment);
       let launchEnvironment = sandbox.launchEnvironment;
