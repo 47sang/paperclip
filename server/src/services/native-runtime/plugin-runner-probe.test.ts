@@ -10,7 +10,7 @@ import type { RunnerProcessHandle } from "../../vendor/paperclip-runner/index.js
 const { spawnRunner } = await import(new URL("../../../../packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts", import.meta.url).href) as {
   spawnRunner: (options: any) => RunnerProcessHandle;
 };
-import { readRunnerdArtifactBinding } from "../../vendor/paperclip-runner/index.js";
+import { configuredEnvironmentProjection, readRunnerdArtifactBinding } from "../../vendor/paperclip-runner/index.js";
 import type { PluginEnvironmentTaskOperation, PluginEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
 import { probePluginRunnerEnvironment } from "./plugin-runner-probe.js";
 
@@ -61,7 +61,8 @@ describe("plugin Runner setup", () => {
       const op = operation as PluginEnvironmentTaskOperation;
       operations.push(op);
       switch (op.kind) {
-        case "describe": return { kind: "description", taskId: "task", resources, environment: { HOME: resources.provider_state, CODEX_HOME: resources.provider_state },
+        case "describe": return { kind: "description", taskId: "task", resources, environment: { HOME: resources.provider_state, CODEX_HOME: resources.provider_state,
+            OPENCODE_CONFIG_DIR: "provider-config", PROVIDER_PRIVATE_ROOT: "provider-storage", SELECTED_SETTING: "default", PAPERCLIP_RUN_ID: "provider-default" },
           connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: port, listenPath },
           runner: { executable: runnerBinary, ...artifact }, codexCommand, codexArgs: ["app-server"] };
         case "submit": {
@@ -106,10 +107,15 @@ describe("plugin Runner setup", () => {
     };
     try {
       const result = await probePluginRunnerEnvironment({ companyId: "fixture", adapterType: "paperclip_runner",
-        config: { provider: "codex", model: "gpt-6.1-sol", env: { OPENAI_API_KEY: "synthetic-fixture" } },
+        config: { provider: "codex", model: "gpt-6.1-sol", env: { ...configuredEnvironmentProjection({ SELECTED_SETTING: "core-selected" }), OPENAI_API_KEY: "synthetic-fixture" } },
         executionTarget: { kind: "remote", transport: "sandbox", providerKey: "plugin", leaseId: randomUUID(), remoteCwd: workspace,
           runnerTaskProbe: { runId: probeRunId, sessionId: randomUUID() }, runnerTask: task },
       });
+      const submission = operations.find(op => op.kind === "submit");
+      expect(submission?.launch?.environment).toMatchObject({ OPENCODE_CONFIG_DIR: "provider-config", PROVIDER_PRIVATE_ROOT: "provider-storage",
+        SELECTED_SETTING: "core-selected", PAPERCLIP_RUN_ID: submission?.runner.runId });
+      expect(JSON.parse(await readFile(join(resources.provider_state, "auth.json"), "utf8")))
+        .toEqual({ OPENAI_API_KEY: "synthetic-fixture" });
       expect(result.status).toBe(mode === "hello" ? "pass" : "fail");
       expect(operations.some(op => op.kind === "submit")).toBe(true);
       if (mode !== "invalid-checkpoint") {

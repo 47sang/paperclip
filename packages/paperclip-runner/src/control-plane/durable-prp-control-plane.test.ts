@@ -384,7 +384,7 @@ it("pins the OpenCode launch profile in runner startup arguments and restarts", 
   }
 });
 
-it("preserves an explicit OpenCode permission mode at the runner spawn boundary", () => {
+it.each([false, true])("preserves explicit OpenCode permissions and admitted plugin settings (%s)", (pluginSettings) => {
   const launches: RunnerProcessLaunchSpec[] = [];
   spawnRunner({
     connection: { mode: "connect", connectUrl: "ws://127.0.0.1:43127" },
@@ -395,7 +395,9 @@ it("preserves an explicit OpenCode permission mode at the runner spawn boundary"
     p0ReserveBytes: 64 * 1024,
     runnerVersion: expectedRunnerVersion,
     runnerDigest: expectedRunnerDigest,
+    additionalEnvironmentKeys: pluginSettings ? ["OPENCODE_CONFIG_DIR", "PROVIDER_PRIVATE_ROOT", "PAPERCLIP_RUNNER_BOOTSTRAP_TICKET"] : [],
     environment: {
+      OPENCODE_CONFIG_DIR: "provider-config", PROVIDER_PRIVATE_ROOT: "provider-storage", PAPERCLIP_RUNNER_BOOTSTRAP_TICKET: "wrong-ticket",
       PATH: "/bin",
       PAPERCLIP_AGENT_KEY_ID: "sha256:identity",
       PAPERCLIP_AGENT_PUBLIC_KEY: "public-pem",
@@ -430,6 +432,9 @@ it("preserves an explicit OpenCode permission mode at the runner spawn boundary"
   });
 
   expect(launches).toHaveLength(1);
+  expect(launches[0]!.environment.OPENCODE_CONFIG_DIR).toBe(pluginSettings ? "provider-config" : undefined);
+  expect(launches[0]!.environment.PROVIDER_PRIVATE_ROOT).toBe(pluginSettings ? "provider-storage" : undefined);
+  expect(launches[0]!.environment.PAPERCLIP_RUNNER_BOOTSTRAP_TICKET).toBe("bootstrap-ticket");
   expect(launches[0]!.environment).toMatchObject({
     PATH: "/bin",
     PAPERCLIP_AGENT_KEY_ID: "sha256:identity",

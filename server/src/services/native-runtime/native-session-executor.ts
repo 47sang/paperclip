@@ -99,6 +99,7 @@ import {
   parseNativeExecutionInput,
   parsePaperclipQuestionSet,
   resolveSourceCodexHome,
+  releaseMaterializedNativeRuntimeSkills,
   readRunnerdArtifactBinding,
   retainedRunnerdMaintenanceIsIdle,
   settleRetainedRunnerdSession,
@@ -11537,6 +11538,10 @@ async function createRunnerdBackendWithinSessionClaim(
         const replaced: typeof staged = [];
         const installed: typeof staged = [];
         let cleanPending = true;
+        const removeCheckpointDirectory = async (item: typeof directories[number], directory: string) => {
+          if (item.name === "codex-home") await releaseMaterializedNativeRuntimeSkills(join(directory, "skills"));
+          rmSync(directory, { recursive: true, force: true });
+        };
         try {
           for (const item of directories) {
             mkdirSync(dirname(item.targetPath), { recursive: true, mode: 0o700 });
@@ -11563,11 +11568,17 @@ async function createRunnerdBackendWithinSessionClaim(
             .where(and(eq(environmentLeases.id, remoteTarget.leaseId!), eq(environmentLeases.companyId, input.execution.binding.companyId)));
         } catch (error) {
           cleanPending = false;
-          for (const item of installed.reverse()) rmSync(item.targetPath, { recursive: true, force: true });
+          for (const item of installed.reverse()) await removeCheckpointDirectory(item, item.targetPath);
           for (const item of replaced.reverse()) renameSync(join(item.pending, "previous"), item.targetPath);
           cleanPending = true;
           throw error;
-        } finally { if (cleanPending) for (const item of staged) rmSync(item.pending, { recursive: true, force: true }); }
+        } finally {
+          if (cleanPending) for (const item of staged) {
+            await removeCheckpointDirectory(item, join(item.pending, item.name));
+            await removeCheckpointDirectory(item, join(item.pending, "previous"));
+            rmSync(item.pending, { recursive: true, force: true });
+          }
+        }
       }, onDispatched: input.onTaskDispatched,
     });
     const executeTool = (call: Parameters<SessionToolAuthorityEpoch["execute"]>[0]) => {

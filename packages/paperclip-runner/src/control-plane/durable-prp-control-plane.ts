@@ -3438,6 +3438,7 @@ function runnerEnvironment(
   ticket: string,
   normalizedSessionId: string,
   explicitSource?: NodeJS.ProcessEnv,
+  additionalKeys: readonly string[] = [],
 ): NodeJS.ProcessEnv {
   const platformSource = explicitSource ?? process.env;
   const environment: NodeJS.ProcessEnv = {
@@ -3451,7 +3452,7 @@ function runnerEnvironment(
   // already-sanitized environment for this run. Never inherit them implicitly
   // from the server process.
   if (explicitSource !== undefined) {
-    for (const key of runnerExplicitProviderEnvironmentKeys) {
+    for (const key of [...runnerExplicitProviderEnvironmentKeys, ...additionalKeys]) {
       const value = explicitSource[key];
       if (value !== undefined) environment[key] = value;
     }
@@ -3478,6 +3479,7 @@ function runnerEnvironment(
     }
     Object.assign(environment, githubCredentialEnvironment(explicitSource), configuredEnvironment(taskEnvironmentSource));
   }
+  environment.PAPERCLIP_RUNNER_BOOTSTRAP_TICKET = ticket;
   return environment;
 }
 
@@ -3514,6 +3516,8 @@ export function spawnRunner(options: {
     executableSha256: string;
   };
   environment?: NodeJS.ProcessEnv;
+  /** Validated plugin runtime settings; values still come from the final, policy-bound environment. */
+  additionalEnvironmentKeys?: readonly string[];
   processLauncher?: (spec: RunnerProcessLaunchSpec) => RunnerProcessHandle;
   diagnosticsDirectory?: string;
 }): RunnerProcessHandle {
@@ -3624,7 +3628,7 @@ export function spawnRunner(options: {
   }
 
   const command = options.runnerBinaryPath ?? runnerBinary;
-  const environment = runnerEnvironment(options.ticket, options.identity.normalizedSessionId, options.environment);
+  const environment = runnerEnvironment(options.ticket, options.identity.normalizedSessionId, options.environment, options.additionalEnvironmentKeys);
   const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => ({
     ...handle,
     restart: (ticket) => spawnRunner({ ...options, ticket }),

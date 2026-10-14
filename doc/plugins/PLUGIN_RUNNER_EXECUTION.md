@@ -216,6 +216,7 @@ type ProviderPack = NonNullable<Response<"description">["providerPack"]>;
 | Homes, search paths, sidecars | Plugin configuration; no Core-selected layout |
 | `description.connection` | Runner listener configuration; not the external WSS endpoint |
 | `description.environment` | Non-secret defaults; Core-selected execution inputs take precedence |
+| `describe.resources` | Maximum 256 bindings; two paths per skill fit within the 128-asset limit |
 | Path strings | 1–4096 characters; no ASCII control characters U+0000–U+001F |
 
 ## Submit the task

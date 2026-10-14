@@ -30,6 +30,13 @@ const submit = { kind: "submit" as const, projectIds: [projectId], runner: { pro
 beforeEach(() => {
   state.plugin = { id: "original", pluginKey: "test.provider", status: "ready", manifestJson: { capabilities: ["environment.drivers.register"], environmentDrivers: [{ driverKey: "tasks", supportsTasks: true }] } };
 });
+it("bounds description resources while allowing both paths for each assigned skill", () => {
+  const operation = { kind: "describe", sessionId: "session", harness: "codex", projectIds: [],
+    resources: Array.from({ length: 256 }, (_, index) => `resource-${index}`) };
+  expect(environmentTaskOperationSchema.safeParse(operation).success).toBe(true);
+  expect(environmentTaskOperationSchema.safeParse({ ...operation, resources: [...operation.resources, "overflow"] }).success).toBe(false);
+});
+
 describe("plugin-provided Runner execution", () => {
   it("requires provider bindings for named resources and rejects caller-selected destinations", () => {
     const operation = environmentTaskOperationSchema.parse({ kind: "describe", sessionId: "session", harness: "codex", projectIds: [], resources: ["instructions"] });

@@ -5163,6 +5163,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       ),
       diagnosticsDirectory: resolve(this.#root, "diagnostics"),
       processLauncher: this.options.runnerProcessLauncher,
+      additionalEnvironmentKeys: Object.keys(this.options.runnerRuntimePaths?.environment ?? {}),
     });
     this.#handle = handle;
     this.#watchRunner(handle);
@@ -5804,6 +5805,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           ),
           diagnosticsDirectory: resolve(this.#root, "diagnostics"),
           processLauncher: this.options.runnerProcessLauncher,
+          additionalEnvironmentKeys: Object.keys(this.options.runnerRuntimePaths?.environment ?? {}),
         });
     if (handle) {
       this.#handle = handle;

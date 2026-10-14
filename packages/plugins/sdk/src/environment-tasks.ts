@@ -23,7 +23,7 @@ const secureUrl = z.string().url().refine(value => {
 /** One plugin-provided Runner execution attempt with a PRP connection. Secrets are transient RPC input. */
 export const environmentTaskOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("describe"), sessionId: runnerIdentity, harness: identifier,
-    projectIds: z.array(z.string().uuid()).max(64), resources: z.array(resourceId).max(128).default([]) }).strict(),
+    projectIds: z.array(z.string().uuid()).max(64), resources: z.array(resourceId).max(256).default([]) }).strict(),
   z.object({ kind: z.literal("checkpoint"),
     exports: z.array(exportedAsset).max(128).default([]),
     archive: z.object({ archiveKey: runnerIdentity, priorIdentity: z.object({

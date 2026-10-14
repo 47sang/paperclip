@@ -1,4 +1,5 @@
 import * as pluginTaskRuntime from "./plugin-runner-task.js";
+import { environmentTaskOperationSchema } from "@paperclipai/plugin-sdk";
 import { configuredEnvironmentProjection } from "../../vendor/paperclip-runner/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -10102,15 +10103,22 @@ describe("runnerd provider runtime wiring", () => {
     await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
     const runtimeContext = nativeRuntimeContextFixture();
     runtimeContext.instructions.workingCopy = { rootPath: instructionRoot, kind: "agent_files", entryPath: "AGENTS.md" } as never;
+    runtimeContext.skills = Array.from({ length: 64 }, (_, index) => ({
+      key: `skill-${index}`, runtimeName: `skill-${index}`, versionId: null, bundle: runtimeContext.instructions.bundle,
+    }));
+    const skillResources = Object.fromEntries(runtimeContext.skills.flatMap(skill => [
+      [`skill:${skill.runtimeName}`, `/assigned/${skill.runtimeName}`],
+      [`skill_entry:${skill.runtimeName}`, `/assigned/${skill.runtimeName}/SKILL.md`],
+    ]));
     const taskExecution = { ...execution, runtimeContext };
     const launcher = vi.fn();
     const registration = vi.fn();
     const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration });
-    const task = vi.fn(async (_operation: unknown): Promise<unknown> => ({ kind: "description", taskId: "task", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
-      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex", codexArgs: ["app-server"] }));
+    const task = vi.fn(async (operation: unknown): Promise<unknown> => { environmentTaskOperationSchema.parse(operation); return { kind: "description", taskId: "task", resources: { ...skillResources, runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
+      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex", codexArgs: ["app-server"] }; });
     const target = { kind: "remote", transport: "sandbox", providerKey: "plugin",
       leaseId: "plugin-task-lease", remoteCwd: "/workspace", runnerTask: task,
-      runnerTaskProjectIds: ["project-one", "project-two"] } as never;
+      runnerTaskProjectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] } as never;
     state.createBackend.mockClear(); state.createTransport.mockClear();
     try {
       await expect(createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution,
@@ -10118,7 +10126,7 @@ describe("runnerd provider runtime wiring", () => {
       await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
         runnerExecutionTarget: target, runnerIngressAuthorized: true,
         runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/wrappers", PATH: "/controller/private/bin", PAPERCLIP_WORKSPACE_CWD: "/controller/workspace" } });
-      expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
+      expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] }));
       expect(state.createBackend.mock.calls.at(-1)![1]).toMatchObject({ workingDirectoryAuthority: "remote_runner",
         environment: { PAPERCLIP_WORKSPACE_CWD: "/workspace" } });
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
@@ -10132,7 +10140,8 @@ describe("runnerd provider runtime wiring", () => {
         archiveExternalRunnerState: expect.any(Function),
         environment: expect.objectContaining({ HOME: "/accounts/selected", PAPERCLIP_WORKSPACE_CWD: "/workspace" }),
       }));
-      expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["project-one", "project-two"] }));
+      expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] }));
+      expect((task.mock.calls[0]![0] as { resources: string[] }).resources).toHaveLength(133);
       const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {
         runnerRuntimeContext: { instructions: { workingCopy: { rootPath: string } } }; environment: NodeJS.ProcessEnv;
       };
@@ -10147,6 +10156,11 @@ describe("runnerd provider runtime wiring", () => {
       const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
       await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
       await writeFile(join(root, "codex-home/auth.json"), "preserved-private-fixture");
+      const sealedSkill = join(root, "codex-home/skills/assigned");
+      await mkdir(sealedSkill, { recursive: true });
+      await writeFile(join(sealedSkill, "SKILL.md"), "sealed skill", { mode: 0o444 });
+      await chmod(sealedSkill, 0o555);
+      await chmod(dirname(sealedSkill), 0o555);
       task.mockImplementation(async (operation: any) => {
         for (const item of operation.exports ?? []) await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
         return { kind: "checkpoint", taskId: "task", state: { lifecycle: "active", runId: "wrong-run" } };
@@ -10170,6 +10184,7 @@ describe("runnerd provider runtime wiring", () => {
       });
       await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).resolves.toBeUndefined();
       expect(await readFile(join(instructionRoot, "AGENTS.md"), "utf8")).toBe("exported instructions");
+      expect((await readdir(root)).filter(name => name.startsWith(".plugin-checkpoint-"))).toEqual([]);
       expect(JSON.parse(await readFile(join(root, "runner/runner-state.json"), "utf8"))).toMatchObject({ lifecycle: "suspended", environmentLeaseId: "plugin-task-lease" });
     } finally { owner.mockRestore(); }
   });
