@@ -1,5 +1,411 @@
 # Runner defaults: staged delivery
 
+## Current qualification and repair checkpoint — 2026-10-13
+
+Canonical branch: `codex/codex-runner-default`. Delivery:
+[#15683](https://github.com/paperclipai/paperclip/pull/15683).
+The published baseline `ea6c8eb5e16d61111968f633a66748b397b64a3e` has
+53 successful hosted checks, two conditional Storybook skips, required verify
+and E2E passes, fresh 5/5 review and 30 resolved threads. Its
+[package qualification](https://github.com/paperclipai/paperclip/actions/runs/38478290686)
+passes all four native producers and clean Apple Silicon, Intel Mac and Linux
+ARM64 consumers. All 18 package source manifests and binary hashes match; no
+Codex payload is bundled. The isolated Apple Silicon install and zero-turn native
+startup pass, and fresh installed JavaScript applies all 342 migrations through
+0343 with confirmed owned cleanup. These are literal baseline results, not proof
+of the new repairs. Linux remains GNU libc 2.39 or newer on x64/AArch64; Windows,
+Alpine and 32-bit ARM stay deferred. No warm-cache speedup or paid ARM task is
+claimed. Docker, Cargo and native builds remain remote.
+
+The [single baseline managed attempt](https://github.com/paperclipai/paperclip/actions/runs/38478333712)
+fails completion reporting and the physical child-file assertion; its
+[existing report](https://d1p6rlowie26tp.cloudfront.net/runner-e2e/campaigns/gha-38478333712-1/index.html)
+remains red. Two runs execute provider turns. A third callback is falsely marked
+successful during startup, before any provider turn, because its onboarding
+parent is already Done. One unstarted child wake is cancelled. Recovery now
+reuses the existing completed-onboarding handoff validator before applying the
+issue-terminal backstop. Company, parent origin/status, assignee, completed child
+and remaining children must match. Process-death and ownership checks remain.
+Three reproduced baseline failures become 103 passing PostgreSQL controls across
+the existing recovery suites, with canonical server typecheck passing. Owned
+test clusters stop and release their slot. The native file tool correctly remains
+bound to its current task: the original run saved a child document but attached
+the file to the parent. First-task instructions now send file-producing work
+through the child's own execution, dependency and block handoff, then verify and
+link the child's result. Document-only and plan-only paths retain their scope.
+Two reproduced instruction-contract failures become 15 passing existing asset
+and greeting controls; these static checks do not prove model compliance.
+
+All seven baseline managed lease rows are released or expired with successful
+cleanup records, and prior company environment settings are restored. A separate
+owned-server supervisor reports incomplete descendant cleanup after server exit;
+its missing nested cause remains unresolved. Lease records do not prove physical
+deletion or settle unknown charges. Existing cost and cleanup holds remain.
+Revised-source live acceptance must still check actual turn events, the child's
+downloaded physical file, source-correlated completion, follow-up and continuity.
+Do not rerun the known failing baseline or weaken its assertions.
+
+The normal staging preparation and exact baseline Core image build complete, but
+the deployment check rejects `fleet_campaign_staging_requires_master`. Current
+Cloud policy admits only actual master source ancestry, including preview DB
+artifacts; a pinned, owned single target has no exception. No staging campaign
+starts and no serving-candidate claim is made. A human sequencing decision is
+pending: complete Mac and signed managed acceptance before a normal squash,
+then qualify the actual merged revision on the owned staging stack, or use a
+separate branch-friendly test environment before merge. Do not bypass this gate
+or change merge method to preserve preview ancestry. The preview Core image has
+verified content identity but no verified signature; the managed image signature
+is separately verified. Actual private Cloud composition and fresh warm/cold
+signup remain required production-readiness evidence after merge.
+
+Next action: independent matching-source review, affected map checks and publish
+the two scoped repairs in one source commit. Freeze that head, require fresh full
+CI and 5/5 review, then repeat the existing package/install and single managed
+journeys on admitted artifacts. Upgrade the idle local app with full saved
+configuration, account and recorded-run-profile comparisons; preserve its data.
+Use a fresh ordinary installed instance for automatic first-agent task/follow-up.
+The new $100 QA ceiling permits bounded messages with paid concurrency one and
+180-second runs; prior unknown-charge and cleanup holds remain separate.
+Existing runners never migrate. Normal protected merge is authorized once
+applicable gates and the sequencing decision are satisfied. No production or
+provisioning-default promotion, local heavy build, new timer or archive is
+authorized. Earlier checkpoints below retain their historical source attribution.
+
+## Current Codex merge checkpoint — 2026-10-13
+
+Current published `1173a859baa78af1d382058aa89c25920da25c3d` passes
+the policy, selector and commitperclip gates and is mergeable; full checks and
+fresh review remain incomplete. Two reviewed setup findings have treatments:
+missing forced-Kubernetes environments stay unqualified sandbox targets, so
+automatic Codex creation preserves Legacy without provisioning and explicit
+native selection returns qualification guidance. Four baseline failures become
+161 passing existing selection/environment controls. Local daemon resolution now
+precedes credential staging; preparation errors remove only the owned pre-handoff
+root, while unconfirmed probe retirement retains recovery state. Three original
+filesystem failures become 96 passing setup controls. Fake credentials and service
+controls do not qualify live Kubernetes or provider execution. Matching final
+source review, maps and typecheck are required before publishing the fixes.
+
+Published `2902b72c330d37ddff5d59e07927716dc3e1517c` is blocked before
+main CI by the repository's tracked-lock policy and another master conflict.
+The generated dependency lock is retained as build evidence; the branch restores
+master's exact tracked lock, using the existing scripts-disabled CI resolution
+path instead of bypassing the gate. Normal reconciliation with
+`e0f30a4c7186498b71b2637f253b3399997dac7d` preserves controller-loss
+attribution, creator identity and migration 0343, voice qualification and Apps
+connection controls. Both test conflicts retain the Codex runner checks and
+incoming controls. All 45 built-in and 44 controller/run-state controls pass;
+maps and token gates remain clean. This source requires fresh CI/review and
+appropriate installed/live qualification. Cancellation is requested for the
+obsolete 2902 managed workflow before a paid test job is observed; terminal cancellation and unknown
+remote costs still need confirmation. No unchanged paid test is retried.
+
+Independent inspection verifies the literal 578 fresh Mac journey below: exactly
+one child, one document revised from one to two, and the same workspace file
+changed from Saturday to Sunday with both required markers. Five executed runs
+succeed with no interval overlap; one terminal-child wake is cancelled before
+starting. Parent session continuity and the separate child session in the same
+workspace are recorded. Estimated run cost is $1.820721600; setup usage and
+settlement remain unknown. Reload preserves the completed task and revision.
+This manual evidence does not relabel the original managed failure or newer source.
+
+The reviewed fixture changes are published as
+`8d65fd7fc31d8170082f30a314b87c4779f91e8a`. Before a main CI merge checkout
+is created, master advances to `edcfcaf3f69abfda12fcbc63225f7346f53450aa`.
+Normal reconciliation retains its repository-skill preparation, signed idle wake
+deadlines, readiness errors, voice support and migrations 0341/0342. The sole
+text conflict preserves master's cancelled-lock return semantics and the PR's
+bounded error-code diagnostic. The dependency lock is completed for the existing
+server test dependencies and incoming voice dependency, without changing prior
+resolved versions or running install hooks. Frozen-lock validation, 29 existing
+native-authority/runtime-skill controls, E2E no-emit, maps and token gates pass.
+This combined server/UI/DB source requires new package and live qualification;
+literal 578 results below remain attributed to their actual source.
+
+The separate fresh Mac UI journey on installed 578 selects automatic native Codex,
+connects an API-key account, creates the first agent, and reaches the ordinary
+opening card. Accepting its proposal creates exactly one child task with a saved
+document and workspace file. A follow-up changes that existing document to
+revision two and edits the same file. Independent content, recorded execution,
+workspace, session-boundary and accounting inspection remains in progress.
+The failed managed eval is retained separately; this manual journey does not
+turn its failed oracle green. All paid work remains bounded by the new $100
+allowance, 180-second runs and single-provider concurrency, with prior holds kept.
+
+Canonical branch: `codex/codex-runner-default`. Delivery PR:
+[#15683](https://github.com/paperclipai/paperclip/pull/15683).
+The runtime/install prerequisite #16028 and release repair #16149 are merged.
+The finish line remains ordinary native Codex onboarding, checked task/follow-up,
+saved-agent preservation, exact-candidate installation and required checks, then
+a normal protected merge. Production deployment and default promotion remain
+outside this merge campaign.
+
+Reconciled head `d68f1facf0e174a4f8a771a2055e02c72a47c289` receives a fresh
+5/5 review with all 28 threads resolved. Its required E2E check passes, but the
+aggregate verification check fails two test shards. A retained company fixture
+collides because it truncates random UUIDs to six characters; full-UUID seed
+treatment passes 255 existing PostgreSQL controls with zero skips. The existing
+Runner durable-progress case lacks the diagnostic evidence needed to identify
+its failure. Bounded failure diagnostics retain the original error, all deadlines,
+usage, recovery and deduplication assertions. One exact local case passes;
+controlled delayed-save and early-admission failures show why that pass cannot
+prove the original cause. Independent review approves these two test-only edits.
+The next published head still requires its own CI and review.
+
+Literal 578 remote qualification now passes all four producers and the maintained
+Linux, Apple Silicon, Intel Mac and Linux ARM64 install scopes. All 18 tarballs,
+source manifests and binary hashes match; no Codex payload is bundled. Native
+consumer reports cover zero-turn open/close and cleanup, not paid ARM execution.
+Fresh local installation/native/CLI controls pass. Its fresh DB helper fails
+before migration with missing bootstrap stderr; its original cause remains unknown.
+The ordinary existing-data restart separately reports exhausted Mac shared-memory
+IDs. Releasing exactly two dead, unattached task-owned fixture segments restores
+the app without changing host settings or other services. Installed 578 applies
+migration 0340, reaches recovery ready and preserves three full agent execution
+configurations, eight recorded run identities and safe account summaries, with
+zero provider work. This proves upgrade preservation, not fresh initialization.
+A separate ordinary installed CLI entry then starts with a new isolated home
+and empty data, applies all 339 packaged migrations including 0340 and reaches
+recovery ready with zero companies and provider actions. This proves fresh
+startup after the owned resource cleanup; the original test-helper failure and
+its missing cause remain recorded.
+
+The original managed child-task failure remains red. Explicit first-task skill
+invocation and delivery source are recorded, but the retained trace cannot prove
+the model received the child-rule bytes or the complete dynamic-tool schema.
+Two rejected human-input calls recover through the ordinary API; their rejected
+argument shapes are not retained. Causality remains provisional. The fresh staging
+image and protected check pass at literal 578; deployment is blocked by an already
+active workspace deployment, with no campaign started by this QA request. Wait
+for that operation before any explicit normal deployment retry. No production
+or provisioning-default action is authorized.
+
+Historical literal candidate `57881c607fcea782ac30f601b768b2142fc2184b`
+passes all required checks: 53 successful checks, two conditional Storybook skips,
+fresh 5/5 automated review and 28 resolved review threads. The existing hosted Linux
+login/reload case passes against its recorded CI merge. The previous failed
+attempts below remain historical evidence.
+
+Normal reconciliation with master `7eea9d8214fec00dfde32bda7fcf9b20a428e330`
+accepts its source-annotation Storybook/map migration. All 263 authored suites and
+2503 story identities, exports and play counts remain intact. Retired aggregate
+files and their review history remain in Git; current indexes regenerate as
+ignored outputs. Durable creation/onboarding annotations describe fixture limits. The 28
+existing tooling controls, UI typecheck, token gates and 35-area/175-ID map check
+pass. Independent inspection finds no change to native execution, defaults,
+onboarding, credentials, workspace, DB, CLI or packaging source relative to 578.
+The isolated GitHub review-heading change and Storybook build preparation retain
+their incoming master source. Fresh published-head CI/review is still required.
+
+Literal 578 [remote package qualification](https://github.com/paperclipai/paperclip/actions/runs/38464237723)
+has completed successfully. The [single managed onboarding attempt](https://github.com/paperclipai/paperclip/actions/runs/38464212481)
+passes automatic selection, saved environment qualification, native authentication,
+hire and reload, then completes two successful native runs with session continuity.
+It fails the accepted-child assertion: the model puts its document/file on the
+onboarding parent and finishes that parent despite the delivered first-task skill
+requiring a child. Preserve this candidate failure; it is not a passing E2E cell
+or complete task/follow-up proof. The owning verifier records six terminal lease
+rows with successful cleanup, of which four appear in the selected report;
+physical deletion and unpriced usage remain unsettled.
+
+The former staging QA stack is archived with a decommissioned database. Its
+normal preview preparation rejects the lifecycle before deployment. A new owned
+QA workspace has been provisioned through the ordinary signup path; it still
+needs candidate deployment and live verification. Previous preview/runtime proof
+is historical. Heavy builds remain remote, existing-agent data stays preserved,
+and no production deployment, default promotion or timer is authorized here.
+
+Published `e301c68d645eabd9fa7ae3a9450a460f6d2d0439` passes required CI with
+52 successes and two conditional skips. Its fresh review finds one linked-login
+setup defect. Literal executable source `6c0eca871616a110954553d6ff971e7655c85f93`
+passes [remote package qualification](https://github.com/paperclipai/paperclip/actions/runs/38445419339),
+including all four producers and clean Apple Silicon, Intel Mac and Linux ARM64
+consumers. Fresh installed JavaScript initializes migration0339. The existing
+Mac app upgrades while preserving three full agent configurations, eight
+historical runs and saved account summaries, with no provider work during upgrade.
+
+The [managed6c attempt](https://github.com/paperclipai/paperclip/actions/runs/38448001365)
+passes the saved environment probe, native account/model hello, native hire and
+campaign bounds. A legitimate reload then returns onboarding to step one before
+Get started. Both setup leases and fixture cleanup pass; no task/artifact/follow-up
+is reached. Preserve this failed attempt. The production draft-restoration fix
+passes192 existing/new controls and independent source review, including delayed
+loading, explicit fresh starts, old runner choices and company/account boundaries.
+The managed fixture keeps its reload assertion. The separately scoped linked-login
+fix stages checked credentials only for isolated setup and keeps the general
+no-follow guard, refresh target and bounded retirement contract. Its original
+source passes both regular-file controls and fails both linked-file controls
+after the real lower materializer omits authentication. The matching treatment
+passes69 setup controls and12 unchanged lower controls, server no-emit and
+independent source review. Private copies retire only after confirmed cleanup;
+an uncertain close retains owned state and remains a failure.
+
+The reviewed fix commit is `12046f522bca29ded24425be71b856993b4997f7`.
+The normal merge retains exact master `393d1c410862aa93561548e0a39feec3b89df6ff`,
+including migration0340, shared/plugin lifecycle contracts and file recovery.
+Independent source inspection confirms all four reviewed fix hashes and the
+incoming executable changes. Storybook reconciliation retains263 suites and2503
+authored IDs, both review histories and all four incoming recovery states. Its
+27 existing controls, maintained catalog check and35-area/175-ID map check pass.
+Only JavaScript dependencies are prepared locally; native/image builds stay remote.
+
+The combined736 source passes368 focused checks across10 files with zero final
+skips. The initial sandbox listener failures are preserved separately; unchanged
+support probes and owned loopback execution reach the affected tests successfully.
+Incoming master `c7f4b74111d16f0b57112fa6d0b6a59c2d63bfe8` then adds fresh-task
+workspace source isolation. Its eleven server files remain exact master, and281
+affected source/trust/preparation/runtime controls pass without repeating the368.
+The catalog retains263 suites/2503 IDs and both histories.
+
+An actual task bootstrap check finds a narrow compatibility mismatch: an explicitly
+configured or operator `CODEX_HOME` with linked auth can pass setup while task
+isolation omits that link. Ordinary new defaults create no such link; regular host
+logins and server-selected managed account homes seed correctly. Keep the general
+no-follow guard. Use existing server-owned managed credential provenance to reject
+the unbound linked case with explicit Legacy/managed-account guidance, while
+retaining checked setup seeding for resolved accounts. The existing fake bootstrap
+stops before provider launch; it is not live account proof. The existing trusted
+outer managed credential-home context closes this mismatch without a new schema
+or permission field. Four linked cases reproduce false setup success before the
+guard;81 final setup controls, server no-emit and independent source review pass.
+Regular homes, API-key precedence and resolved-account setup aliases remain
+supported. Raw configuration cannot provide the trusted provenance.
+
+Published `1d09569b054e0ad9f4bc9e4d92ad1212d4794f7c` retains that combined
+source. Its exact-head review is4/5 with one additional selected-key precedence
+finding: `CODEX_API_KEY` still enters subscription validation when the task
+materializer would use that key directly. Six local/remote selected-key controls
+reproduce the failure; six `OPENAI_API_KEY` controls retain their behavior. The
+two-line correction skips unrelated subscription reads and refresh binding for
+either selected key. Frozen treatment passes93 setup controls,12 unchanged lower
+controls, server no-emit and independent source review. The first93-control run's
+91 passes and two import-deadline/follow-on failures remain recorded; the unchanged
+standalone run passes without extending a deadline or weakening an assertion.
+
+The [1d CI run](https://github.com/paperclipai/paperclip/actions/runs/38459704117)
+passes build, typecheck and native verification but has two independent blockers.
+The onboarding browser case expects the obsolete return to the Agent step. Its
+captured screen correctly restores Connect, Ada and the original authorization
+link. Update that existing case to verify the exact active session, company,
+name/harness/Auto choice, one login start and no pending-login hire through both
+route reopening and actual reload. Independent source review passes. Local
+baseline reproduces the old assertion; the final local attempt cannot initialize
+its fresh PostgreSQL cluster before browser execution. Preserve that failure and
+require the existing hosted Linux E2E case to prove treatment. The chat shard
+loses its hosted runner connection; no failing chat assertion or test log is
+available. A new ordinary current-head CI run must replace that incomplete gate.
+No new image, package or paid live campaign was dispatched during these fixes.
+
+Next action: publish the reviewed narrow corrections together. Require fresh
+CI/review, affected installed-package and managed first-task proof before ready
+or merge. Historical receipts keep their literal sources. The following
+checkpoints are retained history, not the current merge state.
+
+## Production preparation checkpoint — 2026-10-13
+
+The runtime prerequisite [#16028](https://github.com/paperclipai/paperclip/pull/16028)
+is ready for review at `271d434c170e74bdedde65d0b13059a55419c943`.
+[CI attempt 2](https://github.com/paperclipai/paperclip/actions/runs/38346601686)
+passes 54 checks with four conditional skips; fresh Greptile is 5/5 and all four
+threads are resolved. The first attempt's bounded Pi Node archive timeout is
+retained. The unchanged-source retry passed without relaxing source or deadlines;
+its underlying network/host cause remains unknown. The passing CI installation
+records merge source `7a82a37438e6e448abc7cc5caa60dc2519a97be0`, distinct from the
+PR head. The [final literal-source package campaign](https://github.com/paperclipai/paperclip/actions/runs/38347027535)
+passes all four daemon producers, public Linux assembly and Apple Silicon,
+Intel Mac and Linux ARM64 clean consumers. The Linux ACPX component probe uses
+explicit installed authority; normal Mac/ARM native lookup rejects authority
+overrides. Neither establishes final cloud onboarding/task acceptance. Small
+report ZIP downloads did not complete in the browser and the CLI token is invalid;
+no independent current-report rehash is claimed.
+
+GitHub's normal ready-PR gate still requires a code-owner review. On 2026-10-13,
+normal protected squash auto-merge was enabled for exact `271d434c`; approval
+remains pending and no slice was merged. The user authorizes normal protected sequential merges,
+not admin bypasses, production deployment or provisioning-default promotion.
+[Codex #15683](https://github.com/paperclipai/paperclip/pull/15683) remains clean
+at `1a0ca66242121e39d88455aa2b52a07acc4a07d9`, based on the historical `5a9ce11`.
+The parent has advanced and GitHub reports conflicts. Reconcile with the actual
+merged parent before publishing prepared fixes or claiming final checks. The
+Claude owner retains its branches, private installed-authority correction and
+separate $50 qualification ceiling. Those fixes need package and live acceptance;
+root does not rewrite the Claude branches.
+
+Fresh ordinary managed onboarding currently lacks the saved platform probe
+before Auto resolution; an unqualified immutable OCI environment selects Legacy.
+The prepared Codex-only UI correction reuses the existing permission-gated saved
+probe on explicit Connect, refreshes scoped discovery and validates the selected
+runtime. It retains actionable failures, explicit Legacy and current creation/
+discovery non-allocation. The existing explicit-only Product E2E cell gains fresh
+wizard-owned qualification, two authoritative setup lease IDs, independently
+checked physical-file output and follow-up continuity. Its fixture does not
+create an agent or preprobe. Missing responses preserve unknown cost coverage.
+No new suite, grader, automatic roster or local-prompt replacement is introduced.
+
+The privately composed source passes 44 targeted onboarding controls and 184
+existing Product E2E support controls, UI/E2E no-emit and guarded patch
+applicability. The earlier full wizard controls pass 117 cases at their recorded
+source. Independent review found an unanswered-setup accounting gap: four cases
+fail before the fix; 117 first-task controls pass after. Comment cleanup preserves
+353,839 composed executable tokens and semantic ASTs. Required onboarding maps
+retain IDs, actual probe authority and source-only/not-run limitations; structural
+checks pass 35 areas/171 IDs. Storybook metadata must be reviewed after actual
+parent reconciliation; its catalog/script are absent from literal `1a0ca662`.
+This private preparation is not integrated, published or live-qualified.
+
+A private reconciliation rehearsal composes exact Codex `1a0ca662` with exact
+prerequisite `271d434c` without modifying either published branch. It retains
+master's render helper, moved Storybook paths and additional catalog cases; the
+managed onboarding cell is added to the existing catalog with 730 total cases.
+The rehearsal is not an actual post-merge candidate and does not close hosted,
+installed-package or live Cloud acceptance. Its narrow checks and source manifest
+remain private until normal source reconciliation is authorized by the actual merge.
+
+The private root review reproduced four cache failures under production
+`staleTime: 30_000`: setup omitted fresh availability reads, hid a discovery
+error, and skipped qualification after an image change. Both managed Codex
+setup reads now set `staleTime: 0`. The same existing controls cover cold and
+production-cache defaults; 53 selected UI controls and matching-source UI
+no-emit pass on Node 24.19.0. Earlier 44-case results remain tied to their
+pre-correction source. This correction is private and requires ordinary
+published-head review and full qualification after the protected parent merge.
+
+Cloud source `23531d729756ab0461a53f9358beb8df5c1781ed` uses named Daytona
+snapshots without a verified final boot-image binding for fresh-company native
+qualification. A read-only metadata request was rejected before execution because
+automatic approval review requires explicit use of the particular API key.
+Authorization is pending; no key was read or provider request sent. The expired
+GitHub device code needs a new attended sign-in when the human is present.
+Production Fleet Admin sign-in and a concrete current QA owner grant also remain
+pending. The existing QA tenant remains pinned/user-managed and unqualified;
+old auth probes and preview images cannot close the live gate.
+
+The original $250 ceiling and $248.179254104 held/consumed ledger remain intact;
+unknown charges and cleanup holds are not certified invoice balance or available
+funding. Codex retains its bounded $2.50 setup/two-task-turn reservation plus $2
+cleanup. The expanded manual first-task cell has no separate paid reservation.
+No provider turn, paid environment allocation, local Docker/Cargo/native build,
+rollout or default promotion occurred in this preparation. The preserved local
+preview remains `http://127.0.0.1:3125/COD/agents/all`, literal behavior source
+`fe1ecf1c3449c21d6e6f0c9d9772d1949b80ea82`; its data and recorded runners remain
+untouched. Root does not upgrade existing agents.
+
+Next gate: obtain actual code-owner review and restored GitHub CLI authentication,
+then perform the normal exact-head parent merge and reconcile Codex/Claude with
+its actual master commit. Compose these prepared fixes, retain required maps and
+fresh review/checks, resolve the Cloud boot-identity boundary through authorized
+metadata, and qualify the final immutable managed candidate. Actual private
+Cloud distribution, warm/cold signup, useful task/follow-up, existing-agent
+preservation and production-image rollback/forward-recovery checks remain open.
+The stack is not production-ready and production deployment remains unauthorized.
+
+Evidence: `/private/tmp/pr2-271d434-final-qualified-ready-receipt.json`,
+`/private/tmp/pr2-managed-onboarding-accounting-root-review.json`,
+`/private/tmp/ci-artifacts-271d434-installed-native-lookup-audit-receipt.json` and
+private composed source manifests. Public PR bodies contain the exact current
+checkpoint; historical receipt sources remain literal.
+
+
 Updated 2026-10-13 UTC.
 
 ## Fresh cloud onboarding remains unqualified
@@ -1481,6 +1887,11 @@ to run. The actual legacy Codex task completed and its independently read file
 contained the exact two requested lines. The same-task follow-up is running.
 No second task, agent hire, or automatic runner conversion was used.
 
+Next action: commit and push the narrowed candidate, rerun its checks and fresh
+review, then update the PR and existing evidence report. Start the Codex-default
+slice after the user chooses to proceed. Merging and deployment remain outside
+this task.
+
 ### Occupied credential fixture follow-up — 2026-10-12
 
 Current-head `021df207` Runner Vitest 2 failed during fixture preparation with
@@ -1501,3 +1912,141 @@ zero provider calls or native builds. Comment-only removal preserves the tested
 executable structure; the suite was not repeated. Evidence is recorded in
 `/private/tmp/ci-final-021df2-shared-credential-quorum-receipt.json` and its
 comment-closure receipt. Fresh published-head CI and review remain required.
+
+### 2026-10-13 Published canary and fresh staging qualification
+
+The human merged prerequisite #16028 at actual Core master `d67e3507b23041212fa26302ce6de078c5ebcc05` and asked to cancel the existing timer, then test the published npm canary locally and on a new staging stack. The `finish-runner-default-stack-and-merge` heartbeat was deleted. Codex defaults #15683 remains separate and unmerged. No production or provisioning-default promotion is authorized.
+
+The human approved a separate $25 ceiling: $15 for one owned QA stack/sandbox including pool backfill, $5 for setup and at most four short task/follow-up turns, and $5 for cleanup. Zero automatic retries. The original $248.179254104 held/consumed and all original unknown and cleanup holds remain unchanged. Actual new resource cost is unknown and held within the new reservation.
+
+Ordinary authenticated staging signup created `stack-pool-7998e841ace7` at https://runner-canary-d67-qa-oct-13.staging.paperclip.app. It reached fresh first-agent onboarding with zero agents or provider turns. Its user-managed pin is verified. Initial distribution `cloud-38355190192-1` is old source and has observed schema drift; it is baseline only. Exact d67 signed standard image, source gate and signed migrator have passed. Matching private composition is building through the existing canonical workflow, without a duplicate dispatch.
+
+The public d67 release38389963483 ended successfully but skipped native production, publication and canary onboarding. Registry canary.5 provenance binds it to old4a641d, so local acceptance remains blocked. The focused repair [PR #16149](https://github.com/paperclipai/paperclip/pull/16149), exact `ab99d3f7604cb2ac8d8a45c81276797af834e325`, adds explicit cancellation/source-result guards to the existing producer and canary smoke. Its existing contract cases reproduce two missing guards before treatment. All70 release controls and20 source-verification neighbors pass after treatment; independent source review is clear. All required hosted gates passed with fresh5/5 and actual code-owner approval. PR #16149 merged at `60bc0d5fee9a6e48db08fc016521fee3d9f57d67`; its new master-push release38395574681 is running. Concurrent master changes include Storybook indexing and verification-skill docs; npm and staging source identities remain separate. Source predicate tests support the diagnosis but do not establish actual GitHub scheduling or publication.
+
+The native-runner QA override is applied and converged through one-target feature campaign1791869766576, with zero failed targets. Literal d67 private distribution `cloud:38392212140:1` is qualified. Supported one-target deployment request `f7cb6751-91f8-49a4-9ab8-6092ecb27e7c` passed exact-source/private-artifact preflight38395788220; deployment38395855695 succeeded with authenticated serving verification and `set_default=false`. The pin and current private distribution remain verified.
+
+Attended OpenAI device authorization completed in the embedded browser. Ordinary fresh onboarding created Legacy preservation QA (`f9e30b8e-7ceb-4f88-b373-1a2cba65859d`) with its Codex Legacy configuration and unopened first-task question. Its sandbox and connection settings were retained. Native Codex package QA (`861f95bc-c9fc-4e32-8abb-8829d3fe42de`) was created separately through the explicit experimental runner picker, using Codex, gpt-5.6-luna, the responsible user's saved subscription and Paperclip Computer. This tests the merged prerequisite; automatic Codex defaults remain outside this source.
+
+The native creation Test reported success, but its visible details and exact d67 route show a Legacy Codex ACP/CLI model hello, not native runtime execution. At least one real setup hello is held in the setup reservation separately from the four task-turn allowance; other unmeasured setup usage is not assumed zero. Setup lease `1f2b04ce-97c2-4f81-8f92-0ece0fb54feb` and provider resource `622b8bb6-8bec-40d2-83c2-fa5edddfa6e8` have no independent cleanup confirmation yet. Green setup is not native execution or physical cleanup proof.
+
+Native QA policy survives reload with timeout180 seconds, concurrency1, interval disabled and max-turn continuation disabled. Separate transient/connection retry policy still needs an existing supported control before launching the task. The nonce-bearing first file challenge is drafted, not submitted; task turns remain zero. Existing file-artifact and session-continuity assertions are being reused, with manual adaptations identified rather than relabeled as an unchanged E2E suite pass.
+
+The retry audit found no supported retry-only UI control and no certified provider-start bound: existing native recovery can launch additional continuation prompts. The human explicitly approved normal recovery within the same $25 ceiling, with at most four manual task/follow-up messages, 180-second run timeouts and no automatic test reruns. Production recovery policy is unchanged. One manual staging task was submitted (`9f706825-36db-4950-9179-659406db37fb`); its native execution, file bytes and continuity remain pending. Manual message counts and observed underlying provider/recovery events will be reported separately.
+
+Release38395574681 has now actually completed all four native producers, including Darwin x64 and Linux ARM64, and its canary publisher is active. This supplies hosted scheduling evidence for the release repair. Actual source-bound registry publication and published onboarding smoke remain pending; canary.5 is still excluded as old-source evidence.
+
+Next action: verify the actual staging serving revision, wait for the source-bound published registry package, install the real package in an isolated Apple Silicon consumer, and run real file task/follow-up journeys within the new budget. Preserve the old3125 test-drive and all receipts. Current evidence: `/private/tmp/runner-d67-published-canary-qa/evidence/` and `/private/tmp/ci-artifacts-d67e350-artifact-readiness-receipt.json`. Neither requested live runtime test has passed yet.
+
+
+#### 2026-10-13 Final published-consumer and fresh-stack result
+
+Actual master release38395574681 completed all four native producers, npm publication and real canary onboarding smoke. Public `paperclipai@2026.1013.0-canary.6` binds to exact60bc, including narrow merged release repair #16149. Its clean isolated Apple Silicon install passed normal lifecycle, all18 no-bundled-Codex tar checks, packaged daemon/provider verification, native startup/open/close and CLI/doctor checks. Official optional npm Codex dependencies are retained; no local Cargo/Rust/Docker/runner-source build occurred. Literal d67 private staging composition and literal60bc npm remain separately attributed.
+
+Ordinary local onboarding completed with the explicitly authorized OpenAI API key saved in a managed connection, and created Legacy preservation QA. The local subscription device flow expired; no subscription was saved. No credential values were written into prompts/reports. Native saved-account setup exposed a real published UI defect: the selected native runtime delegates to Legacy readiness and can trigger a second forced CLI probe, failing `Command not found in PATH: "codex"` despite successful packaged native resolution. Current private #15683 already contains the native setup probe correction, but its artifact/UI has not been tested here. Configure navigation cannot adopt the failed connection; no developer PATH or global Codex workaround was used.
+
+The supported published API created a separate explicit-native local QA agent with the saved responsible-user OpenAI API-key binding. Real UI task [NPM-2](http://127.0.0.1:3136/NPM/issues/NPM-2) completed native runs88eeb636 and4990be3e in43/46seconds. Independent26/52-byte downloads, exact random challenges, negative newline controls, durable attachments and run-attributed work products pass. Same saved account/grant and execution workspace are recorded. A self-added200-cent monthly cap correctly paused after unpriced metered gpt-5.6-luna usage; spent0 is not proof of free use. Removing only that supplemental cap to ordinary budget0 and explicit resume caused a recorded adapter config-revision freshness reset. The second provider session is fresh, so strict same-provider-session continuity fails and is not waived. No pricing or production budget policy was changed.
+
+Fresh staging [RUN-2](https://runner-canary-d67-qa-oct-13.staging.paperclip.app/RUN/issues/RUN-2) completed native runs7d242e7b and a8e62d9c in93/73seconds at d67/cloud:38392212140:1. Independent26/52-byte downloads pass; recorded UI/PRP events show session.started then session.resumed with the same provider session and workspace. Source-bound UI proof is distinct from a direct stored-row/full-grader export, which was unavailable. Its setup green was a Legacy hello and remains excluded as native readiness proof.
+
+Existing local Legacy full execution settings survived native enablement, an unrelated title edit and reload byte-for-byte; that control made zero provider calls. Both native QA agents are paused after four total authorized manual task/follow-up messages, zero test reruns, with normal product recovery unchanged. Local live runs are0. The installed preview remains [3136](http://127.0.0.1:3136/NPM/issues/NPM-2). Historical3125 is stopped, with its original data intact; no current safe staged source-build preflight was available and it was not restarted. Staging remains pinned/user-managed and available for inspection, with no production/default promotion.
+
+The existing exact-source file/artifact graders were reused. Strict registration helper title checks fail because the manual prompts requested readable titles rather than filename-as-title; correct attachment/run attribution passes separately. No metadata was rewritten to manufacture a pass, and no full catalog-cell pass is claimed. Physical cleanup of setup lease1f2b04ce/provider resource622b8bb6 and provider invoices remain independently unconfirmed. The separate25-dollar reservation and original248.179254104 held/consumed ledger preserve all unknown and cleanup holds. Metered model pricing remains unknown/unpriced. Required next gates are corrected native setup artifact qualification, priced-model budget acceptance and authorized physical cleanup confirmation; this does not make the default rollout production-ready.
+
+Detailed receipts and sanitized report: `/private/tmp/runner-d67-published-canary-qa/evidence/`. Public package admission/source receiptc9eeaf…; native consumer receipt45b613…; paid-pair offline integrityb6bb4e…; exact account attribution is a separate six-field projection. These are literal qualification sources, not the unmerged root HEAD1a0ca662. Record-only changes are retained locally for the next actual reconciliation commit; no doc-only CI churn or dependent branch mutation was introduced.
+
+The sanitized report is uploaded and independently download-verified as attachment-backed artifact work product122676da on the unassigned completed operator [NPM-3](http://127.0.0.1:3136/NPM/issues/NPM-3). It does not wake an agent or close the feature gates. Native task artifacts are unchanged. The authorized Claude owner received the prerequisite source/qualification boundaries; no ownership or allowance was reassigned.
+
+
+#### 2026-10-13 Authorized Codex defaults finish and merge
+
+The human requested that #15683 be finished and merged normally. A separate incremental $100 ceiling and as many bounded messages as needed are explicitly approved. The previous four-message/$25 campaign and original$250 ledger retain all unknown-charge and cleanup holds; they are not refunded or reassigned. Reuse local3136 and owned staging stack7998; preserve their data and receipts. Root owns actual-master reconciliation, exact-head checks/review, ordinary Mac/managed onboarding, checked task/follow-up and normal protected merge. Claude owner retains dependent branches and separate allowance. No production deployment or provisioning-default promotion is authorized. No timer is recreated.
+
+Current-master integration includes `833769ab557255b11dd8f650f43ed7333653f5e4`, then `e3029c632b26b68595adc1a704a387833b3cefcb`. The ordinary merge retains the published Codex history and prerequisite squash history. Its audited logical source delta preserves master fixes, the prepared managed Connect qualification, fresh scoped discovery, and existing first-task eval assertions. The remaining merge conflicts concern Storybook indexes and dated reviews, not execution code. Independent review of both source compositions found no concrete P1/P2 regression; source review does not establish live acceptance.
+
+On the integrated checkout, two focused Codex runs pass 261 tests each across onboarding, runner selection, setup, editing, imports and readiness. Server and UI direct TypeScript checks pass after JavaScript-only shared/DB/adapter-utils/SDK preparation. All token gates pass. New master recovery controls initially report a missing declared trace test dependency and a sandbox-denied PostgreSQL listener; the four unaffected suites pass 74 cases. Isolated installation of the exact declared trace dependencies and an authorized temporary listener allow the two affected suites to pass all 60 cases. No tests are disabled, no lockfile or production policy is changed, and no local native/Docker build occurs. Full canonical workspace checks remain assigned to fresh hosted CI.
+
+Fresh-source remote package qualification, ordinary Apple Silicon onboarding and immutable managed staging onboarding remain pending. The previous canary60bc and stagingd67 receipts stay attributed to those sources. The new budget record reserves resources60/provider30/cleanup10 dollars and retains all prior unknown holds. The supported private Cloud skill and CLI are read from exact private master `4f3a63ad6f3f84c87e0e129da35909d8ccc7ffb0`; a deliberate pre-merge Core preview is separate from actual private Cloud distribution. Freeze the final reviewed product source before building; deploy only the owned pinned QA stack, with `set_default=false`.
+
+Published intermediate448db859 passes the focused source controls and starts fresh hosted checks. A bounded managed-image review then identifies a concrete setup mismatch: real sandbox tasks select provider outer isolation, while `probeNativeRunnerEnvironment` overrides the verified transport choice with false. Correct this internal forwarding and derive its value from the server-resolved target; preserve local/SSH Codex isolation and removal of injected environment flags. The obsolete remote package qualification38423256993 is cancelled to limit costs and is excluded from final proof. Native/Docker work remains remote. Current source and new-head qualification must close the corrected boundary before acceptance or merge.
+
+The maintained Daytona execution image is distinct from a standard Core app image. A saved immutable OCI digest without snapshot/template fields uses normal environment probing, measured OS/architecture/libc, actual image binding and confirmed lease cleanup. The existing full-stack E2E workflow owns its content-addressed execution image and one explicit managed-onboarding cell; its image build and live cell are not yet dispatched. A Core app image cannot be assumed to have compatible Daytona boot behavior merely because it contains the daemon. No provider credential is read to work around this boundary.
+
+The isolation correction changes three production lines, with no API/configuration field or permission change. Inert launch baseline1/8 fails; matching treatment8/8 and23 inert/source neighbors pass. Selected-target server baseline12/12 fails; the full treatment suite51/51 passes, including contradictory configuration/environment flags. Direct server no-emit and independent source review pass. Read-only and approval policy, owner-bound credentials, deadlines and cleanup remain intact. A separately retained overbroad local-listener scaffold failure is not counted as native execution proof.
+
+Intermediate448 hosted CI completes successfully. Fresh review4/5 correctly identifies the new managed case entering a local-only confirmation fixture. Baseline reproduces two failures; scope the existing local fixture correctly, retain all twelve local cases and the thirteenth explicit managed case, and reuse the separate managed-fixture checks. The full existing E2E support run passes2694 controls and exposes two more stale roster assumptions. Update those assertions while retaining the completion judge for accepted managed work and every Pi admission/negative control. No parallel suite or replacement grader is added. Final source still needs fresh published checks/review and live qualification.
+
+Embedded-browser inspection of the built448 stories confirms the dark shared Runner popup and saved Legacy choice. It also exposes remaining OS-native environment/lifecycle/ACP dropdowns on the relevant runtime page. Their narrow shared-picker conversion preserves all values and callbacks and leaves unrelated provider-specific controls alone. These UI changes require a new JavaScript-only Storybook build and rendering checks; the old build remains literal448 evidence. No screenshot baseline is created or changed.
+
+The corrected source passes the full existing E2E support suite:125 files/2697 tests, plus all128 existing Node source/qualification contract controls and direct E2E no-emit. Relevant dropdown baseline145/145 and treatment152/152 pass, including exact save requests for selecting/clearing an environment while retaining Legacy/native execution and accounts. UI no-emit and token gates pass. Independent review of the managed-isolation and confirmation-fixture corrections is clear. These are local source checks; exact-head hosted CI/review, fresh remote packages, rendered stories and real Mac/managed onboarding still remain required. Next action is a single corrected candidate publication, then affected qualification using the existing workflows.
+
+Current published Codex head1a0ca662 is draft with green historical checks. Actual master833769ab is newer than merged prerequisite d67 and release repair60bc. Prepared private onboarding/Storybook work will be reconciled by source, without claiming its private/historical checks as final qualification. Native Connect correction is already in the Codex slice. Final managed defaults require the saved immutable OCI environment probe owned by ordinary Connect. Existing suites/fixtures/assertions/reporting are reused; no duplicate grader or silent Legacy fallback is added. All heavy builds stay remote, Codex payloads remain external official npm dependencies, and saved agents retain runners.
+
+Next action: preserve/commit current evidence, integrate actual master plus reviewed prepared corrections, run targeted checks, freeze/push candidate, require fresh fullCI/review, then qualify ordinary creation/onboarding on Mac and the one staging target before protected squash merge.
+
+The frozen30bc candidate passes all current-head required CI and fresh5/5 review. Its existing remote release-smoke qualification passes all four producers and clean platform consumers. The actual managed onboarding cell38428601763 fails before agent creation: scoped discovery selects native, but Codex0.160 attempts a nested filesystem sandbox while scanning AGENTS.md for the read-only setup session. Both measured setup leases release successfully; the separate fixture environment deletion fails because the fixture leaves it selected as instance default. Preserve this failed attempt, unavailable provider billing and cleanup holds. No task artifact or follow-up is reached.
+
+The correction skips project instruction discovery only in the new empty setup workspace through the supported trusted Codex configuration. It retains the generated security arguments, read-only permission profile, approval-never, no dynamic tools, existing bounded hello turn and teardown deadlines. Ordinary task instruction discovery and saved agent configurations remain unchanged. Pinned official Codex0.160 source confirms the zero instruction limit precedes filesystem probes. Eight inert baseline failures become23 passing source/cleanup neighbors; direct runner/server TypeScript and maps pass. This does not establish hosted treatment.
+
+The existing managed first-task fixture now snapshots and restores its prior instance default and managed-only setting before deletion, including lost setup responses. Unconfirmed default restoration blocks deletion and remains red; other restoration/deletion errors remain inspectable and retry only outstanding cleanup. Three reproduced baseline failures become129 passing first-task controls, with direct E2E TypeScript passing. Independent source review finds no actionable runtime/permission P1/P2; the required source-comment cleanup is applied. Final source needs fresh CI/review, package artifacts and successful ordinary Mac/managed journeys before normal merge. The one owned Core preview deployment for30bc completes through its existing exact-source check/deploy path; actual readiness is independently checked next. No fleet default is changed.
+
+Corrected product source ca31623d36a3d63204077e2e951ff9cdcf2664cf passes all48 ordinary hosted CI jobs, required verify/E2E and fresh5/5 review with26 resolved threads. Its hosted package artifact11834160973 has verified ZIP digest d5d60bf5056f5573461f8d4bd873da78a0204c7f7295d03d5aa7234e55d4af69. The second isolated Mac consumer verifies all18 tarballs, no bundled Codex, official npm Codex0.160, all four daemon bindings and zero-turn native startup/cleanup. Normal install hooks include third-party optional C++ addons; no Paperclip runner/Cargo/Rust/Docker source build occurs locally. The source-bound preview completes one-target deployment38438245490 to the existing pinned QA stack, without default promotion; independent result admission remains separate.
+
+Before paid cell38435063658 entered its matrix job, an admission audit found that ordinary onboarding timeout0 and agent concurrency20 did not satisfy this campaign's retained180-second/single-run bounds. Cancelled the campaign before its live cell started; image/build costs remain unknown and held. Extend the existing first-task fixture with a normal operator configuration PATCH and independent read-back before Get started. Only the timeout/concurrency bounds may change; runner/account/model/environment/permissions remain the wizard's original selection. This is a fixture correction, not a production default or API change. Its first iteration passes149 controls but independent review identifies the concurrency gap. The final combined bound reproduces three functional failures with the previous helper, then passes153 controls and direct E2E TypeScript. Independent review confirms that the timeout reaches the native turn deadline and the queue uses the saved single-run cap; exact source review closes before publication or further live eval admission. No failing or cancelled attempt is relabeled as passed.
+
+The owned local3136 server is updated from30bc to literal ca316 hosted packages after an idle snapshot and stopped-data/home backup. All existing full execution configurations and recorded run projections match before/after, with no provider tasks during upgrade. The fresh Mac company's saved draft resumes with its agent name retained. Ordinary OpenAI API-key Connect creates native Codex with gpt-5.6-sol without a runner override; only the existing QA timeout/concurrency settings are then bounded before Get started. Actual useful task/artifact/follow-up proof is still pending. The staging immutable QA environment is selected temporarily as the instance default, with the prior Paperclip Computer value recorded for restoration. Its normal server credential fallback has not yet been verified. No direct provider-key extraction or production rollout is attempted.
+
+The literal ca316 Mac journey now passes independent exact-file and registration checks for29/63 bytes, saved API-key account binding, native Codex provider session and workspace continuity across all five executed runs. One queued child run is cancelled before start and retained in evidence. Two manual messages and two confirmation responses produce five successful native runs; no process-loss retry occurs. Both task and child finish Done, and the QA agent is paused afterward. Rate-card estimates total$3.504199600, not invoice cost. The existing strict artifact/session helpers are reused offline; this is a real UI journey with independent evidence, not a full catalog-cell pass. Receipt7ef97c4705b085d465eeaf19f11d231e7b01e5a66c61b517cfcde0ec70a2db97 remains literalca316.
+
+Candidate0065 has fresh5/5 review and26 resolved threads but its required E2E gate fails: the unchanged signoff fixture receives a cancelled run while waiting for executor success on GitHub's combined master checkout. The fixture discarded errorCode, so the precise cause is inconclusive. Preserve the failed gate; add only a bounded diagnostic to the existing assertion without weakening ownership, authorization or terminal-state checks. Managed38440601585 fails during image preparation after the hosted runner reports shutdown; its provider pack/live cell are skipped. No named live cell or provider task is admitted. Unknown preparation costs remain held; no automatic retry is dispatched.
+
+Actual master252d9b5077f4eee98ec48225641ef1a02d824158 is integrated through an ordinary merge. Its only conflicts are the three Storybook catalog files. Semantic union preserves226 authored entries,2242 stories, stable IDs, both review histories and actual evidence limits; the existing generator,27 catalog/map controls and structural map checks pass. Runner/Rust/Codex selection/setup/onboarding/guard sources remain byte-identical. Master adds instance-secret storage and migration0339, including its account-home claim check; keep those changes and require fresh combined-source account/lifecycle controls, JS/DB installation, CI/review and current-source managed acceptance. Prior receipts retain their original revision.
+
+On the owned staging stack, ordinary environment Test connects to the immutable image but cannot confirm probe-lease cleanup. New-agent discovery remains Legacy; the supported onboarding entry surfaces the exact pending-cleanup error before hiring. This is a blocked managed acceptance, not a native pass or a silent runner conversion. The QA environment had autoDeleteInterval0; source ordering makes immediate deletion after stop before archival a plausible cause, not a proven provider diagnosis. Attempting to change its QA interval to60 is correctly rejected while cleanup is pending, so persisted configuration remains0. Preserve the failed lease, its holds and the guard; do not clear durable state or extract provider credentials to manufacture qualification. Next action is confirmed owned-resource cleanup, then qualification of corrected QA configuration and normal native setup/task/follow-up.
+
+Combined-source integration passes100 existing controls with the repository launcher's canonical isolated HOME/config/TMPDIR contract:41 device-login,12 real-PostgreSQL instance-secret and47 lifecycle tests, zero skips. Initial direct-invocation99/100 and alone identity-verdict failures remain recorded; no expectations or product code were changed. No on-disk worktree config write is observed, and3136 uses a separate preserved home/data. Direct server/E2E TypeScript pass. The existing signoff failure assertion now retains only a bounded verified errorCode; ownership, issue checks, deadlines, retry semantics and terminal failures stay intact. Actual-helper baseline12-pass/4-missing-diagnostic failures become16 passing inert controls, with no browser/provider work. This improves subsequent diagnosis and does not claim to repair the earlier cancellation.
+
+
+The integrated6c candidate now passes all48 ordinary hosted jobs, required verify/E2E and fresh Greptile5/5 with26 resolved threads. The earlier signoff case passes on this combined source; its earlier0065 cancellation remains an inconclusive historical failure, not a proved flake. The remote four-platform/package qualification38445419339 binds literal6c. A single guarded managed onboarding cell38448001365 also resolves literal6c through the trusted master workflow and independently verified target lock; its exact selection and180-second/concurrency1 guard pass admission. No second paid cell or automatic test rerun is dispatched.
+
+Master advances once more to c8efdbfba43377d39f57e4822e92d796a8a044b6 through Storybook-only #16196. Its only conflicts are the same three catalog files. Semantic reconciliation preserves all226 candidate suites and37 new master suites,263 suites/2499 stories, stable IDs and both review histories. Existing27 catalog/generator controls and35-area/175-ID map checks pass. Independent virtual-merge and actual staged checks prove every production/native/package/build component remains byte-identical to6c. Keep the6c package/image/live receipts literal; this catalog-only merge requires fresh head CI/review and applicable Storybook checks, not another expensive native build or paid runtime campaign.
+
+The supported Cloud CLI is re-read from current private master8472ece87f8d9a9e17a6116b9f4631d98ce63486 and is byte-identical to the previously used maintained command. Its one-target preview request d227da49-fd73-44c0-9377-f25711e529bc builds literal6c remotely in38448052890, preserving the existing pinned/user-managed QA stack and leaving fleet/default promotion disabled. Build, deployment and actual serving-source verification remain pending. A separate QA environment with the same immutable execution image and autoDeleteInterval60 is saved through ordinary UI, with instance default unchanged and no probe yet. The prior failed environment, durable teardown record and cost holds remain intact. It cannot borrow the older environment's qualification facts; it needs its own new saved probe and confirmed matching cleanup before automatic native onboarding.
+
+Existing ordinary board lease APIs and CLI diagnostics are identified, but anonymous challenge creation and the installed CLI's existing board context both receive401 at this tenant's public edge. No browser/provider credential is extracted and no new inspection API/workflow is introduced. The plugin settings route correctly honors Cloud's hidden-settings gate. Existing Fleet Admin provider links reach the normal signed-in Railway log UI; two successful aggregate orphan-cleanup sweeps prove the controller operates, but neither receipt binds the exact outstanding probe lease. Preserve that uncertainty and its hold. Current-source installed JS/DB migration/account preservation, independent managed task/follow-up and normal protected merge remain the next gates. No timer or production deployment is started.
+
+
+#### 2026-10-14 Codex qualification and new Test environment reconciliation
+
+Frozen product9546f41e964953c801ad8c2d8bdecadbd5cd3830 passes current-source required CI and fresh5/5 review with30 resolved threads. Its existing four-platform/package campaign38485482843 succeeds: all18 tarballs/four daemon manifests, normal isolated Apple Silicon install, native credential-free startup/open/close and fresh installed DB initialization through0343 are independently verified. This source-built qualification package is not a registry-published npm canary. No Codex payload is bundled, and no local Cargo/Rust/Docker/native source build occurs.
+
+The original managed onboarding case38485488621 passes its19 assertions and completed judge, without retry. Four actual native turns execute the child-bound240-byte file and real completion callback/reply with parent session/workspace continuity. Its checkout reports dirty state: the verified generated target lock replaces the committed lock, but full final porcelain is unavailable. Literal HEAD, runtime/assets and effective graph are verified separately. The reused signed execution image keeps its historical producer identity. Guarded environment removal and server shutdown pass; physical deletion and invoices are not certified. Earlier failed attempts and unconfirmed cleanup holds remain intact. Public evidence: https://d1p6rlowie26tp.cloudfront.net/runner-e2e/campaigns/gha-38485488621-1/index.html.
+
+Ordinary fresh9546 Mac onboarding persists native Codex without a runner override before any QA bounds. The first useful document task and actual Done-parent completion callback execute successfully. One human follow-up updates the same child document to revision2 and publishes a child-bound1,101-byte file. Independent API and real browser downloads match SHA256b758f6d23b33cfa9cfc597a4c3bc2abbf74dc56b7b5d2b30fc45f65c1a4d1905. All seven actual native runs succeed; parent sessions/workspace continue, child execution has its own task session, observed concurrency1, longest run under47seconds, reload preserved. Two recovered proposal-format errors remain a nonblocking quality follow-up.
+
+Existing installed Mac upgrade preserves all three execution configurations, safe account summaries and eight historical recorded run profiles. The existing Legacy agent's ordinary title edit/reload keeps execution settings, and its shared Advanced dropdown retains Legacy. Two actual Legacy/direct-adapter runs complete the same task and independently checked15-byte then34-byte files. Prior session state is passed and workspace continues; returned provider UUID changes, so stable provider-ID continuity is not claimed. After explicit human authorization, the root-created company QA guard is restored to its original0 and a500-cent hard stop is scoped to the selected Legacy agent. Historical unpriced costs/holds remain unchanged, normal service resolves only the new QA incident, other agents remain paused, and the company is paused again after all runs finish. Rate-card estimates: Mac3.4154336, managed1.170946, Legacy0.114767 dollars; none is an invoice. The separate100-dollar ceiling and all original250/25-dollar unknown/cleanup holds remain enforced.
+
+The human selected the actual new Test environment for pre-merge acceptance. Its deployed policy supports verified branch previews, unlike Staging's current master-ancestry restriction. Normal Test email-code sign-in has sent a code and awaits the human handoff; no OTP redaction workaround, session impersonation or credential extraction is used. No actual owned Test tenant, schema admission, deployment or live task is claimed yet. The maintained one-target CLI and deliberately core-only preview path are prepared, with existing snapshot/migration-role/health/lock protections and set_default=false. Private Cloud composition and production/default promotion remain separate post-merge gates. The human also authorized a code-owner-review exception for PR15683 only, after all current-head CI/review/live gates pass; no global repository rule is changed and no other PR's approval is waived.
+
+Remote preview38498802456 completes at exact9546, through trusted workflow definitionb8ffeb973a2a1d430efabffd755f15b6c7cf112a. The ready result matches its single request; immutable Core image digest4cba5c3546c3af3b948f0ee9c3532ada7c754491ce2d175a00164adc46698976 and exact9546 DB/shared registry archives match producer bytes/integrities. This Core preview has no standard signed-image attestation; npm SLSA structure is source/invocation-bound but cryptographic verification is not claimed. The signed execution image is a distinct artifact. No image layers or large transfer archive are downloaded locally. Terminal admission receipt: /private/tmp/current-9546-preview-preparation/TERMINAL-PREVIEW-PAIR-QUALIFICATION.json, SHA25692faae84c89e9e37e23129b6a5cd18580ed1c09517db91286afdf1445e3b5c6f.
+
+Before merge, actual master advances to875943ac83e730fd4cfbe1e1860b3f4d7bf0ac78 and GitHub reports five content conflicts. Ordinary reconciliation preserves the Codex shared exports, flag-free Codex runtime, unified harness picker/display and incoming Grok Bot exports, three-flag admission, dedicated connection and Execution/Usage summary. The shared display helper additionally preserves Grok Bot branding; it must not label that existing external provider as Paperclip Runner. Seven narrow controls extend the existing display, mounted configuration and runtime-selection suites. An initial new test expected a saved connection section from an unsaved fixture; it is corrected to the existing save-first guidance without changing production behavior. Required maps now align35areas/176 capability IDs and direct token gates pass. Incoming shared Rust/backend/protocol bytes and migration0344 are materially different:9546 artifacts/live proof remain literal, and final integrated native/package/DB qualification must be refreshed remotely. No evidence is relabeled as combined-source proof.
+
+The resolved composition passes226 cases across the five existing runtime/display/mounted/selection/heartbeat suites. Direct server and UI no-emit checks pass after JavaScript-only Runner SDK declaration preparation and isolated installation of the exact declared Speko0.0.13 dependency with lifecycle scripts disabled. Initial missing-dependency/stale-declaration diagnostics remain setup limitations; no production workaround or dependency/lockfile change is made. All three existing token checks and staged diff checks pass. Fresh hosted full checks/review and remote native/package qualification remain required.
+
+Current inspectable QA results remain on local3136/3137 with preserved data. The normal board context publishes the sanitized qualification checklist as an attachment-backed primary work product on NPM-3; Done/unassigned status remains and no agent is woken. Canonical PR: https://github.com/paperclipai/paperclip/pull/15683; branch codex/codex-runner-default. Test login/owned target, refreshed reconciled-head gates/artifacts and real Test onboarding/task/file/manual follow-up remain the next action. No timer, merge, production deployment or provisioning-default promotion is performed in this checkpoint.
+
+#### 2026-10-14 current Test deployment and native cleanup failure
+
+Exact published651a passes fresh current-head CI/review and the remote four-platform/package campaign38502151368. Its normal installed Apple Silicon startup, fresh343-migration initialization through0344 and upgrade preservation pass; earlier9546 live evidence remains literal. The immutable preview38503641696 and matching DB/shared bytes pass independent admission. No Codex payload is bundled and no local Docker/Cargo/Rust build occurs.
+
+The human completes customer and separate Fleet Admin sign-in. One fresh customer-owned Test workspace is cold-provisioned, pinned through normal Admin UI and verified after reload. The maintained one-target core-only prepare/deploy succeeds with exact651a app/schema and authenticated serving-source verification, preserving the pin and fleet default. This unsigned branch preview is not the post-merge private Cloud distribution. Its execution image retains the distinct historical signed producer ea6c.
+
+One ordinary Dashboard first-agent Auto Codex API-key Connect records account connection and environment probing on the saved immutable QA target. Native setup then fails before hire: runtime closing exhausts the existing10-second cleanup deadline and authority release remains unconfirmed. The failed payload is delivered after110573ms; HTTP200 is not readiness. No agent, task, follow-up, Legacy switch or unchanged retry occurs. Hello usage, physical cleanup and invoices remain unverified and held. The failure receipt is SHA2561bfce873af81f2424d9ca66dfd64404a21f19e386c3b51e2e0e08cb3f6e37be3. Actual Test acceptance blocks merge despite the scoped code-owner exception.
+
+Read-only forensics reproduces two relevant bounded-close defects through the existing suites: a remote durable-state read can exceed its remaining suspension deadline, and an authenticated WebSocket awaiting peer close acknowledgement can outlive the setup budget. Late suspension proof is already rejected, and authority is retained; the repairs must preserve those protections and require actual physical socket closure before release. These reproductions establish source defects, not the sole cause of the live failure. The retained controller projection and provider request logs contain only permitted metadata; credentials, prompts and provider keys are not extracted.
+
+Next action: complete narrow deadline/physical-close repairs and independent review, retain baseline failures, freeze a new candidate with fresh applicable gates/artifacts, recover only confirmed owned cleanup, and repeat changed-source Test automatic setup/task/checked file/manual follow-up. Then merge the exact ready head under the human's scoped exception and discover/wait for actual npm publication, signed standard image, migrator and private Cloud composition. Production deployment/default promotion remain outside authorization. The original timer stays cancelled and all prior unknown-charge/cleanup holds remain intact.
+
+The narrow repairs now pass source controls and independent review. Four delayed-state baseline failures become15 passing deadline/containment/authority controls, with direct runner runtime TypeScript passing. Ingress's original no-acknowledgement regression fails before repair; a second review reproduces an earlier-error socket escaping active ownership. Final12 controls pass after retaining every owned socket until its physical close, with direct server TypeScript passing. Missing physical-close evidence remains blocked, and the original10-second setup deadline is unchanged. Maps35areas/176IDs and diff checks pass. These JavaScript repairs change neither permission policy nor native Rust; new-head hosted gates and actual Test treatment remain required.
+
+The actual retained Test controller records turn.accepted/started/completed and completed drain/suspend commands. Their stored timestamps are command issuance times, not completion times, so they cannot identify which close stage exhausted the deadline. The internal setup identity differs from the public environment lease; their correlation remains contextual. No hello content, provider invoice or physical deletion is inferred. The local3136 evidence viewer is restored through normal installed651a startup after a current DB-only read-only idle/paused check. All three agent configurations/accounts and ten recorded run identities match its previous651a snapshot. The refreshed primary NPM-3 report is independently downloaded and hash-verified, preserving Done/unassigned status and historical cleanup state. Local3137 and all prior evidence stay unchanged.

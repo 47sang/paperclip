@@ -72,7 +72,7 @@ export interface BuildNativeExecutionInput {
     branchName: string | null;
   };
   normalizedSessionId: string | null;
-  provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx" | "openai_dot";
+  provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx" | "openai_dot" | "grok_bot";
   dotBinding?: DotBindingSnapshot;
   acpxAgent?: NativeAcpxAgent;
   codexApprovalPolicy?: NativeCodexApprovalPolicy;
@@ -110,8 +110,8 @@ export interface BuildNativeExecutionInput {
   };
   runtimeContext: NativeRuntimeContextSnapshot;
 }
-export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider: "openai_dot"; dotBinding: DotBindingSnapshot }): NativeExecutionInputV6;
-export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider?: Exclude<BuildNativeExecutionInput["provider"], "openai_dot"> }): NativeExecutionInputV5 | NativeExecutionInputV7;
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider: "openai_dot" | "grok_bot"; dotBinding: DotBindingSnapshot }): NativeExecutionInputV6;
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider?: Exclude<BuildNativeExecutionInput["provider"], "openai_dot" | "grok_bot"> }): NativeExecutionInputV5 | NativeExecutionInputV7;
 export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7;
 export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 {
   if (input.issue.workMode !== "standard" && input.issue.workMode !== "planning" && input.issue.workMode !== "ask") {
@@ -333,10 +333,10 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
     credentialBindings: [],
     runtimeContext: input.runtimeContext,
   };
-  return parseNativeExecutionInput(input.provider === "openai_dot" ? { ...prepared,
-    schema: "paperclip.native-execution-input.v6", provider: { kind: "openai_dot", model: null, binding: input.dotBinding },
+  return parseNativeExecutionInput(["openai_dot", "grok_bot"].includes(input.provider ?? "") ? { ...prepared,
+    schema: "paperclip.native-execution-input.v6", provider: { kind: input.provider, model: null, binding: input.dotBinding },
     workspace: { access: "none", cwd: null, repoUrl: null, repoRef: null, branchName: null },
-    session: { ...prepared.session, driverKind: "openai_dot_mcp", lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } }
+    session: { ...prepared.session, driverKind: input.provider === "grok_bot" ? "grok_bot_mcp" : "openai_dot_mcp", lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } }
   } : prepared) as NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7;
 }
 

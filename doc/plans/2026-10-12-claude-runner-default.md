@@ -1211,3 +1211,89 @@ The served controller is ad5875fa with the recorded 52486d6b lookup repair and
 Full workspace typecheck/tests/build and final packaged acceptance remain
 unrun on the reconciled head; they belong to the still pending cloud/full-check
 handoff after dependency and local acceptance gates are satisfied.
+
+
+## Published prerequisite evidence remains separate — 2026-10-13
+
+The source owner reports public canary `2026.1013.0-canary.6` on
+`60bc0d5fee9a6e48db08fc016521fee3d9f57d67`, following merged prerequisite
+d67e3507. The 60bc object is available locally and its own commit changes only
+the release workflow and its verification tests (#16149). This checkpoint does
+not merge that later master into the Claude branches or run a new workflow.
+The source owner reports four native producers, publication and real onboarding
+smoke passing, plus clean Apple Silicon installation and two native Codex task
+runs through the supported API. Its fresh staging pair remains separately bound
+to literal d67/cloud38392212140-1 and reuses its provider session.
+
+Those are prerequisite/Codex measurements, not qualification of our untested
+Claude package. The source owner's published saved-account Connect UI still
+uses a Legacy CLI probe that fails on its clean local PATH; its private Codex
+#15683 fix remains separate. Its released gpt-5.6-luna costs are unpriced, and
+an additional positive-budget control correctly fails closed. Restoring its
+budget to default zero changed the configuration revision/session; local same
+provider-session reuse is therefore not claimed. Four authorized Codex turns
+were used, its QA agents are paused, and physical sandbox teardown/invoices
+remain unconfirmed. None of its $25 allowance funds this Claude lane.
+
+Our public heads remain c60bf4b/4440df2/173a73e, with newer reconciled fixes
+committed locally. Claude budget-check/retry approval is still pending; no new
+paid check, retry, hold release, foreign process cleanup or borrowed environment
+was performed. Current-source broad checks, final packages, local useful-task
+and revision proof and fresh PR review remain gates. The old source merge timer
+was canceled by its human; this chat has no authority to recreate it or promote
+production defaults.
+
+
+## Actual Codex merge composition — 2026-10-14
+
+Codex #15683 merged as `adb69e8f09852c772d9901ae270e5b2d66e39c77`.
+Fetched that exact object using the existing repository authentication. The
+original /Users/dotta/.codex/worktrees/670b/paperclip checkout no longer exists,
+but its committed behavior branch is intact at f4b24bf695. App-managed recovery
+reported Not a git repository, so the same branch was recovered into the isolated
+/private/tmp/claude-runner-default-recovery worktree. No source-owner branch,
+preview or allowance was changed.
+
+Protocol composition `9ac6e674fa` retains the actual merged Codex implementation,
+including shared bounded suspension reads and ingress shutdown. Its shared server
+executor is byte-identical to adb69; transport differences are Claude effort
+fields/admission only. The v7 input reader retains v1–v6, including Dot and Grok
+Bot bindings. The merged Grok Bot gates remain intact in Claude behavior.
+Copilot profile 18 already belongs to merged Grok schema evidence, so the combined
+Claude source extension uses pending profile 19, preserving that immutable v18
+and the earlier private Claude v18 under a separate fixture name. Pi25 retains
+its previous digest; no provider qualification boundary is promoted.
+
+Protocol checks pass 326 controls with one existing distribution-root fixture skip,
+plus runner noemit, schema/profile/manifest generation and map contracts. These
+are JavaScript/fake-provider checks, not new native package or live proof.
+Cached dependencies were restored into isolated copies after the old absolute
+workspace links became dangling. A frozen install stopped on the inherited
+manifest/lock mismatch; a separate pnpm version query refused an unverifiable
+registry fetch. No signature guard or patch policy was bypassed. The existing
+installed dependency lock identity is retained in
+/private/tmp/claude-adb69-dependency-recovery/receipt.json. Newly merged Speko and
+OpenTelemetry packages were installed at their manifest-pinned versions into a
+private prefix with npm lifecycle scripts disabled. Canonical shared/plugin SDK,
+eval-kernel and runner JavaScript outputs were prepared without Docker or Rust.
+Fresh full dependency/source checks still belong to current-head hosted CI.
+
+The defaults composition retains Codex onboarding draft recovery and its
+explicit-Connect probe handling. A combined test exposed an inherited reset that
+started another setup probe when measured discovery changed; restoring merged
+navigation ownership fixes all 39 targeted managed Code/Claude controls. A
+separate stale Claude target control now requires an explicit Connect action
+before a second test: obsolete results cannot hire, and environment updates do
+not automatically spend another setup turn. Native/Legacy configuration and
+saved-account assertions remain intact.
+
+The actual merged Storybook uses source annotations and generated indexes, so
+its deleted old maps/storybook-map files are not revived. The canonical Codex
+story location and stable identity are retained. The current catalog generator
+passes 283 files/2,727 stories; map contracts pass 35 areas/176 capabilities.
+UI/server typechecks and token gates pass. Final focused settings/creation checks
+cover 577 controls across their recorded runs, and all 31 native input-builder
+controls pass. Logs use /private/tmp/claude-adb69-* prefixes. No new rendering,
+paid model turn, budget read/resume, hold release or local native build ran.
+The local preview remains its separately recorded older treatment; this source
+composition is not a claim of current installed/runtime or task/revision proof.

@@ -152,7 +152,6 @@ type Step = 0 | 1 | 2 | 3 | 4 | 5;
 // wizard's registry-driven approach rather than a fixed union.
 type AdapterType = string;
 
-// People select a harness. The server resolves the runner for a new hire.
 const ONBOARDING_EXCLUDED_ADAPTER_TYPES = new Set([
   "process",
   "http",
@@ -627,8 +626,6 @@ function OnboardingWizardInner({
   const [sourcePicked, setSourcePicked] = useState(false);
   const savedNativeRunnerDraft = saved?.adapterType === "paperclip_runner";
   const [cwd, setCwd] = useState((saved?.cwd as string) ?? "");
-  // Recover the harness and runner separately. Host command overrides from an
-  // old native draft cannot describe the provider; portable model/cwd survive.
   const [model, setModel] = useState(
     savedNativeRunnerDraft && saved?.runnerProvider !== undefined && !["codex", "claude", "acpx"].includes(String(saved.runnerProvider)) ? "" : (saved?.model as string) ?? "",
   );
@@ -785,6 +782,7 @@ function OnboardingWizardInner({
   // changes, and takes whatever the step is at that moment.
   const initialStepRef = useRef<Step | undefined>(undefined);
   initialStepRef.current = effectiveOnboardingOptions.initialStep;
+  const openingRequestRef = useRef<{ open: boolean; companyId: string | null; hasOpened: boolean } | null>(null);
 
   // Reset the route-dismissed flag when navigating to a different path.
   useEffect(() => {
@@ -824,20 +822,29 @@ function OnboardingWizardInner({
   // Navigating from one company's onboarding path to another re-decides the
   // step; the same request re-deriving a fresher value does not.
   useEffect(() => {
+    const routeCompanyId = effectiveOnboardingOptions.companyId ?? null;
+    const previousRequest = openingRequestRef.current;
+    openingRequestRef.current = { open: effectiveOnboardingOpen, companyId: routeCompanyId,
+      hasOpened: previousRequest?.hasOpened === true || effectiveOnboardingOpen };
     if (!effectiveOnboardingOpen) return;
-    // If explicit options are provided, they take precedence over saved state
-    if (initialStepRef.current) {
+    if (previousRequest?.open && previousRequest.companyId === routeCompanyId) return;
+    const initialRequest = previousRequest?.hasOpened !== true;
+    const resumesRouteDraft = initialRequest && !onboardingOpen && saved !== null
+      && typeof saved.step === "number" && saved.step >= 1 && saved.step <= 5
+      && (routeCompanyId ? routeCompanyId === saved.createdCompanyId : !companyPrefix);
+    if (initialStepRef.current && !resumesRouteDraft) {
       setStep(initialStepRef.current);
       setEntryStep(initialStepRef.current);
     }
-    const routeCompanyId = effectiveOnboardingOptions.companyId ?? null;
     if (routeCompanyId) {
       // Claim ownership only when the route *introduces* a company. A route
       // that merely names the one already in hand - the wizard created it,
       // then the user navigated to that company's onboarding path - has not
       // supplied anything, so it must not take ownership of it. Otherwise
       // navigating on to `/onboarding` would clear work the wizard did.
-      if (routeCompanyId !== createdCompanyIdRef.current) {
+      if (routeCompanyId !== createdCompanyIdRef.current
+        || (initialRequest && typeof saved?.createdCompanyId === "string"
+          && routeCompanyId !== saved.createdCompanyId)) {
         setCreatedCompanyId(routeCompanyId);
         clearCompanyScopedState();
       }
@@ -861,7 +868,7 @@ function OnboardingWizardInner({
       routeCompanyIdRef.current = routeCompanyId;
       return;
     }
-    if (routeCompanyIdRef.current) {
+    if (routeCompanyIdRef.current || (initialRequest && companyPrefix && saved?.createdCompanyId)) {
       // The route named a company and now does not - the user navigated from
       // an existing company's onboarding to `/onboarding`, or to a prefix that
       // matches nothing. Drop it. Keeping it leaves the wizard showing step 1,
@@ -1016,7 +1023,7 @@ function OnboardingWizardInner({
     }
   }
   const visibleAdapterEnvError = adapterEnvError ?? runnerDiscoveryError;
-  const runnerSelectionKey = JSON.stringify([createdCompanyId, resolvedLoginEnvironmentId, adapterType, runner, resolvedRunner]);
+  const runnerSelectionKey = JSON.stringify([createdCompanyId, resolvedLoginEnvironmentId, adapterType, runner, adapterType === "codex_local" && runner === "auto" ? undefined : resolvedRunner]);
   const runnerSelectionRef = useRef(runnerSelectionKey);
   runnerSelectionRef.current = runnerSelectionKey;
   const resolvedLoginEnvironment = useMemo(
@@ -1042,6 +1049,11 @@ function OnboardingWizardInner({
     setAdapterEnvLoading(false);
     setError("Configuration changed during setup. Connect again to test the current settings.");
   }, [claudeSetupSelectionKey]);
+  const adapterSetupSelectionRef = useRef("");
+  const adapterEnvErrorSelectionRef = useRef<string | null>(null);
+  adapterSetupSelectionRef.current = adapterType === "codex_local" && runner === "auto" && resolvedLoginEnvironment?.driver === "sandbox"
+    ? JSON.stringify([createdCompanyId, adapterType, runner, model, command, args, url, credentialMode, apiKey,
+      selectedSavedKey, selectedApiKey?.binding, savedSubscription?.binding, resolvedLoginEnvironmentId, resolvedLoginEnvironment.config]) : "";
   // Sandbox provider capabilities for the login pseudo-terminal gate, loaded
   // only when the adapter declares a login capability — the same query the
   // agent configuration form runs (AgentConfigForm.tsx:652-658).
@@ -1086,7 +1098,7 @@ function OnboardingWizardInner({
       setAdapterEnvLoading(false);
     }
     return () => { connectAttemptRef.current++; };
-  }, [effectiveOnboardingOpen, createdCompanyId, adapterType, credentialMode, step, resolvedLoginEnvironmentId, runner, resolvedRunner]);
+  }, [effectiveOnboardingOpen, createdCompanyId, adapterType, credentialMode, step]);
 
   const canShowAdapterLogin = Boolean(
     adapterCaps.login != null &&
@@ -1592,7 +1604,7 @@ function OnboardingWizardInner({
     if (step !== 4) return;
     setAdapterEnvResult(null);
     adapterEnvResultAppliedStoredLoginRef.current = false;
-    setAdapterEnvError(null);
+    if (adapterEnvErrorSelectionRef.current !== adapterSetupSelectionRef.current) setAdapterEnvError(null);
   }, [step, adapterType, runner, model, command, args, url, credentialMode, apiKey, selectedSavedKey, selectedApiKey?.id, savedSubscription?.id, createdCompanyId, resolvedLoginEnvironmentId, runner === "auto" ? runnerDiscovery.data?.find(item => item.type === adapterType)?.defaultRunner : undefined]);
 
   /**
@@ -1950,6 +1962,9 @@ function OnboardingWizardInner({
       );
       return null;
     }
+    const selection = adapterSetupSelectionRef.current;
+    const testIsCurrent = () => isCurrent() && adapterSetupSelectionRef.current === selection;
+    adapterEnvErrorSelectionRef.current = null;
     setAdapterEnvLoading(true);
     setAdapterEnvError(null);
     try {
@@ -1980,7 +1995,7 @@ function OnboardingWizardInner({
         settings = generalSettings;
         managedSandboxOnly = experimentalSettings?.enableManagedSandboxOnly === true;
       } catch {
-        if (!isCurrent()) return null;
+        if (!testIsCurrent()) return null;
         setAdapterEnvError(
           "Could not load environment settings to determine which environment to test in. Retry the test.",
         );
@@ -2003,15 +2018,53 @@ function OnboardingWizardInner({
         // default to the managed sandbox instead of sending the hidden local id.
         visibleEnvironmentIds: environmentList.map((environment) => environment.id),
       });
-      if (!isCurrent()) return null;
+      if (!testIsCurrent()) return null;
+      const selectedEnvironment = environmentList.find(environment => environment.id === environmentId);
+      const selectedConfig = selectedEnvironment?.config;
+      if (!createdAgentId && adapterType === "codex_local" && runner === "auto"
+        && selectedEnvironment?.driver === "sandbox" && typeof selectedConfig?.image === "string"
+        && /^[^\s@]+@sha256:[a-f0-9]{64}$/.test(selectedConfig.image)
+        && !selectedConfig.snapshot && !selectedConfig.template && !selectedConfig.templateRef) {
+        const availabilityKey = queryKeys.adapters.availability(createdCompanyId, environmentId);
+        const adapters = await queryClient.fetchQuery({ queryKey: availabilityKey, staleTime: 0,
+          queryFn: () => adaptersApi.list({ companyId: createdCompanyId, environmentId }) });
+        if (!testIsCurrent()) return null;
+        const codex = adapters.find(adapter => adapter.type === "codex_local");
+        const native = adapters.find(adapter => adapter.type === "paperclip_runner");
+        if (!codex || (codex.defaultRunner !== "paperclip" && codex.defaultRunner !== "legacy")
+          || !codex.supportedRunners?.includes(codex.defaultRunner)) {
+          throw new Error("Could not confirm Codex runner availability for this environment. Retry setup.");
+        }
+        if (codex.defaultRunner !== "paperclip" && !codex?.disabled && !codex?.overriddenBuiltin
+          && !native?.disabled && !native?.overriddenBuiltin) {
+          const probe = await environmentsApi.probe(environmentId!, createdCompanyId);
+          if (!testIsCurrent()) return null;
+          if (probe.ok !== true || probe.details?.platformQualificationRecorded !== true
+            || typeof probe.details.leaseId !== "string" || !probe.details.leaseId) {
+            throw new Error(typeof probe.details?.platformQualificationDiagnostic === "string"
+              ? probe.details.platformQualificationDiagnostic
+              : probe.summary || "The environment's platform qualification could not be confirmed. Retry the connection probe or select Legacy runner in Advanced.");
+          }
+          const refreshed = await queryClient.fetchQuery({ queryKey: availabilityKey, staleTime: 0,
+            queryFn: () => adaptersApi.list({ companyId: createdCompanyId, environmentId }) });
+          if (!testIsCurrent()) return null;
+          const refreshedCodex = refreshed.find(adapter => adapter.type === "codex_local");
+          const defaultRunner = refreshedCodex?.defaultRunner;
+          if ((defaultRunner !== "paperclip" && defaultRunner !== "legacy")
+            || !refreshedCodex?.supportedRunners?.includes(defaultRunner)) {
+            throw new Error("Could not confirm the environment's default runner. Retry setup.");
+          }
+        }
+      }
+      if (!testIsCurrent()) return null;
       const selection = { adapterType, runner, savedAgentId: createdAgentId,
         environment: environmentList.find(environment => environment.id === environmentId) };
       const qualified = await qualifyClaudeSetup({ ...selection,
         readAdapters: () => adaptersApi.list({ companyId: createdCompanyId, environmentId }),
         probeEnvironment: () => environmentsApi.probe(environmentId!, createdCompanyId),
-        isCurrent,
+        isCurrent: testIsCurrent,
       });
-      if (!isCurrent() || (needsClaudeSetupQualification(selection) && !qualified)) return null;
+      if (!testIsCurrent() || (needsClaudeSetupQualification(selection) && !qualified)) return null;
       let testedConfig = adapterConfigOverride ?? buildAdapterConfig();
       if (qualified) {
         testedConfig = buildAdapterConfig(true, qualified.runner);
@@ -2030,12 +2083,13 @@ function OnboardingWizardInner({
           environmentId,
         }
       );
-      if (!isCurrent()) return null;
+      if (!testIsCurrent()) return null;
       setAdapterEnvResult(result);
       adapterEnvResultAppliedStoredLoginRef.current = appliedStoredClaudeLoginBinding;
       return result;
     } catch (err) {
-      if (!isCurrent()) return null;
+      if (!testIsCurrent()) return null;
+      adapterEnvErrorSelectionRef.current = selection || null;
       setAdapterEnvError(
         err instanceof Error ? err.message : "Adapter environment test failed"
       );
@@ -2092,7 +2146,6 @@ function OnboardingWizardInner({
   // doesn't hire a second agent.
   async function handleGiveHeartbeat() {
     if (!createdCompanyId) return;
-    // Onboarding submits a harness. The server resolves its execution choice.
     if (adapterType === "paperclip_runner") {
       setAdapterType("claude_local");
       setModel("");
@@ -2105,12 +2158,12 @@ function OnboardingWizardInner({
     }
     if (!runnerDiscoveryReady || hiringAgentRef.current !== null) return;
     const attempt = ++connectAttemptRef.current;
-    const qualifyManagedClaude = needsClaudeSetupQualification({ adapterType, runner, savedAgentId: createdAgentId, environment: resolvedLoginEnvironment });
+    const guardClaudeSetup = adapterType === "claude_local" && runner === "auto";
     const setupSelection = claudeSetupSelectionRef.current;
-    activeClaudeQualification.current = qualifyManagedClaude ? { attempt, selection: setupSelection } : null;
+    activeClaudeQualification.current = guardClaudeSetup ? { attempt, selection: setupSelection } : null;
     const isCurrent = () => connectAttemptRef.current === attempt && stillTheSameCompany(createdCompanyId)
       && runnerSelectionRef.current === runnerSelectionKey
-      && (!qualifyManagedClaude || claudeSetupSelectionRef.current === setupSelection);
+      && (!guardClaudeSetup || claudeSetupSelectionRef.current === setupSelection);
     hiringAgentRef.current = attempt;
     autoConnectStartedRef.current = true;
     setLoading(true);
@@ -2229,10 +2282,12 @@ function OnboardingWizardInner({
         // pass or a warn result that reports missing authentication — the
         // agent cannot run without one of those.
         if (blocksAgentCreate(result)) {
+          const nativeCodexError = adapterType === "codex_local" && result.adapterType === "paperclip_runner"
+            ? result.checks.find(check => check.level === "error")?.message : undefined;
           setError(
-            result.status === "fail"
+            nativeCodexError || (result.status === "fail"
               ? "The environment test failed. Fix the reported checks before you hire this agent."
-              : "No working authentication was found. Fix the reported checks before you hire this agent.",
+              : "No working authentication was found. Fix the reported checks before you hire this agent."),
           );
           return;
         }

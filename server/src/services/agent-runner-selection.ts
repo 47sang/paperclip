@@ -122,9 +122,6 @@ export function resolveNewAgentRunner(input: AgentRunnerSelection): { adapterTyp
     return { adapterType: "paperclip_runner", adapterConfig: config };
   }
   const aliasSources = new Map<string, string>();
-  // Legacy ACP uses the first nonempty canonical/alias string, and nullish
-  // precedence for its idle timeout. Validate that effective choice, not an
-  // unchecked prefixed field, while retaining its name in actionable errors.
   for (const [canonical, alias] of [
     ["agentCommand", "acpAgentCommand"], ["stateDir", "acpStateDir"],
     ["mode", "acpMode"], ["permissionMode", "acpPermissionMode"],
@@ -161,8 +158,6 @@ export function resolveNewAgentRunner(input: AgentRunnerSelection): { adapterTyp
   const network = env.PAPERCLIP_CODEX_ACP_NETWORK_ACCESS;
   const binding = network && typeof network === "object" && !Array.isArray(network)
     ? network as Record<string, unknown> : null;
-  // Native networking is server-owned. Never translate a Legacy restriction
-  // into that trusted variable, or guess the value of a deferred policy binding.
   if (config.engine !== "cli" && (network === "false"
     || (binding?.type === "plain" && binding.value === "false")
     || binding?.type === "secret_ref" || binding?.type === "user_secret_ref")) {
@@ -180,7 +175,6 @@ export function resolveNewAgentRunner(input: AgentRunnerSelection): { adapterTyp
   return { adapterType: "paperclip_runner", adapterConfig: config };
 }
 
-/** Use the execution environment selected by dispatch, without starting a provider. */
 export async function resolveNewAgentRunnerForCompany(db: Db, companyId: string, input: AgentRunnerSelection & { defaultEnvironmentId?: string | null }) {
   if (!["codex_local", "claude_local"].includes(agentHarnessType(input.adapterType ?? "process", input.adapterConfig))
     || input.runner === "legacy" || (input.adapterType === "paperclip_runner" && (input.runner === undefined || input.runner === "paperclip"))) return resolveNewAgentRunner(input);
@@ -188,7 +182,6 @@ export async function resolveNewAgentRunnerForCompany(db: Db, companyId: string,
   return resolveNewAgentRunner({ ...input, target });
 }
 
-/** Shared creation/discovery target selection; no provider turn or environment lease. */
 export async function resolveAgentRunnerTargetForCompany(db: Db, companyId: string, defaultEnvironmentId?: string | null): Promise<RunnerTarget> {
   await waitForExternalAdapters();
   const { instanceSettingsService } = await import("./instance-settings.js");
@@ -203,7 +196,7 @@ export async function resolveAgentRunnerTargetForCompany(db: Db, companyId: stri
   }
   if (settings.general?.executionMode === "kubernetes") {
     environment = await envs.findKubernetesEnvironment(companyId);
-    if (!environment) throw unprocessable("The required Kubernetes environment is unavailable.", { code: "kubernetes_environment_unavailable" });
+    if (!environment) return { driver: "sandbox" };
   }
   if (environmentId && !environment) throw unprocessable("Environment not found.");
   if (environment) {

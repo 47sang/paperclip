@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { buildClaudeLocalConfig } from "../../../packages/adapters/claude-local/src/ui/build-config";
 import type { CreateConfigValues } from "@paperclipai/adapter-utils";
 import type { LocalAiLoginStatus } from "@paperclipai/shared";
@@ -14,6 +14,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // *succeeds*. A seeded entry is stale under the test client and refetches, so
 // the refetch has to answer too — otherwise the identity errors and the list
 // never runs.
+const mockAdaptersApi = vi.hoisted(() => ({ list: vi.fn(async (_context?: { companyId: string; environmentId?: string | null }) => [] as import("../api/adapters").AdapterInfo[]) }));
+vi.mock("../api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
+
+function setupAdapterInfo(input: Pick<import("../api/adapters").AdapterInfo, "type"> & Partial<import("../api/adapters").AdapterInfo>): import("../api/adapters").AdapterInfo {
+  return { label: input.type, source: "builtin", modelsCount: 0, loaded: true, disabled: false,
+    capabilities: { supportsInstructionsBundle: true, supportsSkills: true, supportsLocalAgentJwt: true,
+      requiresMaterializedRuntimeSkills: false, supportsAcp: true }, ...input };
+}
+
 const mockAuthApi = vi.hoisted(() => ({ getSession: vi.fn() }));
 const localHealth = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("@/api/health", () => ({ healthApi: localHealth }));
@@ -132,7 +141,7 @@ const mockAdapterBuild = vi.hoisted(() => ({
 // the probe dies on "Could not load environment settings" and the hire never
 // runs — which reads as a mysterious 0-call assertion, not an error.
 const mockEnvironmentsApi = vi.hoisted(() => ({
-  probe: vi.fn(),
+  probe: vi.fn(async (): Promise<import("@paperclipai/shared").EnvironmentProbeResult> => ({ ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "platform-lease" } })),
   list: vi.fn(async () => [] as Array<Record<string, unknown>>),
   capabilities: vi.fn(
     async (): Promise<import("@paperclipai/shared").EnvironmentCapabilities> =>
@@ -170,8 +179,10 @@ const mockAdapterRegistry = vi.hoisted(() => ({
   disabled: new Set<string>(),
 }));
 
+const mockRouterState = vi.hoisted(() => ({ pathname: "/" }));
+
 vi.mock("@/lib/router", () => ({
-  useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
+  useLocation: () => ({ pathname: mockRouterState.pathname, search: "", hash: "", state: null }),
   useNavigate: () => vi.fn(),
   useParams: () => ({}),
 }));
@@ -181,8 +192,6 @@ vi.mock("../context/DialogContext", () => ({
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => mockCompany,
 }));
-const mockAdaptersApi = vi.hoisted(() => ({ list: vi.fn() }));
-vi.mock("../api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
 vi.mock("../api/companies", () => ({ companiesApi: mockCompaniesApi }));
 vi.mock("../api/goals", () => ({ goalsApi: mockGoalsApi }));
 vi.mock("../api/agents", () => ({ agentsApi: mockAgentsApi }));
@@ -290,12 +299,12 @@ function renderWizardView(root: ReturnType<typeof createRoot>, queryClient: Quer
 
 const SESSION_USER_ID = "user-b";
 
-function render() {
+function render(staleTime = 0) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, staleTime } },
   });
   // The company list is keyed by account, so it stays disabled until the
   // session is known. Seeding it is how these tests say "signed in as B".
@@ -340,6 +349,8 @@ function isArcPrimary(text: string): boolean {
 
 describe("OnboardingWizard restore-gate (stale localStorage across accounts)", () => {
   beforeEach(() => {
+    mockAdaptersApi.list.mockReset().mockResolvedValue([]);
+    mockEnvironmentsApi.probe.mockReset().mockResolvedValue({ ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "platform-lease" } });
     localHealth.get.mockResolvedValue({ deploymentMode: "authenticated" });
     managedApi.checkLocalLogin.mockReset().mockResolvedValue({
       status: "sign_in_required",
@@ -355,6 +366,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     mockSecretsApi.listMyUserSecrets.mockResolvedValue([]);
     mockSecretsApi.removeUserSecretDefinition.mockResolvedValue({ ok: true });
     window.localStorage.clear();
+    mockRouterState.pathname = "/";
     mockDialog.onboardingOpen = true;
     mockDialog.onboardingOptions = {};
     mockDialog.onboardingRouteDismissed = false;
@@ -364,7 +376,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     mockCompaniesApi.list.mockResolvedValue([]);
     mockAdapterRegistry.list = [];
     mockAdapterRegistry.disabled = new Set<string>();
-    mockAdaptersApi.list.mockReset().mockResolvedValue(["claude_local", "codex_local"].map(type => ({ type, loaded: true, disabled: false, supportedRunners: ["paperclip", "legacy"], defaultRunner: "legacy" })));
+    mockAdaptersApi.list.mockReset().mockResolvedValue(["claude_local", "codex_local"].map(type => setupAdapterInfo({ type, loaded: true, disabled: false, supportedRunners: ["paperclip", "legacy"], defaultRunner: "legacy" })));
     mockAdapterBuild.buildAdapterConfig.mockReset();
     mockAdapterBuild.buildAdapterConfig.mockReturnValue({});
     // Default: no stored Claude login for the owner. The route returns a
@@ -1258,6 +1270,116 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     });
   });
 
+  describe("restored route progress", () => {
+    function savedReview(runner = "auto") {
+      return { step: 5, companyName: "Saved Co", createdCompanyId: "c1", createdCompanyPrefix: "SC",
+        createdAgentId: "saved-agent", agentName: "Saved lead", adapterType: "codex_local", runner,
+        model: "gpt-5.6-sol", credentialMode: "api" };
+    }
+
+    async function openSavedReview(pathname: string, runner = "auto", options: { strict?: boolean; companiesLoading?: boolean; dialogStep?: number } = {}) {
+      const draft = savedReview(runner);
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(draft));
+      mockRouterState.pathname = pathname;
+      mockDialog.onboardingOpen = options.dialogStep !== undefined;
+      mockDialog.onboardingOptions = options.dialogStep === undefined ? {} : { initialStep: options.dialogStep, companyId: "c1" };
+      const companies = [{ id: "c1", name: "Saved Co", issuePrefix: "SC" },
+        { id: "c2", name: "Other Co", issuePrefix: "OTHER" }];
+      mockCompany.companies = companies;
+      mockCompany.loading = options.companiesLoading ?? false;
+      mockCompaniesApi.list.mockResolvedValue(companies);
+      const handles = render();
+      if (options.strict) {
+        await act(async () => handles.root.render(
+          <QueryClientProvider client={handles.queryClient}><StrictMode><OnboardingWizard /></StrictMode></QueryClientProvider>,
+        ));
+      } else await renderWizardView(handles.root, handles.queryClient);
+      for (let tick = 0; tick < 8; tick++) await flushReact();
+      return { ...handles, draft };
+    }
+
+    it.each([
+      ["/onboarding", "auto"], ["/SC/onboarding", "auto"],
+      ["/onboarding", "legacy"], ["/SC/onboarding", "legacy"],
+    ])("restores the authorized review draft after route reload %s with %s runner", async (pathname, runner) => {
+      const { root, draft } = await openSavedReview(pathname, runner);
+      try {
+        expect([...document.querySelectorAll("button")].some(button => button.textContent?.trim() === "Get started")).toBe(true);
+        expect(document.body.textContent).not.toContain("What is the name of your organization?");
+        const persisted = JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!);
+        expect(persisted).toMatchObject(draft);
+        expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it("keeps restored review progress when initial effects replay in StrictMode", async () => {
+      const { root, draft } = await openSavedReview("/SC/onboarding", "auto", { strict: true });
+      try {
+        expect([...document.querySelectorAll("button")].some(button => button.textContent?.trim() === "Get started")).toBe(true);
+        expect(JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!)).toMatchObject(draft);
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it("waits for route company loading before deciding the initial restored step", async () => {
+      const { root, queryClient, draft } = await openSavedReview("/SC/onboarding", "auto", { companiesLoading: true });
+      try {
+        mockCompany.loading = false;
+        await renderWizardView(root, queryClient);
+        for (let tick = 0; tick < 8; tick++) await flushReact();
+        expect([...document.querySelectorAll("button")].some(button => button.textContent?.trim() === "Get started")).toBe(true);
+        expect(JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!)).toMatchObject(draft);
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it("does not restore another company's review into a different route", async () => {
+      const { root } = await openSavedReview("/OTHER/onboarding");
+      try {
+        expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+        const persisted = JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!);
+        expect(persisted.createdCompanyId).toBe("c2");
+        expect(persisted.createdAgentId).toBeNull();
+        expect(persisted.step).toBe(3);
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it("does not bind an unmatched company prefix to the restored company", async () => {
+      const { root } = await openSavedReview("/MISSING/onboarding");
+      try {
+        const persisted = JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!);
+        expect(persisted.step).toBe(1);
+        expect(persisted.createdCompanyId).toBeNull();
+        expect(persisted.createdAgentId).toBeNull();
+        expect(persisted.companyName).toBe("");
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it.each([2, 3])("honors explicit prefilled-company dialog step %s on initial mount", async initialStep => {
+      const { root } = await openSavedReview("/SC/onboarding", "auto", { dialogStep: initialStep });
+      try {
+        const persisted = JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!);
+        expect(persisted.step).toBe(initialStep);
+        expect(persisted.createdCompanyId).toBe("c1");
+        expect([...document.querySelectorAll("button")].some(button => button.textContent?.trim() === "Get started")).toBe(false);
+      } finally { await act(async () => root.unmount()); }
+    });
+
+    it("honors an explicit dialog step instead of resuming the route draft", async () => {
+      const { root, queryClient } = await openSavedReview("/SC/onboarding");
+      try {
+        mockDialog.onboardingOpen = true;
+        mockDialog.onboardingOptions = { companyId: "c2", initialStep: 3 };
+        await renderWizardView(root, queryClient);
+        await flushReact();
+        expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+        const persisted = JSON.parse(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)!);
+        expect(persisted.createdCompanyId).toBe("c2");
+        expect(persisted.createdAgentId).toBeNull();
+        expect(persisted.step).toBe(3);
+      } finally { await act(async () => root.unmount()); }
+    });
+  });
+
   it("re-syncs a restored draft once companies resolve asynchronously (companies start empty/loading)", async () => {
     // Regression for the initializer-only restore bug: the inner wizard's
     // ~20 useState(saved?.x ?? default) initializers only read `saved` on
@@ -1872,7 +1994,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     });
 
     /** Drives the wizard to the Connect step with a company already created. */
-    async function openStep4(overrides: Record<string, unknown> = {}) {
+    async function openStep4(overrides: Record<string, unknown> = {}, staleTime = 0) {
       mockCompany.companies = [{ id: "company-new", name: "Initech", issuePrefix: "INI" }];
       mockCompany.loading = false;
       mockCompaniesApi.list.mockResolvedValue(mockCompany.companies);
@@ -1889,7 +2011,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       );
       mockDialog.onboardingOptions = {};
 
-      const { root, queryClient } = render();
+      const { root, queryClient } = render(staleTime);
       await renderWizardView(root, queryClient);
       // The login-panel gate chains several dependent queries (environments,
       // instance settings, environment capabilities, then the auth signal
@@ -1908,8 +2030,8 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         provider: "daytona", image: `registry.example.test/runtime@sha256:${"a".repeat(64)}`,
       } }]);
       const discovery = (runner: "paperclip" | "legacy") => [
-        { type: "claude_local", loaded: true, disabled: false, defaultRunner: runner, supportedRunners: [runner] },
-        { type: "paperclip_runner", loaded: true, disabled: false },
+        setupAdapterInfo({ type: "claude_local", loaded: true, disabled: false, defaultRunner: runner, supportedRunners: [runner] }),
+        setupAdapterInfo({ type: "paperclip_runner", loaded: true, disabled: false }),
       ];
       let qualified = false;
       mockAdaptersApi.list.mockImplementation(async () => discovery(qualified ? measured : "legacy"));
@@ -1953,8 +2075,8 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       } }]);
       let qualified = false;
       mockAdaptersApi.list.mockImplementation(async () => [
-        { type: "claude_local", defaultRunner: qualified ? "paperclip" : "legacy", supportedRunners: qualified ? ["paperclip"] : ["legacy"] },
-        { type: "paperclip_runner" },
+        setupAdapterInfo({ type: "claude_local", defaultRunner: qualified ? "paperclip" : "legacy", supportedRunners: qualified ? ["paperclip"] : ["legacy"] }),
+        setupAdapterInfo({ type: "paperclip_runner" }),
       ]);
       mockEnvironmentsApi.probe.mockImplementation(async () => {
         qualified = true;
@@ -1984,7 +2106,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       const image = `registry.example.test/runtime@sha256:${"a".repeat(64)}`;
       mockEnvironmentsApi.list.mockResolvedValue([{ ...SANDBOX_ENVIRONMENT, config: { provider: "daytona", image } }]);
       mockAdaptersApi.list.mockResolvedValue([
-        { type: "claude_local", defaultRunner: "legacy", supportedRunners: ["legacy"] }, { type: "paperclip_runner" },
+        setupAdapterInfo({ type: "claude_local", defaultRunner: "legacy", supportedRunners: ["legacy"] }), setupAdapterInfo({ type: "paperclip_runner" }),
       ]);
       const handles = await openStep4({ adapterType: "claude_local", runner: "auto" });
       await act(async () => handles.queryClient.setQueryData(["ai-connections", "company-new"], {
@@ -2018,7 +2140,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         provider: "daytona", image: `registry.example.test/runtime@sha256:${"a".repeat(64)}`,
       } }]);
       mockAdaptersApi.list.mockResolvedValue([
-        { type: "claude_local", defaultRunner: "legacy", supportedRunners: ["legacy"] }, { type: "paperclip_runner" },
+        setupAdapterInfo({ type: "claude_local", defaultRunner: "legacy", supportedRunners: ["legacy"] }), setupAdapterInfo({ type: "paperclip_runner" }),
       ]);
       const handles = await openStep4({ adapterType: "claude_local", runner: "auto" });
       await act(async () => handles.queryClient.setQueryData(["ai-connections", "company-new"], {
@@ -2088,7 +2210,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // then never read, so the row went on rendering whatever the registry
       // supplied: "Claude Code" and "Codex" in the app, and the bare type here,
       // since this suite's registry mock returns `label: type`.
-      mockAdapterRegistry.list = [{ type: "claude_local" }, { type: "codex_local" }];
+      mockAdapterRegistry.list = [setupAdapterInfo({ type: "claude_local" }), { type: "codex_local" }];
       const { root } = await openStep4({ adapterType: "claude_local" });
 
       const labels = [...document.body.querySelectorAll("button[aria-checked]")].map(
@@ -2157,7 +2279,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // in never shows it. Nothing is highlighted, the canvas is shut, and with
       // the gate on `sourcePicked` the CTA was live: one press hires against an
       // adapter the customer has not seen on this screen.
-      mockAdapterRegistry.list = [{ type: "claude_local" }, { type: "opencode_local" }];
+      mockAdapterRegistry.list = [setupAdapterInfo({ type: "claude_local" }), { type: "opencode_local" }];
       const { root } = await openStep4({ adapterType: "opencode_local" });
 
       const tiles = [...document.body.querySelectorAll("button[aria-checked]")];
@@ -2189,7 +2311,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // tiles, neither chosen. A keystroke that gets through hires claude_local
       // — a real, offerable adapter that nobody on this screen selected, which
       // is what makes the bypass worth a test rather than a comment.
-      mockAdapterRegistry.list = [{ type: "claude_local" }, { type: "codex_local" }];
+      mockAdapterRegistry.list = [setupAdapterInfo({ type: "claude_local" }), { type: "codex_local" }];
       const { root } = await openStep4({ adapterType: "some_retired_adapter" });
 
       const tiles = [...document.body.querySelectorAll("button[aria-checked]")];
@@ -3073,7 +3195,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     });
 
     it("reads the signal again after an adapter change", async () => {
-      mockAdapterRegistry.list = [{ type: "claude_local" }, { type: "codex_local" }];
+      mockAdapterRegistry.list = [setupAdapterInfo({ type: "claude_local" }), { type: "codex_local" }];
       mockAgentsApi.getAdapterAuthSignal.mockResolvedValue({ status: "absent" });
       const { root } = await openStep4({ adapterType: "claude_local" });
 
@@ -3111,6 +3233,162 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       );
 
       await act(async () => root.unmount());
+    });
+
+    describe("managed Codex automatic setup qualification", () => {
+      const image = `registry.example.test/runtime@sha256:${"a".repeat(64)}`;
+      const discovery = (defaultRunner: "paperclip" | "legacy") => [{ type: "codex_local", defaultRunner,
+        supportedRunners: defaultRunner === "paperclip" ? ["paperclip", "legacy"] : ["legacy"] }] as import("../api/adapters").AdapterInfo[];
+
+      async function openManaged(overrides: Record<string, unknown> = {}, config: Record<string, unknown> = { provider: "daytona", image }, staleTime = 0) {
+        mockEnvironmentsApi.list.mockResolvedValue([{ ...SANDBOX_ENVIRONMENT, config }]);
+        mockAdaptersApi.list.mockResolvedValue(discovery("legacy"));
+        const handles = await openStep4({ adapterType: "codex_local", runner: "auto", ...overrides }, staleTime);
+        await act(async () => handles.queryClient.setQueryData(["ai-connections", "company-new"], {
+          currentUserId: "user-1", connections: [{ id: "saved", grantId: "grant", companyId: "company-new", provider: "openai", method: "subscription", name: "My subscription", ownership: "personal", ownerUserId: "user-1", status: "connected", isDefault: true }],
+        }));
+        return handles;
+      }
+
+      it.each([["paperclip", 0], ["legacy", 0], ["paperclip", 30_000], ["legacy", 30_000]] as const)("qualifies the image on Connect and honors the measured %s default with %i ms cache", async (defaultRunner, staleTime) => {
+        const calls: string[] = [];
+        const handles = await openManaged({}, { provider: "daytona", image }, staleTime);
+        let qualified = false;
+        mockAdaptersApi.list.mockImplementation(async context => {
+          expect(context).toEqual({ companyId: "company-new", environmentId: "env-sandbox-1" });
+          calls.push(qualified ? "discovery-after" : "discovery-before");
+          return discovery(qualified ? defaultRunner : "legacy");
+        });
+        mockEnvironmentsApi.probe.mockImplementation(async () => {
+          calls.push("platform");
+          qualified = true;
+          return { ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "platform-lease" } };
+        });
+        mockAgentsApi.testEnvironment.mockImplementation(async () => {
+          calls.push("adapter");
+          return { adapterType: defaultRunner === "paperclip" ? "paperclip_runner" : "codex_local", status: "pass", checks: [], testedAt: "2026-10-13T00:00:00Z" };
+        });
+        mockAgentsApi.hire.mockImplementation(async () => { calls.push("hire"); return { agent: { id: "agent-1" }, approval: null }; });
+        try {
+          expect(mockEnvironmentsApi.probe).not.toHaveBeenCalled();
+          await pickSource(/OpenAI/);
+          expect(calls).toEqual(["discovery-before", "platform", "discovery-after", "adapter", "hire"]);
+          expect(handles.queryClient.getQueryData(queryKeys.adapters.availability("company-new", "env-sandbox-1"))).toEqual(discovery(defaultRunner));
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledExactlyOnceWith("env-sandbox-1", "company-new");
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledWith("company-new", "codex_local", expect.objectContaining({ environmentId: "env-sandbox-1", aiConnection: { provider: "openai", method: "subscription", mode: "responsible_user" } }));
+          expect((mockAgentsApi.testEnvironment.mock.calls[0] as unknown[])[2]).not.toHaveProperty("runner");
+          expect((mockAgentsApi.hire.mock.calls[0] as unknown[])[1]).not.toHaveProperty("runner");
+          expect(managedApi.connectLocal).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each(["permission", "cleanup", "config-race", "missing-lease", "connection", "discovery"].flatMap(failure => [0, 30_000].map(staleTime => [failure, staleTime] as const)))("stops managed automatic setup after %s qualification failure with %i ms cache", async (failure, staleTime) => {
+        const handles = await openManaged({}, { provider: "daytona", image }, staleTime);
+        const diagnostic = failure === "permission" ? "Instance admin access required" : "Qualification could not be confirmed";
+        if (failure === "permission") mockEnvironmentsApi.probe.mockRejectedValue(new ApiError(diagnostic, 403, null));
+        else mockEnvironmentsApi.probe.mockImplementation(async () => {
+          if (failure === "discovery") mockAdaptersApi.list.mockRejectedValue(new Error(diagnostic));
+          return { ok: failure !== "connection", driver: "sandbox", summary: diagnostic,
+            details: { platformQualificationRecorded: !["cleanup", "config-race"].includes(failure),
+              ...(failure === "missing-lease" ? {} : { leaseId: "platform-lease" }), platformQualificationDiagnostic: diagnostic } };
+        });
+        try {
+          await pickSource(/OpenAI/);
+          expect(document.body.textContent).toContain(diagnostic);
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each(["legacy", "native-cache", "snapshot", "tag", "local", "saved"])("keeps the %s path free of an extra platform probe", async mode => {
+        const handles = await openManaged(mode === "legacy" ? { runner: "legacy" } : mode === "saved" ? { createdAgentId: "existing" } : {},
+          mode === "snapshot" ? { provider: "daytona", snapshot: "named" } : mode === "tag" ? { provider: "daytona", image: "ubuntu:24.04" } : { provider: "daytona", image });
+        if (mode === "native-cache") {
+          mockAdaptersApi.list.mockResolvedValue(discovery("paperclip"));
+          await act(async () => handles.queryClient.setQueryData(queryKeys.adapters.availability("company-new", "env-sandbox-1"), discovery("paperclip")));
+        }
+        if (mode === "local") {
+          await act(async () => handles.queryClient.setQueryData(queryKeys.environments.list("company-new"), [LOCAL_ENVIRONMENT]));
+          mockInstanceSettingsApi.get.mockResolvedValue({ defaultEnvironmentId: null });
+          await act(async () => handles.queryClient.setQueryData(queryKeys.instance.settings, { defaultEnvironmentId: null }));
+        }
+        try {
+          await pickSource(/OpenAI/);
+          expect(mockEnvironmentsApi.probe).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each(["missing", "invalid-default", "unsupported-default"])("does not probe or hire with %s authoritative discovery", async mode => {
+        const handles = await openManaged();
+        mockAdaptersApi.list.mockResolvedValue(mode === "missing" ? [] : mode === "invalid-default"
+          ? [{ type: "codex_local", supportedRunners: ["legacy"] }] as import("../api/adapters").AdapterInfo[]
+          : [{ type: "codex_local", defaultRunner: "paperclip", supportedRunners: ["legacy"] }] as import("../api/adapters").AdapterInfo[]);
+        try {
+          await pickSource(/OpenAI/);
+          expect(document.body.textContent).toContain("Could not confirm Codex runner availability");
+          expect(mockEnvironmentsApi.probe).not.toHaveBeenCalled();
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each([0, 30_000])("rechecks stale native discovery and stops a changed image from becoming an unnoticed Legacy hire with %i ms cache", async staleTime => {
+        const handles = await openManaged({}, { provider: "daytona", image }, staleTime);
+        await act(async () => handles.queryClient.setQueryData(queryKeys.adapters.availability("company-new", "env-sandbox-1"), discovery("paperclip")));
+        mockEnvironmentsApi.probe.mockResolvedValue({ ok: true, driver: "sandbox", summary: "Connected", details: {
+          platformQualificationRecorded: false, leaseId: "platform-lease", platformQualificationDiagnostic: "The environment changed during the probe. Probe its current configuration again." } });
+        try {
+          await pickSource(/OpenAI/);
+          expect(mockAdaptersApi.list).toHaveBeenCalledWith({ companyId: "company-new", environmentId: "env-sandbox-1" });
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          expect(document.body.textContent).toContain("The environment changed during the probe");
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each(["authentication", "dependency", "model"])("keeps selected native %s setup failures actionable without retrying Legacy", async failure => {
+        const handles = await openManaged();
+        mockEnvironmentsApi.probe.mockImplementation(async () => {
+          mockAdaptersApi.list.mockResolvedValue(discovery("paperclip"));
+          return { ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "platform-lease" } };
+        });
+        mockAgentsApi.testEnvironment.mockResolvedValue({ adapterType: "paperclip_runner", status: "fail", testedAt: "2026-10-13T00:00:00Z",
+          checks: [{ code: `native_${failure}`, level: "error", message: `Repair native ${failure}` }] });
+        try {
+          await pickSource(/OpenAI/);
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+          expect((mockAgentsApi.testEnvironment.mock.calls[0] as unknown[])[2]).not.toHaveProperty("runner");
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+          expect(document.body.textContent).toContain(`Repair native ${failure}`);
+        } finally { await act(async () => handles.root.unmount()); }
+      });
+
+      it.each(["back", "environment-config"])("does not test or hire after a held probe is abandoned by %s", async change => {
+        let finish!: (value: import("@paperclipai/shared").EnvironmentProbeResult) => void;
+        const handles = await openManaged();
+        mockEnvironmentsApi.probe.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+        try {
+          await pickSource(/OpenAI/);
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          await act(async () => document.querySelector('[data-testid="onboarding-wizard"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true })));
+          await flushReact();
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          if (change === "back") await act(async () => [...document.body.querySelectorAll("button")].find(button => button.textContent?.trim() === "Back")!.click());
+          else {
+            await act(async () => handles.queryClient.setQueryData(queryKeys.environments.list("company-new"), [{ ...SANDBOX_ENVIRONMENT, config: { provider: "daytona", image: `registry.example.test/runtime@sha256:${"b".repeat(64)}` } }]));
+            await flushReact();
+          }
+          await act(async () => finish({ ok: true, driver: "sandbox", summary: "Measured image", details: { platformQualificationRecorded: true, leaseId: "platform-lease" } }));
+          for (let i = 0; i < 8; i++) await flushReact();
+          expect(mockEnvironmentsApi.probe).toHaveBeenCalledTimes(1);
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        } finally { await act(async () => handles.root.unmount()); }
+      });
     });
 
     describe("automatic subscription verification", () => {
@@ -3153,8 +3431,8 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       }
 
       it.each(["paperclip", "legacy"] as const)("waits for Claude runner discovery before saved subscription verification (%s)", async defaultRunner => {
-        let finish!: (value: object[]) => void;
-        mockAdaptersApi.list.mockReturnValue(new Promise<object[]>(resolve => { finish = resolve; }));
+        let finish!: (value: import("../api/adapters").AdapterInfo[]) => void;
+        mockAdaptersApi.list.mockReturnValue(new Promise<import("../api/adapters").AdapterInfo[]>(resolve => { finish = resolve; }));
         mockAdapterBuild.buildAdapterConfig.mockImplementation(values => buildClaudeLocalConfig(values!));
         const { root, queryClient } = await openStep4({ adapterType: "claude_local" });
         try {
@@ -3168,7 +3446,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
           await settle();
           expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
           expect(mockAgentsApi.hire).not.toHaveBeenCalled();
-          await act(async () => finish([{ type: "claude_local", defaultRunner, supportedRunners: ["paperclip", "legacy"] }]));
+          await act(async () => finish([setupAdapterInfo({ type: "claude_local", defaultRunner, supportedRunners: ["paperclip", "legacy"] })]));
           await settle();
           expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
           expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
@@ -3233,7 +3511,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       it("does not hire from obsolete Claude discovery after the target changes during verification", async () => {
         mockAdapterBuild.buildAdapterConfig.mockImplementation(values => buildClaudeLocalConfig(values!));
-        mockAdaptersApi.list.mockImplementation(async ({ environmentId }: { environmentId: string | null }) => [{ type: "claude_local", defaultRunner: environmentId === "new-local-default" ? "paperclip" : "legacy" }]);
+        mockAdaptersApi.list.mockImplementation(async context => [setupAdapterInfo({ type: "claude_local", defaultRunner: context?.environmentId === "new-local-default" ? "paperclip" : "legacy" })]);
         const finishes: Array<(value: typeof passed) => void> = [];
         mockAgentsApi.testEnvironment.mockImplementation(() => new Promise(resolve => finishes.push(resolve)));
         const { root, queryClient } = await openStep4({ adapterType: "claude_local" });
@@ -3243,10 +3521,14 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
           expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
           await act(async () => queryClient.setQueryData(queryKeys.environments.list("company-new"), [{ ...LOCAL_ENVIRONMENT, id: "new-local-default" }]));
           await settle();
-          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(2);
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
           await act(async () => finishes[0](passed));
           await settle();
           expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+          expect(document.body.textContent).toContain("Configuration changed during setup");
+          await click("Connect");
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(2);
           await act(async () => finishes[1](passed));
           await settle();
           expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
@@ -3271,7 +3553,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
           expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
           expect(mockAgentsApi.hire).not.toHaveBeenCalled();
           expect(document.body.textContent).toContain("Could not load runner availability");
-          mockAdaptersApi.list.mockResolvedValue([{ type: "claude_local", defaultRunner: "paperclip" }]);
+          mockAdaptersApi.list.mockResolvedValue([setupAdapterInfo({ type: "claude_local", defaultRunner: "paperclip" })]);
           await click("Retry setup");
           expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
           expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
