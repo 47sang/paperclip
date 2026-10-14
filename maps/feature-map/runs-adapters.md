@@ -1,3 +1,7 @@
+---
+navigation: {"section":"Agents and reusable capabilities","sectionOrder":30,"order":20}
+---
+
 # Runs, harnesses, and model accounts
 
 Operators choose an agent harness and model account, inspect execution history and transcripts, and distinguish a working configuration from a successful task result.
@@ -41,6 +45,11 @@ and [runtime prerequisites](../../packages/paperclip-runner/README.md) define th
 platform/libc boundary. Windows and Alpine/musl remain Legacy; other harness
 defaults are unchanged. Disabled adapters, external overrides, and selected-target
 qualification also affect availability.
+On a fresh forced-Kubernetes instance without an environment row, inspect discovery
+and create with automatic selection. Both must retain Legacy without provisioning;
+an explicit Paperclip request must give target-qualification guidance. Begin the
+ordinary task to exercise the existing lazy environment path. This live journey
+remains separate from the resolver's source controls.
 
 For sandbox defaults, follow the [environment probe](./execution-environments.md#environment-settings)
 recipe first. Discovery/creation read company-bound immutable-image evidence
@@ -59,6 +68,24 @@ existing agent, make an unrelated edit, and confirm both its persisted runner an
 next run stay unchanged. Use [hiring/import preservation](./agents.md#hire-agent)
 for approval and portability controls.
 
+Test native Codex with a saved subscription whose setup auth file is a managed
+link, as well as a regular file and an API-key account. Setup must seed the
+isolated probe from the checked account without exposing credentials or changing
+its saved runner. With subscription authentication, an unbound configured
+`CODEX_HOME` with linked credentials must fail setup with managed-account or explicit Legacy guidance; it must not claim
+readiness when task isolation would omit the file. Dangling or incorrectly owned
+credentials must also fail clearly. A selected `CODEX_API_KEY` or
+`OPENAI_API_KEY` takes precedence over an unrelated subscription file. Test valid,
+dangling and invalid subscription links with that selected key; setup must test
+the key without reading or refreshing the unrelated account. The private probe copy must be removed after confirmed retirement following success,
+failure or cancellation. Unconfirmed shutdown remains a cleanup failure.
+Exercise an unavailable local daemon and a preparation failure before probe
+handoff. No owned temporary credential copy may remain, and original account
+files must be unchanged. A probe whose shutdown is unconfirmed must retain its
+recovery state; do not treat it as a preparation-only failure.
+Existing setup controls use fake credentials; real account execution remains
+a separate acceptance requirement.
+
 ### `run-history`
 
 Automated: [live run routes](../../server/src/__tests__/agent-live-run-routes.test.ts) and [run event sequencing](../../server/src/__tests__/heartbeat-run-event-sequencing.test.ts) cover run data contracts.
@@ -70,6 +97,14 @@ eligible session. Active runs, restart recovery and historical transcript parsin
 retain their recorded execution configuration; do not infer their runner from a
 later edit to the agent. Account/harness branding and execution identity are
 different observations, both required in the evidence.
+
+For an onboarding child-completion callback, verify actual session/turn events
+and the source-correlated reply. A `succeeded` row alone is insufficient: the
+literal `ea6c8eb5e16d61111968f633a66748b397b64a3e` managed attempt was marked
+successful during startup without a provider turn. The recovery correction
+preserves the existing validated Done-parent handoff; process-death and ownership
+checks remain active. Its PostgreSQL controls are separate from the required
+revised-source live onboarding and follow-up proof.
 
 ## Gotchas
 
@@ -90,3 +125,13 @@ after close. These are lifecycle controls, separate from installed provider proo
 The real daemon readiness and recovery controls require their existing native
 fixtures in hosted CI; passing credential-free controls does not qualify them.
 A primary setup timeout remains a failure even when teardown also fails.
+
+For remote setup shutdown, verify that each durable-state read respects the
+remaining suspension deadline. A late result cannot establish suspension or
+queue a replacement command after that deadline. An intentional ingress close
+must observe physical socket closure before retiring its connection owner and
+releasing the endpoint; an unresponsive peer must not extend the setup budget.
+The existing transport and ingress suites exercise these conditions without a
+provider. Repeat the actual managed setup and useful task journey separately;
+the literal `651a3de64fc943216cc414b64b1443809f9499da` Test attempt failed
+cleanup before hire and retains its unconfirmed recovery state.

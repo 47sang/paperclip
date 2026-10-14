@@ -2152,6 +2152,29 @@ the changed chief-of-staff persona and skill selections; it needs no fixture
 change for that default selection. Hiring from that wizard-created chief of
 staff remains a separate follow-up qualification.
 
+The explicit-only cell `confirmation-replies.runner-codex.daytona.task-card-accept`
+extends that wizard journey to one fresh managed company. Select this exact ID;
+the automatic roster and all local prompts remain unchanged. Its fixture seeds
+encrypted credentials and an immutable OCI image environment, but does not
+prequalify the image or create an agent. Connect owns the existing saved
+environment probe, fresh scoped adapter discovery, and selected runtime setup.
+The case requires one confirmed platform probe and one native Codex setup lease,
+then verifies the automatically saved native configuration after reload.
+
+The completed child must expose a downloaded `garden-welcome.txt` attachment
+whose byte size, SHA-256, content and scenario marker are independently checked.
+A saved document alone cannot pass. Existing task-card grading and the same-task
+follow-up continuity checks remain required. This cell has one attempt, zero
+automatic retries and a shared fifteen-minute deadline with cleanup time
+reserved. The script authors three turns; four task runs were observed in the
+historical local journey. The existing twelve-run guard and $5 company task cap
+remain, with native setup, one completion judge request, sandbox time and cleanup
+requiring separate reservation. Registration and provider-free controls do not
+establish live qualification or funding within the remaining paid reserve.
+
+This OCI-image Core case does not prove Cloud signup, warm/cold provisioning or
+name-only snapshot qualification. Those remain separate acceptance gates.
+
 ### Hiring completion accounting evidence
 
 The v3 hiring grader uses turn-accounting v2 in both executable guards. It requires complete per-run public event streams, exact native tool-use/result pairing and canonical execution IDs for completion actions. Only successful known GET issue/document/comment operations, verified reads/discovery, and attributed native chat finish are admitted. Writes, failed mutation attempts, incomplete streams and unknown actions cannot pass. Separate ACPX host request IDs and provider execution IDs are not joined by name/order/count; missing mapping is uncomparable action coverage, not a measured task failure. The original source-read and exact template checks remain unchanged.

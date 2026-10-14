@@ -81,6 +81,7 @@ import { accessService } from "./access.js";
 import { agentService } from "./agents.js";
 import { agentInstructionsBundleMode, agentInstructionsService } from "./agent-instructions.js";
 import { assetService } from "./assets.js";
+import { isRunnerApiResponseAsset } from "./asset-content-access.js";
 import { generateReadme } from "./company-export-readme.js";
 import { renderOrgChartPng, type OrgNode } from "../routes/org-chart-svg.js";
 import { companySkillService } from "./company-skills.js";
@@ -3916,6 +3917,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const allAgentRows = include.agents ? await agents.list(companyId, { includeTerminated: true }) : [];
     const agentSelection = resolvePortableExportAgentSelection(allAgentRows, input.agents, include.agents);
     const companySkillRowsRaw = include.skills ? await companySkills.listFull(companyId) : [];
+    if (companySkillRowsRaw.some(skill => skill.accessSourceId)) {
+      throw unprocessable("Project-restricted skills cannot be exported until the package can preserve their project access.");
+    }
     const managedSkillRows = companySkillRowsRaw.filter((skill) => managedSkillIds.has(skill.id));
     const companySkillRows = companySkillRowsRaw.filter((skill) => !managedSkillIds.has(skill.id));
     warnings.push(...agentSelection.warnings);
@@ -4130,6 +4134,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const logoAsset = await assetRecords.getById(company.logoAssetId);
         if (!logoAsset) {
           warnings.push(`Skipped company logo ${company.logoAssetId} because the asset record was not found.`);
+        } else if (await isRunnerApiResponseAsset(db, logoAsset)) {
+          warnings.push("Skipped private API response snapshot used as a company logo.");
         } else {
           try {
             const object = await storage.getObject(company.id, logoAsset.objectKey);
@@ -4674,7 +4680,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // Embedded references only pull bytes for assets owned by the
         // exporting company: a crafted URL naming another company's asset id
         // must not leak that asset's bytes into the bundle.
-        if (!asset || asset.companyId !== companyId) {
+        if (!asset || asset.companyId !== companyId || await isRunnerApiResponseAsset(db, asset)) {
           unownedEmbeddedAssetRefCount += 1;
           continue;
         }
@@ -4705,8 +4711,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
     if (unownedEmbeddedAssetRefCount > 0) {
       warnings.push(unownedEmbeddedAssetRefCount === 1
-        ? "1 embedded image reference points at an asset that does not belong to this company or no longer exists; its image was not exported."
-        : `${unownedEmbeddedAssetRefCount} embedded image references point at assets that do not belong to this company or no longer exist; their images were not exported.`);
+        ? "1 embedded image reference points at an asset that is unavailable for export (missing, outside this company, or a private API response snapshot); its image was not exported."
+        : `${unownedEmbeddedAssetRefCount} embedded image references point at assets that are unavailable for export (missing, outside this company, or private API response snapshots); their images were not exported.`);
     }
 
     const paperclipExtensionPath = ".paperclip.yaml";
@@ -5628,8 +5634,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             ? await agents.getById(planAgent.existingAgentId) : null;
           let selectedAdapterType = adapterOverride?.adapterType ?? manifestAgent.adapterType;
           const selectedHarness = agentHarnessType(selectedAdapterType, baseAdapterConfig);
-          // Config-only edits keep the package's explicit runner or an existing
-          // agent's execution. A genuinely changed harness selects its default.
           let runner = adapterOverride?.runner;
           if (runner === undefined && adapterOverride?.adapterType !== "paperclip_runner") {
             if (selectedHarness === agentHarnessType(manifestAgent.adapterType, manifestAgent.adapterConfig)) {
@@ -5640,8 +5644,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               runner = agentRunner(existingImportAgent.adapterType);
             }
           }
-          // The picker sends harness identity for config edits. Keep a saved
-          // native profile, including on a source-built unqualified platform.
           const retainedNative = runner === "paperclip" && selectedHarness === "codex_local"
             ? [manifestAgent, existingImportAgent].find((agent) => agent?.adapterType === "paperclip_runner"
               && agentHarnessType(agent.adapterType, agent.adapterConfig) === selectedHarness)

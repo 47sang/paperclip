@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectPopover } from "../../components/ui/select";
 import { AdapterMark } from "../../components/AdapterMark";
+import { GrokBotConnection } from "../../components/GrokBotConnection";
 import { DotRunnerConnection } from "../../components/DotRunnerConnection";
 import { configFieldsForSection } from "../config-sections";
 import type { AdapterConfigFieldsProps } from "../types";
@@ -50,13 +51,11 @@ const runnerHarnessOptions = [
   { value: "grok", label: "Grok Build", adapter: "grok_local" },
 ];
 
-/** Keep explicit Legacy policy even when the server resolves an automatic choice. */
 export function buildCodexRunnerConfig(values: CreateConfigValues): Record<string, unknown> {
   const config = buildCodexLocalConfig(values);
   if (values.codexLegacySandboxBypass !== undefined) {
     config.dangerouslyBypassApprovalsAndSandbox = values.codexLegacySandboxBypass;
   } else if (values.runner !== "legacy") {
-    // An untouched false form default is not an explicit native permission policy.
     delete config.dangerouslyBypassApprovalsAndSandbox;
   }
   return {
@@ -225,7 +224,7 @@ export function CodexLocalConfigFields({
           />
         </Field>
       )}
-      {runnerManaged && !hideRunnerHarness && runnerProvider !== "openai_dot" && (
+      {runnerManaged && !hideRunnerHarness && runnerProvider !== "openai_dot" && runnerProvider !== "grok_bot" && (
         <Field configSection="adapter"
           label="Harness"
           hint="Choose the agent harness that runs your tasks."
@@ -288,6 +287,7 @@ export function CodexLocalConfigFields({
           </Select>
         </Field>
       )}
+      {runnerManaged && runnerProvider === "grok_bot" && <GrokBotConnection companyId={companyId} agentId={agentId} />}
       {runnerManaged && runnerProvider === "openai_dot" && <>
         <Field configSection="adapter" label="Dot connection" hint="A verified event round trip is required before assigning work.">
           <DotRunnerConnection companyId={companyId} agentId={agentId} bindingId={String(runnerSchemaValue("dotBindingId", ""))} onBinding={id => updateRunnerSchemaValue("dotBindingId", id)} />
@@ -541,27 +541,28 @@ export function CodexLocalConfigFields({
           )}
         </Field>
       )}
-      {runnerManaged && runnerProvider !== "openai_dot" && (
+      {runnerManaged && runnerProvider !== "openai_dot" && runnerProvider !== "grok_bot" && (
         <Field configSection="runPolicy"
           label="Runner lifecycle"
           hint="Turn by turn suspends after each run. Warm keeps the same provider process available between governed runs."
         >
-          <select
-            className={inputClass}
+          <SelectPopover
+            aria-label="Runner lifecycle"
             value={runnerLifecycleMode}
-            onChange={(event) => {
-              const value = event.target.value === "warm" ? "warm" : "per_turn";
+            onValueChange={(next) => {
+              const value = next === "warm" ? "warm" : "per_turn";
               isCreate
                 ? set!({ paperclipRunnerLifecycleMode: value })
                 : mark("adapterConfig", "lifecycleMode", value);
             }}
-          >
-            <option value="per_turn">Turn by turn</option>
-            <option value="warm">Warm session</option>
-          </select>
+            options={[
+              { value: "per_turn", label: "Turn by turn" },
+              { value: "warm", label: "Warm session" },
+            ]}
+          />
         </Field>
       )}
-      {runnerManaged && runnerProvider !== "openai_dot" && runnerLifecycleMode === "warm" && (
+      {runnerManaged && runnerProvider !== "openai_dot" && runnerProvider !== "grok_bot" && runnerLifecycleMode === "warm" && (
         <Field configSection="runPolicy"
           label="Warm idle timeout (ms)"
           hint="After this much inactivity, runnerd checkpoints and suspends the provider session. The maximum is 24 hours."
@@ -632,8 +633,8 @@ export function CodexLocalConfigFields({
             label="ACP session mode"
             hint="Persistent keeps ACP session state between runs. One-shot starts fresh each run."
           >
-            <select
-              className={inputClass}
+            <SelectPopover
+              aria-label="ACP session mode"
               value={
                 isCreate
                   ? (values!.codexAcpMode ?? "persistent")
@@ -643,24 +644,25 @@ export function CodexLocalConfigFields({
                       String(config.mode ?? "persistent"),
                     )
               }
-              onChange={(e) => {
+              onValueChange={(next) => {
                 const value =
-                  e.target.value === "oneshot" ? "oneshot" : "persistent";
+                  next === "oneshot" ? "oneshot" : "persistent";
                 isCreate
                   ? set!({ codexAcpMode: value })
                   : mark("adapterConfig", "mode", value);
               }}
-            >
-              <option value="persistent">Persistent</option>
-              <option value="oneshot">One-shot</option>
-            </select>
+              options={[
+                { value: "persistent", label: "Persistent" },
+                { value: "oneshot", label: "One-shot" },
+              ]}
+            />
           </Field>
           <Field
             label="ACP non-interactive permissions"
             hint="Fallback if the ACP agent asks for input outside an interactive session."
           >
-            <select
-              className={inputClass}
+            <SelectPopover
+              aria-label="ACP non-interactive permissions"
               value={
                 isCreate
                   ? (values!.codexAcpNonInteractivePermissions ?? "deny")
@@ -670,16 +672,17 @@ export function CodexLocalConfigFields({
                       String(config.nonInteractivePermissions ?? "deny"),
                     )
               }
-              onChange={(e) => {
-                const value = e.target.value === "fail" ? "fail" : "deny";
+              onValueChange={(next) => {
+                const value = next === "fail" ? "fail" : "deny";
                 isCreate
                   ? set!({ codexAcpNonInteractivePermissions: value })
                   : mark("adapterConfig", "nonInteractivePermissions", value);
               }}
-            >
-              <option value="deny">Deny</option>
-              <option value="fail">Fail</option>
-            </select>
+              options={[
+                { value: "deny", label: "Deny" },
+                { value: "fail", label: "Fail" },
+              ]}
+            />
           </Field>
           {!managedSandboxOnly && (
             <Field
@@ -821,7 +824,7 @@ export function CodexLocalConfigFields({
           )}
         </>
       )}
-      {runnerProvider !== "openai_dot" && <LocalWorkspaceRuntimeFields
+      {runnerProvider !== "openai_dot" && runnerProvider !== "grok_bot" && <LocalWorkspaceRuntimeFields
         isCreate={isCreate}
         values={values}
         set={set}

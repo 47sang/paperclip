@@ -8,7 +8,6 @@ vi.mock("../services/agent-runner-selection.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/agent-runner-selection.js")>();
   return {
     ...actual,
-    // Exercise the real selection/translation policy on an explicit target.
     resolveNewAgentRunnerForCompany: vi.fn(async (...[_db, _companyId, input]: Parameters<typeof actual.resolveNewAgentRunnerForCompany>) =>
       actual.resolveNewAgentRunner({ ...input, target: runnerTarget })),
   };
@@ -1217,7 +1216,6 @@ describe("agent skill routes", () => {
     if (native) expect(input.adapterConfig.provider).toBe("codex");
     const canonicalKey = skill === "paperclip" ? "paperclipai/paperclip/paperclip" : skill;
     const expected = ["paperclip", "paperclip-board", "paperclip-converting-plans-to-tasks", "paperclip-create-agent", "para-memory-files", "first-task"]
-      // Native PRP supplies the operational contract; role skills and their pins remain assigned.
       .filter((name) => !native || name !== "paperclip")
       .map((name) => ({ key: `paperclipai/paperclip/${name}`, versionId: `paperclipai/paperclip/${name}` === canonicalKey ? versionId : null }));
     const desiredSkills = input.adapterConfig.paperclipSkillSync.desiredSkills.map((entry: string | { key: string; versionId: string | null }) =>
