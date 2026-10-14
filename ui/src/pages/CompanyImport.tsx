@@ -1753,9 +1753,6 @@ export function CompanyImport() {
         if (agent.adapterType === "paperclip_runner" && selectedType === agent.adapterChoice
           && ["codex_local", "claude_local"].includes(selectedType) && configVals.adapterType === selectedType
           && agentHarnessType("paperclip_runner", configVals.adapterSchemaValues) === selectedType) {
-          // Project only real form changes onto the saved native configuration.
-          // Form defaults must not replace bindings or runtime fields; explicit
-          // clears must not be filled back in from the source either.
           const original = importAdapterValues(selectedType, agent.adapterConfig, agent.adapterType, configVals.runner);
           const baseline = build(original);
           const retained = { ...agent.adapterConfig };

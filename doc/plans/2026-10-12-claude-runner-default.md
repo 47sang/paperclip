@@ -1291,3 +1291,26 @@ The prior reconciliation report was uploaded to its original completed QA task
 and independently byte-checked: attachment aabe2e7e-a8a0-4408-bc7e-a013e0f7485b,
 5916 bytes, SHA256 3bd9bcfa64db6a3a7968952122b1a5c2ae27e24f0e4ff336fd47ae374bae8ff1.
 Paid acceptance and budget/hold changes remain stopped pending human approval.
+
+
+### Frozen runtime and comment-only review cleanup — 2026-10-14
+
+Protocol dd82936c1d has current 5/5 review and green CI 38609018629.
+Platform 2646b94533 has current 5/5 review and green CI 38609191818.
+Behavior 05a98b6cbf received one style finding for added code comments.
+Removing its seven specified comment lines across three files produces identical
+comment-free esbuild output for each file; the SHA256 comparison is retained in
+/private/tmp/claude-comment-cleanup-equivalence-20261014.json. No executable
+behavior changes, so package campaign 38610086180 and qualification-image
+campaign 38610152781 retain their literal 2646b94533 runtime source identity.
+They do not become proof of a later source revision by relabeling.
+
+The full Product E2E support checks pass 2733 Vitest and 128 node:test controls.
+The behavior static lane observed a transient atomic .tmp record in an unchanged
+build-stamp concurrency fixture; its exact local control passes. The original
+failed attempt and one requested failed-job rerun remain recorded.
+A read-only QA budget audit now succeeds on 3115: six confirmed policies have
+zero live runs; four remain paused with pending accounting, and an older policy
+is unavailable. Historical reservations remain conservative. No hold, limit or
+paid run was changed. The two previously colliding foreign port listeners remain
+present and untouched; retrying that exact old session is not execution proof.
