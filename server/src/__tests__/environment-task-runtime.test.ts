@@ -36,6 +36,10 @@ describe("plugin-provided Runner execution", () => {
     const description = { kind: "description", taskId: "attempt-1", runner: { executable: "paperclip-runnerd", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
       connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 9000, listenPath: "/connect" }, resources: { instructions: "V:\\assigned\\instructions" } };
     expect(parseEnvironmentTaskResult(operation, "attempt-1", description)).toMatchObject({ resources: description.resources });
+    expect(parseEnvironmentTaskResult(operation, "attempt-1", { ...description, environment: { HOME: "V:\\account", PATH: "bin", CODEX_HOME: "account" } })).toHaveProperty("environment.PATH", "bin");
+    for (const key of ["OPENAI_API_KEY", "XAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "PAPERCLIP_AI_PROVIDER_KEY", "OPENCODE_AUTH_JSON", "PAPERCLIP_PI_PROVIDERS", "OPENCODE_CONFIG_CONTENT"]) {
+      expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, environment: { [key]: "provider-default" } })).toThrow("cannot contain credentials");
+    }
     expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, resources: {} })).toThrow("omitted a requested runtime resource");
     expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ resource: "instructions", targetPath: "/core/mirror" }] }).success).toBe(true);
     expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ sourcePath: "/guest/guessed", targetPath: "/core/mirror" }] }).success).toBe(false);

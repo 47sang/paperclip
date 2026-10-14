@@ -6,6 +6,9 @@ const providerId = z.string().min(1);
 // These are provider-issued protocol values, never resolved against Core's filesystem.
 const runtimePath = z.string().min(1).max(4096).regex(/^[^\x00-\x1f]+$/);
 const resourceId = z.string().min(1).max(200);
+// Descriptions are runtime configuration; selected credentials arrive only on submit.
+const runtimeEnvironment = z.record(z.string().refine(key => !/(?:^|_)(?:KEYS?|TOKEN|SECRET|CREDENTIALS?|AUTH)(?:_|$)|^PAPERCLIP_.*PROVIDERS$|^OPENCODE_CONFIG_CONTENT$/i.test(key),
+  "Provider runtime settings cannot contain credentials or authentication overrides"), z.string());
 const asset = z.object({ resource: resourceId, sourcePath: runtimePath }).strict();
 const exportedAsset = z.object({ resource: resourceId, targetPath: runtimePath }).strict();
 const runnerArtifact = z.object({ executable: runtimePath, version: z.string().min(1), digest: z.string().regex(/^sha256:[a-f0-9]{64}$/) }).strict();
@@ -70,7 +73,7 @@ export const environmentTaskResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("description"), taskId: providerId,
     runner: runnerArtifact, codexCommand: runtimePath.optional(), codexArgs: z.array(z.string().max(4096).regex(/^[^\x00]*$/)).max(64).optional(),
     resources: z.record(resourceId, runtimePath),
-    environment: z.record(z.string(), z.string()).default({}),
+    environment: runtimeEnvironment.default({}),
     connection: z.object({ mode: z.literal("listen"), listenAddress: z.literal("0.0.0.0"),
       listenPort: z.number().int().min(1).max(65_535), listenPath: z.string().startsWith("/") }).strict(),
     providerPack: z.object({ authorityDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),

@@ -9,9 +9,9 @@ import { connectRunnerPrpIngress } from "../../realtime/runner-prp-outbound.js";
 export function pluginRunnerEnvironment(input: NodeJS.ProcessEnv, provided: Record<string, string>): NodeJS.ProcessEnv {
   const environment = { ...input };
   for (const key of Object.keys(environment)) {
-    if (/^(PATH|HOME|USERPROFILE|CODEX_HOME|GROK_HOME|AGENT_HOME|BASH_ENV|ZDOTDIR|SHELL|TMPDIR|GH_CONFIG_DIR|GIT_CONFIG_.*|GIT_SSH.*|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|PAPERCLIP_GITHUB_.*|PAPERCLIP_WORKSPACE_CWD)$/.test(key)) delete environment[key];
+    if (/^(PATH|HOME|USERPROFILE|CODEX_HOME|GROK_HOME|AGENT_HOME|HERMES_HOME|CLAUDE_CONFIG_DIR|OPENCODE_CONFIG(_DIR)?|AWS_SHARED_CREDENTIALS_FILE|AWS_CONFIG_FILE|AWS_WEB_IDENTITY_TOKEN_FILE|BASH_ENV|ZDOTDIR|SHELL|TMPDIR|GH_CONFIG_DIR|GIT_CONFIG_.*|GIT_SSH.*|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|PAPERCLIP_GITHUB_.*|PAPERCLIP_WORKSPACE_CWD)$/.test(key)) delete environment[key];
   }
-  return { ...environment, ...provided };
+  return { ...provided, ...environment };
 }
 
 /** Adapts a lease-bound task provider to the existing native process owner.

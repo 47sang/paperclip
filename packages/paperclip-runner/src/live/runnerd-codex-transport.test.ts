@@ -8465,14 +8465,16 @@ it.each(["claude", "codex"] as const)("keeps the explicitly assigned gateway in 
 it.each(["codex", "opencode", "acpx"] as const)("preserves provider-owned paths without host discovery (%s)", provider => {
   const provided = { HOME: "V:\\account", PATH: "V:\\bin;W:\\tools", PROVIDER_PRIVATE_ROOT: "W:\\runtime" };
   const environment = createCapabilityRunnerdProviderEnvironment({ provider,
-    options: { provider, acpxAgent: "pi", environment: { OPENAI_API_KEY: "selected", DATABASE_URL: "must-not-cross", PAPERCLIP_API_KEY: "must-not-cross" },
-      runnerRuntimePaths: { codexHome: "V:\\account", runtimeContext: "W:\\input.json", skillEntries: {}, environment: provided } },
+    options: { provider, acpxAgent: "pi", environment: { OPENAI_API_KEY: "selected", PAPERCLIP_AI_PROVIDER_KEY: "selected", DATABASE_URL: "must-not-cross", PAPERCLIP_API_KEY: "must-not-cross" },
+      runnerRuntimePaths: { codexHome: "V:\\account", runtimeContext: "W:\\input.json", skillEntries: {}, environment: { ...provided,
+        ...(provider === "codex" ? { PAPERCLIP_AI_PROVIDER_KEY: "provider-default" } : {}) } } },
     identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run", normalizedSessionId: "session", turnId: "turn", itemId: "item" },
     codexHome: "V:\\account", runtimeContextPath: "W:\\input.json", hasRuntimeContext: true,
   });
   expect(environment).toMatchObject({ ...provided, PAPERCLIP_NATIVE_RUNTIME_CONTEXT_PATH: "W:\\input.json" });
   expect(environment.DATABASE_URL).toBeUndefined(); expect(environment.PAPERCLIP_API_KEY).toBeUndefined();
   expect(environment.CODEX_HOME).toBeUndefined();
+  if (provider === "codex") expect(environment.PAPERCLIP_AI_PROVIDER_KEY).toBe("selected");
   if (provider === "acpx") expect(createAcpxSidecarHostEnvironment(environment, "pi", "session").OPENAI_API_KEY).toBe("selected");
 });
 

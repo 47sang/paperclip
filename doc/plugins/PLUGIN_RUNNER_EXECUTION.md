@@ -62,6 +62,9 @@ file references remain relative to the bound workspace.
 The provider configures its runtime environment, including any homes, search
 paths, and packaged sidecar locations required by its installed Runner version.
 Core retains authority over run identity, credential binding and permission policy.
+Description environment settings must not contain credentials or authentication
+overrides; credentials arrive only in the transient submit input. Core-selected
+execution inputs take precedence over provider defaults.
 
 On `submit`, Core supplies identity, a bootstrap ticket, expected artifact identity,
 resource limits, lifecycle policy, selected environment/credentials, and named

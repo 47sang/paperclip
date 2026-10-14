@@ -3309,7 +3309,7 @@ export function createCapabilityRunnerdProviderEnvironment(input: {
     const selected = input.provider === "acpx" ? createSanitizedAcpxSpawnInput(input.options.environment, input.options.acpxAgent ?? "codex").env
       : input.provider === "opencode" ? createSanitizedOpenCodeRunnerEnvironment(input.options.environment, false)
       : createSanitizedCodexEnvironment(input.options.environment);
-    return { ...selected, ...input.options.runnerRuntimePaths.environment, ...commonIdentity,
+    return { ...input.options.runnerRuntimePaths.environment, ...selected, ...commonIdentity,
       ...(input.provider === "acpx" && input.options.acpxAgent === "grok" && input.options.environment?.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET
         ? { PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET: input.options.environment.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET } : {}),
       ...(binding === undefined ? {} : { [ACPX_CREDENTIAL_BINDING_ENV]: binding }),

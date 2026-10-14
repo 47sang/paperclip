@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RunnerProcessLaunchSpec } from "../../vendor/paperclip-runner/index.js";
-import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
+import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
 
 const ingress = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../../realtime/runner-prp-outbound.js", () => ({ connectRunnerPrpIngress: ingress.connect }));
@@ -29,6 +29,11 @@ function provider() {
 }
 
 describe("plugin native Runner ownership", () => {
+  it("keeps selected execution inputs authoritative while replacing controller paths", () => {
+    expect(pluginRunnerEnvironment({ OPENAI_API_KEY: "selected", XAI_API_KEY: "", PATH: "/controller/bin", HOME: "/controller/home", OPENCODE_CONFIG_DIR: "" },
+      { OPENAI_API_KEY: "default", XAI_API_KEY: "default", PATH: "provider-bin", HOME: "provider-home", OPENCODE_CONFIG_DIR: "provider-config" }))
+      .toEqual({ OPENAI_API_KEY: "selected", XAI_API_KEY: "", PATH: "provider-bin", HOME: "provider-home", OPENCODE_CONFIG_DIR: "provider-config" });
+  });
   it("exposes connection failure before activation and forwards late recovery exhaustion", async () => {
     const { task } = provider();
     let fail!: (error: Error) => void;
