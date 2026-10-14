@@ -1,223 +1,436 @@
 # Plugin-provided Runner execution
 
-Plugins provide Runner execution through environment drivers. The plugin prepares
-the task's project and repository storage, starts Runner, and provides its Paperclip
-Runner Protocol (PRP) connection. The plugin owns resource preparation and task
-lifecycle. Declare `supportsTasks: true` on the driver and
-implement `onEnvironmentTask`. The worker advertises `environmentTask` during
-initialization. Both declarations must be present. The existing
-`environment.drivers.register` capability applies.
+## Contract sources and ownership
 
-The server-only `environmentRuntime.task({companyId, leaseId, operation})` method
-loads the persisted lease and its run. It resolves the exact plugin recorded at
-acquisition. It supplies the agent and issue context and validates requested
-projects against the company. The persisted lease determines the plugin and
-execution identity. An environment edit cannot redirect an existing task to a
-replacement provider. The caller must
-already authorize access to the company.
+The SDK defines the RPC contract:
 
-Submit includes `projectIds`, the projects whose storage the task needs. The host
-checks that every ID belongs to the task's company and passes the validated list
-to the plugin. The plugin resolves those projects into provider-specific storage
-and mount inputs. The plugin prepares project and repository volumes before
-starting Runner; PRP carries the subsequent Runner session.
+- [Task operations, results, and validators](../../packages/plugins/sdk/src/environment-tasks.ts)
+- [Lease and driver types](../../packages/plugins/sdk/src/protocol.ts)
 
-## Core integration and required hooks
+Type references in this document use the SDK exports:
 
-Assign a saved `plugin` environment to an agent using the `paperclip_runner`
-adapter. Core requires `supportsTasks` in the manifest and `onEnvironmentTask`
-in the live worker. It does not require `onEnvironmentExecute`, file-command
-hooks, or `onEnvironmentRealizeWorkspace`. Missing task support fails closed.
+```ts
+import type {
+  PluginEnvironmentTaskOperation as Operation,
+  PluginEnvironmentTaskResult as Result,
+  PluginEnvironmentTaskParams as Params,
+} from "@paperclipai/plugin-sdk";
 
-Implement the lease hooks: `onEnvironmentAcquireLease`,
-`onEnvironmentReleaseLease`, and `onEnvironmentDestroyLease`. Acquisition reserves
-a unique task attempt and returns its workspace path in `metadata.remoteCwd`. Each attempt
-needs its own provider lease ID, even when attempts share a persistent computer.
-The plugin owns the authoritative project volumes and resolves the validated
-project IDs into mounts before task startup. Core does not upload or restore a
-host checkout over those volumes.
+type Request<K extends Operation["kind"]> = Extract<Operation, { kind: K }>;
+type Response<K extends Result["kind"]> = Extract<Result, { kind: K }>;
+type TaskHook = (params: Params) => Promise<Result>;
+```
 
-Core requests `describe` for the session, harness, and named resources. The plugin
-returns qualified Runner/provider artifacts, listener settings, runtime environment,
-and a `resources` map of provider-owned paths. Core forwards those protocol values
-unchanged; it never joins, normalizes, or creates paths on the Runner host. There
-is no required filesystem root, shell profile, PATH, home directory, or shared
-filesystem with Core. Artifact identities must come from the installed plugin's
-pinned image or trusted build manifest. Core authenticates the Runner over PRP.
+| Term | Definition | Owner |
+| --- | --- | --- |
+| Core | Paperclip server | Company authorization, execution identity, credentials, permission policy |
+| Plugin | Installed environment driver and worker | Storage, task process, runtime layout, transport, cleanup |
+| Runner | Qualified Paperclip Runner process | Provider execution and Paperclip Runner Protocol (PRP) |
+| Task | One execution attempt | Plugin; identified by `providerLeaseId` |
+| Resource | Named input, output, or durable state | Core selects the name; plugin selects the Runner path |
+| Checkpoint | Durable Runner state and requested resource exports | Plugin supplies; Core verifies |
 
-The resource names express purpose, not directory layout:
+## Enable the driver
 
-- `runner_state`: durable Runner state in the Runner's checkpoint format.
-- `provider_state`: isolated provider configuration and resumable state.
-- `runtime_context`: the execution context document consumed by Runner.
-- `instructions` and `instruction_working_copy`: assigned and editable agent files.
-- `skill:<name>` and `skill_entry:<name>`: an assigned skill bundle and its entry file.
-- `provider_auth`: refreshed subscription authentication, exported when requested.
+1. Add the capability and driver declaration to the plugin manifest.
 
-Return every requested resource and keep its binding stable across attempts that resume the same session.
-Return `codexCommand` and `codexArgs` for Codex, or a qualified `providerPack` for ACPX/OpenCode.
-Executable resolution (including PATH lookup) belongs to the plugin; return resolved
-paths where the installed Runner requires them for artifact verification. Project
-file references remain relative to the bound workspace.
-The provider configures its runtime environment, including any homes, search
-paths, and packaged sidecar locations required by its installed Runner version.
-Core retains authority over run identity, credential binding and permission policy.
-Description environment settings must not contain credentials or authentication
-overrides; credentials arrive only in the transient submit input. Core-selected
-execution inputs take precedence over provider defaults.
+```json
+{
+  "capabilities": ["environment.drivers.register"],
+  "environmentDrivers": [{ "driverKey": "runner", "supportsTasks": true }]
+}
+```
 
-On `submit`, Core supplies identity, a bootstrap ticket, expected artifact identity,
-resource limits, lifecycle policy, selected environment/credentials, and named
-`assets`. Each asset has a `resource` and a Core-local `sourcePath`; the plugin
-materializes it at its own location before starting Runner. It can use HTTP,
-storage, shell/exec, or another facility. Core does not select that transport.
-Core does not send GitHub wrappers or prescribe a guest shell environment.
-Assets are private: do not log them, reuse another attempt's credentials, or
-replace project mounts while a task runs. Core-local paths are only readable by
-the plugin worker on Core; they are never assumed to exist on the Runner host.
+This example is a manifest fragment. Other required manifest fields are omitted.
 
-Core waits for `running`, obtains `connection`, and opens authenticated PRP.
-PRP carries tools, provider sessions, results, and authorization. The task hook
-also supplies bounded file handoff and durable checkpoints. Thus the plugin needs
-no command endpoint and no Core fork. The integrated path supports per-turn
-workspace sessions. Warm process retention and Dot's workspace-free backend are
-not enabled for this driver. A replacement process needs a new task lease. Core authorizes a saved session's
-lease transition only after the prior run is terminal and its execution has a
-verified stop receipt. Company, agent, issue, workspace, environment, and pinned
-plugin driver must match. PRP verifies and archives the prior suspended state
-before binding the new lease. Interrupted archive steps are safe to retry.
-Managed GitHub CLI shell bridges are not installed on task providers; semantic
-Core tools retain their normal authorization.
+2. Write code for these worker hooks.
 
-## Files and durable state
+```ts
+// Required hooks; the worker SDK advertises environmentTask at initialization.
+onEnvironmentAcquireLease
+onEnvironmentTask // TaskHook
+onEnvironmentReleaseLease
+onEnvironmentDestroyLease
 
-`checkpoint` reads the task's durable Runner state and returns `state`. When
-`exports` are present, export each named `resource` into its Core-owned `targetPath` before
-returning. Replace exported directories atomically. Never follow symlinks out of
-the bound resource, preserve private file modes, and fail when a requested
-export cannot be completed. Core exports provider homes and Runner/provider state
-after verified suspension. Core validates the returned identity and lifecycle.
-It also exports the registered agent instruction working copy before task
-completion revokes grants. The existing file store then validates and saves the
-local mirror. A persisted task lease binding and checkpoint marker prevent a stale
-mirror from being saved, including by the instruction recovery sweep. An export failure must not become a successful
-save. Guest source locations are resolved by the plugin, never supplied by Core.
+// Not required by task execution:
+onEnvironmentExecute
+onEnvironmentRealizeWorkspace
+```
 
-For authority rotation, `checkpoint.archive` supplies an archive key and the
-prior identity. Atomically verify that the prior Runner is suspended, archive that
-exact state, and return it. Repeating the same archive request returns the same
-state. Never archive active or identity-conflicting state. Core independently
-checks the returned state before rotating PRP authority. Preserve provider session
-files and volumes across task lease cleanup so the next attempt can resume them.
+3. Assign a saved `plugin` environment to an agent with adapter type `paperclip_runner`.
 
-`read_file` reads a relative path inside the task's bound project workspace.
-Reject traversal, symlinks, non-regular files, and files that change during the
-read. Check the requested size and digest before returning canonical base64.
-Core also bounds and checks the returned bytes before accepting a deliverable.
-There is no caller-selected filesystem root or arbitrary command.
+| Execution profile | Support |
+| --- | --- |
+| Per-turn workspace session | Supported |
+| Normal agent initialization and Test | Runner setup probe |
+| Codex | `codexCommand` and `codexArgs` |
+| Qualified ACPX/OpenCode | `providerPack` |
+| Warm process retention; Dot workspace-free backend | Not enabled |
+| Managed GitHub CLI shell bridge | Not installed; semantic Core tools keep normal authorization |
 
-## Lifetime and operations
+## Acquire a task lease
 
-Acquire the environment lease before submitting a task. The provider lease ID is
-the task's durable attempt ID. Save it before a remote call. Do not use a persistent
-machine ID as this task ID. Multiple attempts can use the same underlying resource. Provider task IDs are
-opaque strings; each provider owns its addressing constraints.
+Example `onEnvironmentAcquireLease` result:
 
-- `describe`: returns the trusted artifact and session filesystem layout. Core
-  validates its project IDs like submission. It does not start a process.
-- `check_project_auth`: prepares the company-validated `projectIds` storage without starting Runner, then inspects OpenAI or Anthropic project authentication settings in the workspace and its parent directories. Return only a conflict boolean, never file contents or secrets. The SDK `checkRunnerProjectAuth` helper accepts a provider-owned file reader; return null only for missing files and reject other read failures. This operation must work before submission and must not require a shell hook.
-- `checkpoint`: exports registered files and returns durable Runner state.
-- `read_file`: returns a confined, size- and hash-checked workspace file.
-- `submit`: supplies a unique list of up to 64 project UUIDs, Runner identity,
-  harness, the client's supported PRP version range (`runner.protocolMin` and `runner.protocolMax`, inclusive), and a transient
-  bootstrap ticket. The Runner run and lease IDs must match the persisted host records. Only a running run with an active,
-  unexpired lease can submit. Core setup probes use a private, expiring probe identity on an ad-hoc lease instead of a heartbeat run.
-- `status`: returns the phase and optional exit code. Optional `executionStopped`
-  is live provider evidence that the complete task process tree has stopped.
-- `connection`: returns a private authenticated WebSocket endpoint for a running
-  task. The tenant connects to this provider endpoint. Transport credentials remain
-  on the server. PRP authentication still binds
-  the Runner to its authorized run.
-- `complete`: releases task grants according to the provider's policy. It does not
-  imply that the process or its descendants stopped.
-- `stop`: requests cancellation of the task. An accepted request is not a process
-  termination receipt. Reconcile status before treating execution as stopped.
+```json
+{
+  "providerLeaseId": "attempt-1",
+  "metadata": { "remoteCwd": "/provider-selected/project" }
+}
+```
 
-Submit the task, wait until it is running, then request `connection` and connect
-to its WSS endpoint with the returned headers. Core obtains this endpoint only from the plugin task response. The plugin owns provisioning, address discovery, TLS termination, authentication, and any HTTP or exec calls needed to deliver it. Core does not derive an endpoint from provider lease IDs or provider-specific URLs. The provider must select a Runner
-whose supported PRP range overlaps the client's range. The client uses that same
-range during the PRP handshake, which negotiates the highest shared version and
-verifies Runner identity and artifacts before execution.
+1. Set a unique task ID for each attempt.
+2. Save the task ID before a remote call.
+3. Return the workspace path in `metadata.remoteCwd`.
+4. Keep persistent machine IDs separate from task IDs.
 
-Submission, completion and stop return `accepted`. Acceptance does not imply
-readiness or success. Status and connection return distinct typed results. Every
-result echoes the task ID and is checked by both the worker SDK and the host.
+The path above is a plugin-selected example. Core does not create or inspect that directory.
 
-## Retry and credentials
+```ts
+// Core's server-only entry point; the caller authorizes company access.
+environmentRuntime.task({ companyId, leaseId, operation });
 
-A timeout may follow successful submission. Retain the same task ID and launch
-configuration, inspect status, and retry the exact request when needed. Never
-allocate a second attempt merely because the response was lost. A stop issued before submission must fence that attempt against a late launch.
-Providers must
-reject conflicting reuse and deduplicate identical submissions, including after a
-terminal outcome. A new execution attempt requires a new lease and task ID.
+// The plugin receives Params, including:
+type Context = Pick<Params,
+  | "driverKey" | "companyId" | "environmentId" | "issueId" | "config"
+  | "lease" | "taskId" | "runId" | "agentId" | "projectIds" | "operation"
+>;
+```
 
-Do not store bootstrap tickets, connection headers, or provider credentials in
-lease metadata, plugin state, run profiles, logs, or browser responses. The host
-sanitizes worker errors. Treat a connection result as credential-bearing material.
-An endpoint is transport access, not a replacement for the Runner protocol's
-identity and artifact verification.
+| Binding | Source or constraint |
+| --- | --- |
+| `taskId` | Persisted `lease.providerLeaseId`; opaque, nonempty string |
+| Plugin and driver | Pinned acquisition record; environment edits cannot redirect an existing lease |
+| Company, agent, issue, run | Core records |
+| `projectIds` | Core-validated company projects; maximum 64 UUIDs |
+| Cleanup context | `environmentId`, `runId`, `agentId` can be `null`; `projectIds: []` |
+| Active operations | `describe`, `check_project_auth`, `submit`, `connection`, `read_file`: active, unexpired lease and authorized execution |
+| Execution authority | Running heartbeat run, or private expiring setup-probe identity |
+| Deleted environment or run | `status`, `stop`, `complete` remain available through the pinned lease |
 
-Providers own resource-specific credential lookup, mounts, task status, and cleanup.
-Task lease cleanup must never destroy a longer-lived resource as an implicit
-fallback. Unsupported operations and unavailable providers fail closed.
+Use the saved lease binding for cleanup. Do not require current project or environment records for cleanup.
 
-Cleanup operations (`status`, `complete`, `stop`) remain available when an
-environment or run has been deleted. The corresponding `environmentId`, `runId`,
-and `agentId` can be null. Providers must use their persisted lease binding for
-cleanup; they must not need a current project or environment configuration.
-Description, submission, connection, and workspace reads require the environment
-and running run to still exist.
-Cleanup receives an empty `projectIds` list and uses the persisted task binding.
+## Operations and results
 
-## Cancellation and recovery
+| `operation.kind` | Required result `kind` | Effect |
+| --- | --- | --- |
+| `describe` | `description` | Runtime configuration; no process start |
+| `check_project_auth` | `project_auth` | Project authentication inspection; no Runner start |
+| `submit` | `accepted` | Launch request |
+| `status` | `status` | Observed task state |
+| `connection` | `connection` | Authenticated WSS endpoint |
+| `checkpoint` | `checkpoint` | Durable state and requested exports |
+| `read_file` | `file` | Bounded workspace file |
+| `stop` | `accepted` | Cancellation request |
+| `complete` | `accepted` | Task grant release |
 
-Core records a content-free dispatch marker on the lease before submitting. A lost
-submit reply causes status reconciliation against the same task; Core does not
-resubmit with a new identity. Cancellation while assets are still being prepared
-prevents a late submission. Cancellation after dispatch calls `stop` and waits for
-`executionStopped: true`; a terminal phase or an accepted stop is insufficient.
+Return the request's `taskId` in every result. Reject unsupported operations.
 
-Core closes the PRP route, confirms task stop, verifies and installs the native
-checkpoint, and only then sends `complete`. Failed exports keep task grants for
-cleanup recovery. Core stores the original environment identity and the intended
-lease cleanup hook. Recovery calls that pinned release or destroy hook even after
-the environment record is deleted; a hook failure remains `pending_cleanup`.
-Core checkpoints the existing native session state before completing task cleanup.
-Lease release and destroy also check the dispatch marker, so a controller failure
-does not bypass termination verification. Unconfirmed cleanup preserves the pinned
-provider handle in `pending_cleanup`. The existing cleanup sweep retries stop,
-status, and completion, including after the environment record is deleted. Only a
-confirmed task stop produces a run-bound remote termination receipt.
+```ts
+import { parseEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
 
-The integrated fake-provider test acquires a real database lease and dispatches
-through the SDK RPC host. It covers launch input forwarding, company/project denial,
-connection, cancellation proof, lease release, and cleanup recovery after deletion.
-The task fixture advertises no command or workspace hook. It also checks asset
-handoff and instruction export failures. A separate Runner transport test uses
-the real Runner binary to authenticate a provider-owned artifact.
-The WebSocket connection is mocked in the database fixture; it is not live-provider or real
-Runner handshake evidence. Providers must qualify their actual Runner and storage
-implementation before production use.
+// Worker SDK and Core both validate the response.
+parseEnvironmentTaskResult(operation, taskId, result);
 
-## Agent setup verification
+// Acceptance is not readiness, successful execution, or proof of termination.
+type Accepted = Response<"accepted">; // { kind: "accepted"; taskId: string }
+type Phase = Response<"status">["phase"];
+// "preparing" | "running" | "completed" | "failed" | "cancelled" | "interrupted"
+```
 
-Normal agent initialization and the agent Test flow acquire a disposable task lease.
-Core issues an expiring private Runner identity, with no issue, project mounts, or
-agent tool authority. It uses the same describe, submit, connection, status,
-checkpoint, stop, and complete operations as execution. No workspace-realization
-or command hook is required. Core also bounds Runner's own lifetime through its supported maximum-runtime flag to the probe deadline, so a controller crash cannot leave an unlimited probe. Core runs a bounded read-only hello turn and checks
-PRP identity, the qualified provider driver, the observed model, a completed
-response, and confirmed task shutdown. A plugin readiness flag cannot replace
-this probe. Managed accounts also require the project-auth check before launch.
-Core preserves refreshed subscription credentials through checkpoint export.
+## Describe runtime resources
+
+Example operation:
+
+```json
+{
+  "kind": "describe",
+  "sessionId": "session-1",
+  "harness": "codex",
+  "projectIds": [],
+  "resources": ["runner_state", "provider_state", "runtime_context"]
+}
+```
+
+Example result, with illustrative paths and artifact identity:
+
+```json
+{
+  "kind": "description",
+  "taskId": "attempt-1",
+  "runner": {
+    "executable": "/provider-selected/bin/paperclip-runner",
+    "version": "1.0.0",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "codexCommand": "codex",
+  "codexArgs": ["app-server"],
+  "resources": {
+    "runner_state": "/provider-selected/session/runner",
+    "provider_state": "/provider-selected/session/account",
+    "runtime_context": "/provider-selected/session/context.json"
+  },
+  "environment": { "CODEX_HOME": "/provider-selected/session/account" },
+  "connection": {
+    "mode": "listen",
+    "listenAddress": "0.0.0.0",
+    "listenPort": 9000,
+    "listenPath": "/api/runner/v1/connect/run-1"
+  }
+}
+```
+
+| Resource name | Content |
+| --- | --- |
+| `runner_state` | Durable state in Runner checkpoint format |
+| `provider_state` | Isolated provider configuration and resumable state |
+| `runtime_context` | Runner execution context document |
+| `instructions` | Assigned agent files |
+| `instruction_working_copy` | Editable agent files |
+| `skill:<name>` | Assigned skill bundle |
+| `skill_entry:<name>` | Skill entry file |
+| `provider_auth` | Refreshed subscription credentials, when requested |
+
+1. Return every requested resource.
+2. Keep resource bindings unchanged across attempts that resume the same session.
+3. Use artifact identities from the plugin's pinned image or trusted build manifest.
+4. Replace the example artifact identity with the installed artifact's identity.
+5. Use executable paths that meet the installed Runner's artifact verification requirements.
+6. Set listener parameters for the installed Runner and the request's run ID.
+7. Keep credentials and authentication overrides out of `description.environment`.
+
+```ts
+// Codex profile:
+type Codex = Required<Pick<Response<"description">, "codexCommand" | "codexArgs">>;
+
+// ACPX/OpenCode profile; artifact fields: executable, version, digest.
+type ProviderPack = NonNullable<Response<"description">["providerPack"]>;
+// authorityDigest, node, optional acpxSidecar, opencodeExecutable, opencodeProxy
+```
+
+| Value | Contract |
+| --- | --- |
+| Runner paths | Plugin-issued protocol values; Core forwards them unchanged |
+| Executable names on `PATH` | Allowed where supported by the installed Runner |
+| Project file references | Relative to the bound workspace |
+| Homes, search paths, sidecars | Plugin configuration; no Core-selected layout |
+| `description.connection` | Runner listener configuration; not the external WSS endpoint |
+| `description.environment` | Non-secret defaults; Core-selected execution inputs take precedence |
+| Path strings | 1–4096 characters; no ASCII control characters U+0000–U+001F |
+
+## Submit the task
+
+Example operation, with illustrative identities and a ticket placeholder:
+
+```json
+{
+  "kind": "submit",
+  "projectIds": [],
+  "runner": {
+    "protocolMin": 1, "protocolMax": 1, "harness": "codex",
+    "runnerId": "runner-1", "leaseId": "core-lease-1", "runId": "run-1",
+    "sessionId": "session-1", "turnId": "turn-1", "itemId": "item-1"
+  },
+  "bootstrapTicket": "example-only",
+  "launch": {
+    "assets": [{ "resource": "runtime_context", "sourcePath": "/core-selected/input/context.json" }],
+    "runnerVersion": "1.0.0",
+    "runnerDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "maxOutboxBytes": 1048576, "p0ReserveBytes": 65536,
+    "lifecyclePolicy": { "mode": "per_turn", "idleTimeoutMs": null },
+    "environment": {}
+  }
+}
+```
+
+| Field | Constraint |
+| --- | --- |
+| `projectIds` | Unique UUIDs; maximum 64 |
+| `runner.leaseId`, `runner.runId` | Core lease and execution IDs; distinct from plugin `taskId` |
+| `runner.protocolMin`, `runner.protocolMax` | Inclusive client-supported range; minimum ≤ maximum |
+| `bootstrapTicket` | Core-issued transient secret; no plugin substitution |
+| `launch` | Optional in the SDK; supplied by Core for native execution |
+| `launch.assets` | Maximum 128 named inputs |
+| `launch.environment` | Core-selected inputs, including credentials |
+| `launch.maxRuntimeMs`, `maxLifetimeMs`, `reconnectGraceMs` | Optional nonnegative integers |
+
+1. Prepare storage for the validated `projectIds` before Runner starts.
+2. Copy each asset from its Core-local `sourcePath` to its bound resource location.
+3. Select a Runner with a PRP version range that overlaps `[protocolMin, protocolMax]`.
+4. Start Runner with the supplied identity, ticket, limits, and lifecycle policy.
+5. Keep project mounts unchanged while the task runs.
+
+| Asset boundary | Rule |
+| --- | --- |
+| `sourcePath` | Readable by the plugin worker on Core; not a Runner-host path |
+| Transfer method | Plugin choice: HTTP, object storage, shell/exec, or another facility |
+| Project volumes | Plugin authority; no Core checkout upload or restore over project storage |
+| Private input | No asset logging or credential reuse across attempts |
+| Core authority | Run identity, selected credentials, permission policy |
+
+## Return the WSS endpoint
+
+Example `connection` result:
+
+```json
+{
+  "kind": "connection",
+  "taskId": "attempt-1",
+  "endpoint": {
+    "kind": "authenticated_websocket",
+    "websocketUrl": "wss://runner.example.com/tasks/attempt-1",
+    "generation": "generation-1",
+    "secretHeaders": [{ "name": "Authorization", "value": "example-only" }]
+  }
+}
+```
+
+| Endpoint field | Constraint |
+| --- | --- |
+| `websocketUrl` | `wss:`; no URL credentials, query, or fragment |
+| `generation` | Nonempty opaque string |
+| `secretHeaders` | Maximum 16; valid HTTP header names; no CR/LF in values |
+| Provisioning and discovery | Plugin-owned; no required HTTP, exec, or shell API |
+| TLS termination and transport authentication | Plugin-owned |
+| Core connection | Exact returned endpoint and headers; no address derivation from lease IDs |
+| PRP handshake | Highest shared version; independent identity and artifact verification |
+
+Do not store tickets, headers, or credentials in lease metadata, plugin state, run profiles, logs, or browser responses.
+
+## Lifecycle, retry, and cancellation
+
+Core's execution sequence, shown as pseudocode:
+
+```text
+acquire lease -> describe -> prepare assets -> persist dispatch marker -> submit
+status until running -> connection -> authenticated PRP session
+close PRP route -> stop -> status until executionStopped == true
+checkpoint -> verify and install exported state -> complete -> release/destroy lease
+```
+
+| Event | Required plugin behavior |
+| --- | --- |
+| Lost submit response | Same task ID and launch configuration remain valid for reconciliation |
+| Repeated identical submit | One execution, including retries after a terminal outcome |
+| Conflicting reuse of task ID | Rejection |
+| Stop before submit | Attempt fenced against a late launch |
+| New execution attempt | New lease and task ID |
+| Accepted stop or terminal phase | Insufficient termination evidence |
+| `executionStopped: true` | Observed termination of the task and all descendants |
+| `complete` | Grant release; not process termination evidence |
+| Lease cleanup | Persistent session files and longer-lived volumes retained |
+
+Core prevents submission after cancellation during asset preparation. After dispatch, Core requires verified termination before lease cleanup.
+Unconfirmed termination or failed cleanup remains `pending_cleanup`. Recovery uses the pinned provider and original release/destroy hook.
+Failed exports retain task grants for recovery. Only confirmed termination produces a run-bound remote termination receipt.
+
+## Checkpoint and file transfer
+
+Example checkpoint operation:
+
+```json
+{
+  "kind": "checkpoint",
+  "exports": [{ "resource": "instruction_working_copy", "targetPath": "/core-selected/export/instructions" }]
+}
+```
+
+```ts
+type Checkpoint = Request<"checkpoint">;
+type CheckpointResult = Response<"checkpoint">; // { kind, taskId, state }
+type Archive = NonNullable<Checkpoint["archive"]>;
+// archiveKey; priorIdentity: { runnerInstanceId, environmentLeaseId, runId,
+//                            normalizedSessionId, turnId, itemId }
+```
+
+1. Before you return the result, export each requested resource to its Core-owned `targetPath`.
+2. Replace exported directories atomically.
+3. Keep private file modes unchanged.
+4. Reject symlinks that leave the bound resource.
+5. If an export fails, reject the operation.
+6. Return durable Runner state in `state`.
+
+| Checkpoint use | Additional requirements |
+| --- | --- |
+| Normal suspension | Core validates state identity and lifecycle before installation |
+| Instruction save | Export before `complete`; persisted lease binding and checkpoint marker prevent stale saves |
+| Recovery sweep | Same validation as normal instruction save; export failure cannot become a successful save |
+| `archive` | Atomic verification and archive of the exact suspended prior identity |
+| Repeated archive key and identity | Same archived state; interrupted archive safe to retry |
+| Active or conflicting prior state | Rejection |
+| Session lease transition | Prior run terminal and verified stop; matching company, agent, issue, workspace, environment, and pinned driver |
+
+Example workspace file operation and result:
+
+```json
+{
+  "kind": "read_file",
+  "contentRef": "output/report.txt",
+  "byteSize": 6,
+  "sha256": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+}
+```
+
+```json
+{ "kind": "file", "taskId": "attempt-1", "base64": "aGVsbG8K" }
+```
+
+1. Read `contentRef` relative to the task's bound project workspace.
+2. Reject traversal, symlinks, non-regular files, and files that change during the read.
+3. Before you return canonical base64, make sure the size and SHA-256 digest match the request.
+
+The maximum file size is 64 MiB. Core independently validates the returned bytes.
+
+## Project authentication and setup verification
+
+Example operation and result:
+
+```json
+{ "kind": "check_project_auth", "provider": "openai", "projectIds": [] }
+```
+
+```json
+{ "kind": "project_auth", "taskId": "attempt-1", "conflict": false }
+```
+
+1. Prepare the validated project storage before inspecting authentication settings.
+2. Examine provider configuration in the workspace and its parent directories.
+3. Return only the conflict boolean.
+4. Do not return configuration contents or secrets.
+5. Make sure this operation can run before `submit` without a shell hook.
+
+Optional SDK helper for POSIX-style paths:
+
+```ts
+import { checkRunnerProjectAuth } from "@paperclipai/plugin-sdk";
+
+checkRunnerProjectAuth(
+  { provider: "openai", cwd: pluginSelectedWorkspace },
+  providerReadFile, // (absolutePath: string) => Promise<string | null>
+);
+// Missing file -> null; other read failures -> rejection.
+// "openai": .codex/config.toml
+// "anthropic": .claude/settings.json, .claude/settings.local.json
+```
+
+| Setup probe | Core behavior |
+| --- | --- |
+| Trigger | Normal agent initialization and agent Test |
+| Authority | Disposable lease; private expiring identity; no issue, project mounts, or agent tool authority |
+| Operations | Same task operations as execution |
+| Execution | Bounded read-only hello turn; Runner maximum runtime tied to probe deadline |
+| Acceptance | Verified PRP identity, qualified provider driver, expected model, completed response, confirmed shutdown |
+| Managed account | Project-auth inspection before launch; refreshed credentials preserved by checkpoint export |
+| Plugin readiness flag | Insufficient evidence; cannot replace the Runner probe |
+
+## Verification scope
+
+| Test | Evidence |
+| --- | --- |
+| [Task integration](../../server/src/__tests__/plugin-runner-task.integration.test.ts) | Database lease, SDK RPC, company/project denial, assets, instruction export, cancellation, cleanup after deletion |
+| [Setup probe](../../server/src/services/native-runtime/plugin-runner-probe.test.ts) | Real Runner, provider-selected paths, task-only worker, authenticated setup turn and shutdown |
+| [Runner transport](../../packages/paperclip-runner/src/live/runnerd-codex-transport.test.ts) | Real Runner artifact authentication and runtime binding |
+
+The database fixture mocks the WebSocket connection. These tests do not qualify a live provider's storage or transport.
+
+Before production use, do qualification tests for the plugin's actual Runner, storage, and transport.
