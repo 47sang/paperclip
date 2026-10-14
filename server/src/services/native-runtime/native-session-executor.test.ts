@@ -10117,8 +10117,10 @@ describe("runnerd provider runtime wiring", () => {
         runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
       await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
         runnerExecutionTarget: target, runnerIngressAuthorized: true,
-        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/wrappers", PATH: "/controller/private/bin" } });
+        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/wrappers", PATH: "/controller/private/bin", PAPERCLIP_WORKSPACE_CWD: "/controller/workspace" } });
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["project-one", "project-two"] }));
+      expect(state.createBackend.mock.calls.at(-1)![1]).toMatchObject({ workingDirectoryAuthority: "remote_runner",
+        environment: { PAPERCLIP_WORKSPACE_CWD: "/workspace" } });
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
       expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
         runnerProcessLauncher: launcher,
@@ -10128,7 +10130,7 @@ describe("runnerd provider runtime wiring", () => {
         runnerArtifact: expect.objectContaining({ version: "fixture" }), codexCommand: "/codex", codexArgs: ["app-server"],
         runnerRuntimePaths: expect.objectContaining({ codexHome: "/accounts/selected", runtimeContext: "/inputs/context.json" }), readRunnerState: expect.any(Function),
         archiveExternalRunnerState: expect.any(Function),
-        environment: expect.objectContaining({ HOME: "/accounts/selected" }),
+        environment: expect.objectContaining({ HOME: "/accounts/selected", PAPERCLIP_WORKSPACE_CWD: "/workspace" }),
       }));
       expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["project-one", "project-two"] }));
       const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {

@@ -11497,6 +11497,7 @@ async function createRunnerdBackendWithinSessionClaim(
     }) : null;
     // Runtime paths/environment come from the provider. Core only supplies selected execution inputs.
     const taskEnvironment = pluginRunnerEnvironment(grokCredential?.environment ?? input.runnerEnvironment ?? {}, description.environment);
+    taskEnvironment.PAPERCLIP_WORKSPACE_CWD = remoteTarget.remoteCwd;
     if (relayAssignedMcp) {
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_NAME;
       delete taskEnvironment.PAPERCLIP_NATIVE_MCP_URL;

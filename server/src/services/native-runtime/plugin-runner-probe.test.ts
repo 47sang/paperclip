@@ -42,7 +42,6 @@ describe("plugin Runner setup", () => {
     const workspace = join(root, "workspace");
     // Provider-selected locations share no prescribed runtime root or directory names.
     const resources: Record<string, string> = { runner_state: join(root, "records"), provider_state: join(root, "account"), runtime_context: join(root, "input.json") };
-    await mkdir(workspace);
     const server = createServer();
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as { port: number }).port;
@@ -66,6 +65,8 @@ describe("plugin Runner setup", () => {
           connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: port, listenPath },
           runner: { executable: runnerBinary, ...artifact }, codexCommand, codexArgs: ["app-server"] };
         case "submit": {
+          // Core must not require the provider's workspace to exist locally before dispatch.
+          await mkdir(workspace);
           const launch = op.launch!;
           for (const asset of launch.assets) await cp(asset.sourcePath, resources[asset.resource], { recursive: true });
           handle = spawnRunner({ ...launch, runnerBinaryPath: runnerBinary, stateDirectory: resources.runner_state,
