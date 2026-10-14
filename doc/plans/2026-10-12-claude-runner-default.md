@@ -1255,3 +1255,39 @@ stopped on its404 target check before creating an attachment or work product.
 That foreign instance is left untouched. Claude preview recovery must select
 a separate port and the existing Claude data directory; the historical3105
 link is no longer a usable Claude preview.
+
+
+### Fresh review and cancellation correction — 2026-10-14
+
+Fresh reviews passed behavior 7069077274 and platforms 6b0cb979d4 at 5/5.
+Protocol 519e8369a1 received two valid findings: stale profile 23 catalog
+expectations and an owned Claude settings write that blocked startup abort.
+Correction dd82936c1d updates the Pi 25 expectations/fingerprint and uses the
+existing abort-aware admission helper, transferring the unfinished write and
+lifetime lease to retained cleanup. Both successful and failing late writes
+return cancellation promptly while rejecting a competing provider. All 55
+runtime-host tests, 72 Pi evidence controls, runner noemit and profile/manifest
+checks pass. These are fake-provider controls, not paid execution evidence.
+
+Hosted jobs 38606914671 and 38606913944 received simultaneous runner shutdown
+signals at 17:35:06 UTC. One failed-job prerequisite rerun was requested before
+the new review findings. Credential-free package campaign 38607132186 was
+canceled once the runtime fix invalidated its source 6b0cb979d4. Completed
+producer outputs remain historical; no new package qualification is claimed.
+A replacement package campaign waits for fresh review of the corrected runtime.
+
+The existing Product E2E browser helper exercised UI source 7069077274 against
+the retained older backend at 3115 through New Agent, Claude Code and Advanced.
+The runner shows Paperclip Runner (default); keyboard Legacy/native selection
+passes. Stable light/dark screenshots at 1440 and 390 px show no horizontal page
+overflow. The inherited Custom Gateway subtitle clips on 390 px; Claude API-key
+controls remain visible. Every API mutation was blocked by the browser guard;
+one local connection-attempt request was intercepted, no agent was created and
+no setup probe or provider turn was submitted. This establishes UI rendering
+and controls only, not saved-default persistence or final runtime execution.
+UI receipt: /private/tmp/claude-current-ui-review-20261014.json.
+Retained Claude preview: http://127.0.0.1:3115 (historical runtime treatment).
+The prior reconciliation report was uploaded to its original completed QA task
+and independently byte-checked: attachment aabe2e7e-a8a0-4408-bc7e-a013e0f7485b,
+5916 bytes, SHA256 3bd9bcfa64db6a3a7968952122b1a5c2ae27e24f0e4ff336fd47ae374bae8ff1.
+Paid acceptance and budget/hold changes remain stopped pending human approval.
