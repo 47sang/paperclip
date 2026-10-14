@@ -1237,3 +1237,21 @@ controls pass. Logs use /private/tmp/claude-adb69-* prefixes. No new rendering,
 paid model turn, budget read/resume, hold release or local native build ran.
 The local preview remains its separately recorded older treatment; this source
 composition is not a claim of current installed/runtime or task/revision proof.
+
+
+### Hosted clean-install correction — 2026-10-14
+
+The first reconciled hosted Build jobs (38605177149 and 38605182039)
+failed in the credential-free Pi public-install probe: the generated profile25
+digest was dd673874…, while the probe retained d25d674c…. Protocol correction
+519e8369a1 aligns that exact assertion with the immutable profile; all24 existing
+public-install sandbox controls and profile generation checks pass locally.
+The daemon, profile, admission checks and paid-provider behavior are unchanged.
+The full clean consumer will rerun in hosted CI; no local Docker build ran.
+
+The earlier port3105 preview has been replaced by another test-drive
+(source a6d81b67cb, separate github-review data directory). The report uploader
+stopped on its404 target check before creating an attachment or work product.
+That foreign instance is left untouched. Claude preview recovery must select
+a separate port and the existing Claude data directory; the historical3105
+link is no longer a usable Claude preview.
