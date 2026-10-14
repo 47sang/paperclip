@@ -129,6 +129,7 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     icon: MousePointer2,
   },
   // Display-only choice: persisted as paperclip_runner with provider openai_dot.
+  grok_bot: { label: "Grok Bot", experimental: true, icon: Bot, description: "An existing external Bot in Grok" },
   openai_dot: {
     label: "OpenAI Dot",
     description: "Your Dot in ChatGPT",
@@ -208,10 +209,11 @@ export function getAdapterDisplay(type: string): AdapterDisplayInfo {
   };
 }
 
-/** Codex branding follows its harness; diagnostics retain the saved adapter. */
 export function agentDisplayAdapterType(agent: { adapterType: string; adapterConfig: Record<string, unknown> }): string {
   if (agent.adapterType !== "paperclip_runner") return agent.adapterType;
-  if (agent.adapterConfig.provider === "openai_dot") return "openai_dot";
+  if (agent.adapterConfig.provider === "openai_dot" || agent.adapterConfig.provider === "grok_bot") {
+    return agent.adapterConfig.provider;
+  }
   const harness = agentHarnessType(agent.adapterType, agent.adapterConfig);
   return ["codex_local", "claude_local"].includes(harness) ? harness : agent.adapterType;
 }

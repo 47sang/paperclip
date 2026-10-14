@@ -39,6 +39,7 @@ export type QualifiedPaperclipRunnerAcpxAgent =
 type AdmittedPaperclipRunnerAcpxAgent = QualifiedPaperclipRunnerAcpxAgent | AcpxQualificationCandidate;
 
 export type PaperclipRunnerProviderProfile =
+  | { provider: "grok_bot"; backend: "grok_bot_mcp"; model: null; externalBindingId: string }
   | { provider: "openai_dot"; backend: "openai_dot_mcp"; model: null; dotBindingId: string }
   | {
       provider: "codex";
@@ -72,6 +73,7 @@ export type PaperclipRunnerProviderProfile =
     };
 
 export type PaperclipRunnerNativeProviderInput =
+  | { provider: "grok_bot"; model: null; dotBinding: import("../../vendor/paperclip-runner/index.js").DotBindingSnapshot }
   | { provider: "openai_dot"; model: null; dotBinding: import("../../vendor/paperclip-runner/index.js").DotBindingSnapshot }
   | {
       provider: "codex";
@@ -167,6 +169,18 @@ export function validatePaperclipRunnerDotConfig(config: Record<string, unknown>
   return bindingId;
 }
 
+export function validatePaperclipRunnerGrokConfig(config: Record<string, unknown>, requireBinding = true): string | null {
+  const bindingId = optionalString(config.externalBindingId);
+  if ((requireBinding && !bindingId) || (bindingId && !/^[0-9a-f-]{36}$/i.test(bindingId))
+      || config.allowUnmeteredProvider !== true || (config.lifecycleMode && config.lifecycleMode !== "per_turn")
+      || optionalString(config.model) || config.dotWorkspaceAccess === true || config.dotAttachmentAccess === true
+      || optionalString(config.cwd) || optionalString(config.command)) {
+    throw new PaperclipRunnerProviderProfileError("paperclip_runner_grok_config_invalid", "Grok Bot requires a bound per-turn work session and an explicit acknowledgement of unreported provider spending. Paperclip workspace, shell and third-party app tools are unavailable.");
+  }
+  return bindingId;
+}
+
+/** A task may change a local Runner model (and Codex effort), but not provider identity. */
 export function projectPaperclipRunnerTaskConfig(
   backend: "codex_app_server" | "opencode_server" | "acpx_runtime",
   agentConfig: unknown,
@@ -385,6 +399,9 @@ export function resolvePaperclipRunnerProviderProfile(
     );
   }
 
+  if (candidate === "grok_bot") {
+    return { provider: "grok_bot", backend: "grok_bot_mcp", model: null, externalBindingId: validatePaperclipRunnerGrokConfig(config)! };
+  }
   if (candidate === "openai_dot") {
     const bindingId = validatePaperclipRunnerDotConfig(config)!;
     return { provider: "openai_dot", backend: "openai_dot_mcp", model: null, dotBindingId: bindingId };
@@ -576,6 +593,10 @@ export function resolvePaperclipRunnerNativeProviderInput(input: {
       "paperclip_runner_provider_changed",
       "Paperclip Runner provider changed after this run selected its native backend.",
     );
+  }
+  if (profile.provider === "grok_bot") {
+    if (!input.dotBinding || input.dotBinding.bindingId !== profile.externalBindingId) throw new PaperclipRunnerProviderProfileError("paperclip_runner_grok_binding_unavailable", "The Grok binding must be resolved by the server after normal admission.");
+    return { provider: "grok_bot", model: null, dotBinding: input.dotBinding };
   }
   if (profile.provider === "openai_dot") {
     if (!input.dotBinding || input.dotBinding.bindingId !== profile.dotBindingId) throw new PaperclipRunnerProviderProfileError("paperclip_runner_dot_binding_unavailable", "Dot binding must be resolved by the server after normal admission.");

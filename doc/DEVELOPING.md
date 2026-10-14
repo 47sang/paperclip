@@ -124,19 +124,30 @@ API responses and MCP transports keep their existing compression behavior.
 
 The board UI Storybook keeps stories and Storybook config under `ui/storybook/` so component review files stay out of the app source routes.
 
-Stories are grouped in `ui/storybook/stories/<feature-area>/` and the sidebar follows
-the feature map's sections and feature names. Shared fixtures live in
-`ui/storybook/support/`. Keep each suite's explicit meta `id` and catalog `stableId`
-when changing titles or locations so existing review links remain valid.
+Stories are grouped in `ui/storybook/stories/<feature-area>/`. Feature recipe
+navigation controls the sidebar. Shared fixtures live in `ui/storybook/support/`.
+Keep each suite's explicit meta `id` when changing titles or locations so existing
+review links remain valid. Author capability associations, implementation/data
+classification and durable limitations in the story's `parameters.paperclip`.
 
-Start from the downstream [Storybook feature index](../maps/storybook-map/INDEX.md)
-to find existing stories by capability. Its [contract](../maps/storybook-map/README.md)
-separates production subjects, prototype implementations, simulated data, and
-source-review status. Use `maintain-storybook` to reconcile stories/fixtures with
-the feature map, and `review-storybook` to exercise them with existing tools.
-Run `node scripts/storybook-catalog.mjs` after affected story or review-source
-changes; review drift before updating fingerprints, then regenerate with `--write`.
-The feature map remains an upstream input and needs no Storybook-specific fields.
+Storybook start/build generates the catalog, feature Overview pages, and literal
+sidebar order from the checked-out sources. `ui/storybook/generated/` and
+`ui/storybook/.storybook/preview.tsx` are ignored build outputs. Shared preview
+fixtures and decorators live in `preview-base.tsx`; generation never edits it.
+UI typechecking also generates the inputs on a fresh checkout.
+
+Run `node scripts/storybook-catalog.mjs` to assemble the local Markdown indexes,
+verification routes and page inventory under `maps/generated/`. Use `--check`
+for validation without writes. These outputs are not committed. Use Git diffs to
+select affected sources for review; do not maintain review fingerprints or append
+a shared review journal. Record executed evidence in the PR, issue, or CI result.
+
+The [Storybook map contract](../maps/storybook-map/README.md) describes annotations
+and the [published guide](https://d1p6rlowie26tp.cloudfront.net/storybook/branches/master/?path=/story/overview-storybook-guide--coverage-guide).
+Use `maintain-storybook` for source alignment and `review-storybook` for rendering
+and interactions. Generated guides, example counts and structural checks do not
+establish production behavior. Feature recipes retain optional verification
+scope guidance; the feature/access structural check needs no Storybook runtime.
 
 **Chat & Comments → Human identity** covers other-human names and avatars on
 left-aligned task messages alongside agents; only the viewer’s own messages are blue/right-aligned. Its review guide explains the data flow; the task journey uses representative
@@ -533,7 +544,7 @@ npx paperclipai allowed-hostname dotta-macbook-pro
 
 The [feature map](../maps/feature-map/README.md) is an optional reference for user
 entry points, targeted tests, manual verification recipes, and coverage gaps.
-Its page inventory is a source snapshot. The documented journeys have separate
+Its generated page inventory lists current source references. The documented journeys have separate
 verification steps and do not run automatically from the map.
 
 The sibling [agent access map](../maps/agent-access-map/README.md) describes API
@@ -922,6 +933,11 @@ No Docker or external database is required for this mode.
 - `off`: skip the predicate and shadow logging
 
 Grant checks read current database state; there is no positive privacy cache.
+
+A run-history list is one read operation. It checks each distinct company,
+run scope, and task binding once, then applies that decision to the related
+rows in the same response. Every new list operation reads permissions again.
+
 Sharing a task grants access to that task and its private descendants. Parents
 and siblings need separate grants. An agent's access is intersected with its
 run's responsible user's current access.
@@ -1010,6 +1026,13 @@ Tasks use every distinct repository attached to their project, including reposit
 When an additional repository has a configured local checkout, Paperclip seeds the task copy from its current commit and uncommitted files. Git-ignored files stay out of that copy. Subsequent task edits stay in the task copy. They do not overwrite the configured source folder. Existing task copies retain their work across runs.
 
 Sandbox staging, including Daytona, transfers each repository's Git history and working files. Restore merges files and commits back into each local task checkout independently. Durable sandbox recovery keeps the same repository snapshots. Normal ignore and workspace exclusion rules still apply. A clone failure stops task preparation with an error so the agent does not start with only part of the project.
+
+An interrupted legacy run can retain a file recovery hold after its automatic
+replay decision is resolved. The task's recovery notice remains authoritative.
+After recovering and verifying files from the original workspace, a board member
+with runtime access can record the evidence in that notice. This operation checks
+the exact source run and stop receipts, leaves the task status unchanged, and does
+not start another run. A chat reply cannot clear the file recovery hold.
 
 Staging preserves relative symlink targets in secondary repositories, including skill links such as `.claude/skills/demo -> ../../skills/demo`. It does not rewrite them to host temporary paths or copy their target contents in place of the link. Daytona still rejects outbound archives with absolute or escaping link targets before extraction.
 
@@ -1354,6 +1377,8 @@ When a workspace service runs Paperclip for browser OAuth QA, configure its `exp
 ## Heartbeat Service Extractions
 
 Keep relevant heartbeat extractions and their focused tests in `server/src/services/heartbeat/`.
+Follow [Heartbeat execution boundaries](../rules/heartbeat-execution-boundaries.mdc)
+for state lifetime, admission, recovery ownership, cleanup ordering, and verification.
 
 Runtime-service coordination is in `server/src/services/heartbeat/runtime-services.ts`.
 It validates service intents, starts configured services, records adapter-managed
@@ -2260,10 +2285,42 @@ that flushes after the tab hides marks data stale without starting a refetch.
 The developer-server health poll also stops in hidden tabs.
 
 Workspace detail responses share concurrent Git inspections and reuse their
-results for up to five seconds after completion. The cache holds at most 256
-entries. Close-readiness checks, the terminal-workspace reaper, and the final
-cleanup validation still inspect Git afresh. A display result never authorizes
-worktree removal.
+results for up to thirty seconds after completion. Workspace identity and metadata
+changes invalidate the cached result. The cache holds at most 256
+entries. Close-readiness checks and final cleanup validation request separate
+Git scans that cannot join an older in-flight scan. A display result never
+authorizes worktree removal.
+
+The terminal-workspace reaper uses the database work coordinator. Startup scans
+recover existing workspace rows in bounded pages. Issue status and tree changes,
+workspace lifecycle writes, and pull-request work-product writes signal work on
+their transaction before writing. The coordinator wakes after the outer
+transaction settles and holds idle admission while writes or cleanup are active.
+Empty and nonterminal-only lanes have no recurring timer or query. Terminal trees
+schedule their actual cooldown deadline; unresolved delivery or cleanup eligibility
+is checked again after five minutes. Nonterminal trees, cooldowns, and active runs
+are checked before Git. The worker shares Git readiness across compatible rows
+that point at one directory within a bounded page. Company, branch, base ref,
+and runtime ownership must match. Each row keeps its own task and delivery
+assessment, which reuses the task tree read by the early gate. Unchanged terminal
+candidates also back off for five minutes during unrelated commit wakes. Scoped
+task/workspace hints invalidate
+affected candidates; changed tree or workspace revisions invalidate them too.
+Deadline selection reuses task trees read by those pages and performs no separate
+full-inventory query. Commits during a paged rotation request another bounded
+rotation so changes behind its cursor are recovered.
+The backoff retains at most 256 candidates and only applies to the background
+worker. Final cleanup still checks the current task tree,
+delivery evidence, ownership, lifecycle generation, and Git state under the
+existing cleanup locks.
+
+These wakes cover the owning `createDb` scope in this server process. Direct SQL
+and other server processes require startup recovery. Local deadlines do not
+establish external wake-alarm coverage or whole-instance sleep safety. The local
+sleep inventory blocks host suspension until bounded recovery succeeds. Cooldown
+eligibility is an earliest allowed cleanup time; passive retained directories can
+wait for the next wake, when startup restores their rows. Existing idle-sleep
+blockers and cleanup admission holds remain authoritative.
 
 The connection-health sweep selects only due IDs in SQL before applying its
 limit. Legacy `paperclip_plugin` placeholder connections are excluded: their
@@ -2314,3 +2371,16 @@ companion broker profile and Slack approval. Do not add manager client credentia
 to a local `.env` or an open-source deployment. See
 [Slack setup and Cloud qualification](connections/slack-setup.md) for the gates,
 recovery behavior, and production-component stories.
+
+### Project repository skills
+
+New GitHub project workspace attachments enqueue imports transactionally. A bounded
+server worker drains imports and checks enabled sources every five minutes. Shutdown
+cancels owned scans and releases their leases. Sources can be refreshed manually or
+paused through Skills → Sources. Legacy repositories appear there without being
+imported until the user chooses Import skills.
+
+Storybook: **Skills → Project repository skills**. Its production UI journeys use
+in-memory provider and execution fixtures. Live GitHub refresh and execution need
+separate acceptance evidence. Run the focused browser suite against built Storybook,
+or set `STORYBOOK_TEST_BASE_URL` to an owned Storybook dev server.

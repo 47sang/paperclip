@@ -1,5 +1,5 @@
 {
-  "commandDigest": "sha256:bc0827bd362d01b5595738515f0ca1adcd6961ec622034cbda4633b0f5ec4701",
+  "commandDigest": "sha256:2ec904f44218f51058fa83d7437b26c4551e1c65e6f2c55f5a6386fa4061e96d",
   "declaration": {
     "schema": "paperclip.acpx_profile_declaration.v1",
     "agent": "copilot",
@@ -30,14 +30,14 @@
     "semanticBridgeSourceSha256": "cf136da18e2cdbefae8e01d23d2c93f64eb7aebccaec938e84c2887c888f87ee",
     "toolEvidenceSourceSha256": "49d7d09eb6957e596a173b0afd763544afe582f0c1f05cc0992fe51916a8fdb3",
     "semanticNormalizedInputContract": "validated-forwarded-input-commit-v1",
-    "semanticSidecarSourceSha256": "d2777bfc3e15ee7861ce57a069ffb55d3dc266364adf7915845bfbad5aa2e402",
-    "semanticDirectDriverSourceSha256": "187772a17e5d4f854ec10f37abfcd294cf4f1db58a91d18e7645f4a8c617f329",
+    "semanticSidecarSourceSha256": "91629734a80f0d32295cbce2c573b32af9e345f45302ff4525c269f66811aa06",
+    "semanticDirectDriverSourceSha256": "2b7b7eaadee658312816ecdcbcb311ce491521fedf39e2ecb571036c36ff7b8e",
     "semanticValidationSourceSha256": "3b0ac8d3f3cb92747d0bcea472ab0419a140e1cfdc43047e2c22542acc2d105f",
     "semanticNormalizationSourceSha256": "8b628b82e8eacc91cdcc6fdca2210ba4cf282f01e9c6f74e95ff271655b5047e",
     "semanticCompletionContractSourceSha256": "fa2b0c81cb9a62965839c905db81b930794774d8d557a01bce077dae5830b594",
     "semanticValidatorsSourceSha256": "4f0219ed00938c5d8bc1b11532ecab9c13230012b23bfd6b7dd6b992e58e98d5",
-    "semanticSchemaBundleSourceSha256": "fb4a232460dc9e6c7e7221cb4ddd66d7cb82fa0b35e1b3eb04f2d1ee5ee18c86",
-    "semanticSidecarProtocolSourceSha256": "03c0c95b900f9dc18f29f6be27b8c79bc0bcab29780190d46a74e95328081236",
+    "semanticSchemaBundleSourceSha256": "969c1c47bc538422210e3789bd53249ebf0f6be335a38c7997d201f0783dfd6b",
+    "semanticSidecarProtocolSourceSha256": "334b67857bd81e9924186890258cb2ad41f92b1ef68ec60fa5c5d9fbb277673c",
     "semanticSidecarReceiptCommitContract": "correlated-tool-resolve-v1"
   }
 }

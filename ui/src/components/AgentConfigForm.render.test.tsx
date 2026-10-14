@@ -576,16 +576,20 @@ async function renderStatefulCreateClaudeSandbox(environments: Environment[]) {
   return { container, root, valuesRef };
 }
 
+async function environmentOptions(container: HTMLElement) {
+  const picker = container.querySelector('[aria-label="Environment override"]');
+  expect(picker).not.toBeNull();
+  await clickElement(picker);
+  const options = document.body.querySelector('[role="listbox"][aria-label="Environment override"]');
+  expect(options).not.toBeNull();
+  return options!;
+}
+
 async function selectEnvironment(container: HTMLElement, environmentId: string) {
-  const select = container.querySelector("select");
-  await act(async () => {
-    if (select) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-      setter?.call(select, environmentId);
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-  });
-  await flushReact();
+  const options = await environmentOptions(container);
+  const option = options.querySelector(`[role="option"][data-value="${environmentId}"]`);
+  expect(option).not.toBeNull();
+  await clickElement(option);
 }
 
 async function clickByText(container: HTMLElement, label: string) {
@@ -718,6 +722,40 @@ describe("AgentConfigForm environment selector", () => {
     expect(saved.replaceAdapterConfig).toBe(true);
     expect(saved.adapterConfig).toMatchObject(profile);
     for (const alias of ["modelReasoningEffort", "reasoningEffort", "effort"]) expect(saved.adapterConfig).not.toHaveProperty(alias);
+  });
+
+  it.each(["codex_local", "paperclip_runner"])("changes and clears the environment without changing a saved %s runner or account", async adapterType => {
+    const adapterConfig = {
+      model: "gpt-5.6-sol",
+      ...(adapterType === "paperclip_runner" ? { provider: "codex", reasoningEffort: "high" } : { modelReasoningEffort: "high" }),
+      env: { CODEX_HOME: { type: "secret_ref", secretId: "codex-account" } },
+    };
+    const result = await renderForm([
+      ...daytonaEnvironments(),
+      makeEnvironment({ id: "sandbox-2", name: "Daytona Two", driver: "sandbox", config: { provider: "daytona" } }),
+    ], { adapterType, adapterConfig, defaultEnvironmentId: "sandbox-1" }, { showAdapterTypeField: true });
+    roots.push(result.root);
+    await clickByText(result.container, "Advanced");
+    const runnerLabel = adapterType === "paperclip_runner" ? "Paperclip Runner" : "Legacy runner";
+
+    await selectEnvironment(result.container, "sandbox-2");
+    expect(result.container.querySelector('[aria-label="Environment override"]')?.textContent).toContain("Daytona Two");
+    expect(result.container.querySelector('[aria-label="Runner"]')?.textContent).toContain(runnerLabel);
+    await clickByText(result.container, "Save");
+    expect(result.onSave).toHaveBeenLastCalledWith({ defaultEnvironmentId: "sandbox-2" });
+
+    await selectEnvironment(result.container, "");
+    expect(result.container.querySelector('[aria-label="Environment override"]')?.textContent).toContain("Default: Local");
+    expect(result.container.querySelector('[aria-label="Runner"]')?.textContent).toContain(runnerLabel);
+    await clickByText(result.container, "Save");
+    expect(result.onSave).toHaveBeenLastCalledWith({ defaultEnvironmentId: null });
+  });
+
+  it("clears a new agent's environment override to the empty draft value", async () => {
+    const result = await renderCreateForm(daytonaEnvironments(), { defaultEnvironmentId: "sandbox-1", runner: "legacy" });
+    roots.push(result.root);
+    await selectEnvironment(result.container, "");
+    expect(result.onChange).toHaveBeenLastCalledWith({ defaultEnvironmentId: "" });
   });
 
   it("submits only an explicit runner change and retains saved configuration for server translation", async () => {
@@ -972,7 +1010,7 @@ describe("AgentConfigForm environment selector", () => {
     roots.push(result.root);
 
     expect(result.container.textContent).not.toContain("Environment override");
-    expect(result.container.querySelector("select")).toBeNull();
+    expect(result.container.querySelector('[aria-label="Environment override"]')).toBeNull();
   });
 
   it("renders GPT-6 Astra and its model-specific reasoning efforts", async () => {
@@ -1138,7 +1176,7 @@ describe("AgentConfigForm environment selector", () => {
     roots.push(result.root);
 
     const text = result.container.textContent ?? "";
-    const selector = result.container.querySelector("select");
+    const selector = await environmentOptions(result.container);
 
     expect(text).toContain("Environment");
     expect(text).toContain("Environment override");
@@ -1157,7 +1195,7 @@ describe("AgentConfigForm environment selector", () => {
     roots.push(result.root);
 
     const text = result.container.textContent ?? "";
-    const selector = result.container.querySelector("select");
+    const selector = await environmentOptions(result.container);
 
     expect(text).toContain("Environment override");
     expect(selector?.textContent).toContain("E2B · sandbox");
@@ -1171,7 +1209,7 @@ describe("AgentConfigForm environment selector", () => {
     roots.push(result.root);
 
     const text = result.container.textContent ?? "";
-    const selector = result.container.querySelector("select");
+    const selector = await environmentOptions(result.container);
 
     expect(text).toContain("Environment override");
     expect(selector?.textContent).toContain("E2B · sandbox");
@@ -1193,7 +1231,7 @@ describe("AgentConfigForm environment selector", () => {
     roots.push(result.root);
 
     const text = result.container.textContent ?? "";
-    const selector = result.container.querySelector("select");
+    const selector = await environmentOptions(result.container);
 
     expect(text).toContain("Environment override");
     expect(selector?.textContent).toContain("Default: Local");
@@ -1213,7 +1251,7 @@ describe("AgentConfigForm environment selector", () => {
     ]);
     roots.push(result.root);
 
-    const selector = result.container.querySelector("select");
+    const selector = await environmentOptions(result.container);
 
     expect(selector?.textContent).toContain("Default: Paperclip Computer");
     expect(selector?.textContent).toContain("Paperclip Computer");
@@ -2597,15 +2635,7 @@ describe("AgentConfigForm environment selector", () => {
     await runTest(result.container);
     expect(findButton(result.container, "Sign in")).toBeTruthy();
 
-    const select = result.container.querySelector("select");
-    await act(async () => {
-      if (select) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-        setter?.call(select, "");
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
-    await flushReact();
+    await selectEnvironment(result.container, "");
 
     expect(findButton(result.container, "Sign in")).toBeFalsy();
   });

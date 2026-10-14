@@ -304,3 +304,15 @@ not part of the contract. Native attempt output is
 fields but rejects unknown required versions and inconsistent terminal,
 semantic-denial, usage, or transcript facts. Full fields and the deterministic
 gate are exercised by the package-local deterministic conformance suite.
+
+
+## Claude effort after the Codex default merge
+
+Native input v7 adds configured Claude effort while retaining v1–v6 readers,
+including v6 Dot and Grok Bot bindings. The shared executor retains the merged
+Codex close/cleanup implementation. Copilot's shared source attestation advances
+to pending profile 19 rather than overwriting the merged profile-18 fixture;
+its provider executable and permission closure are unchanged. Historical private
+Claude profile-18 evidence remains source-bound under its separate fixture name.
+Pi profile 25 retains its existing identity. These source identities require
+fresh packaged compatibility checks; earlier provider runs are not relabeled.

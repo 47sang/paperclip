@@ -1,3 +1,4 @@
+import { enableRunFailureReporting } from "./helpers/run-failure-reporting.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -451,3 +452,6 @@ describe("durable, authorized connection routing", () => {
     } finally { await first.cleanup(); }
   });
 });
+
+
+enableRunFailureReporting();
