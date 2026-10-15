@@ -200,7 +200,7 @@ fn check_project_auth(workspace: &Path, home: &Path) -> Result<(), DurableRunner
     Ok(())
 }
 
-fn resolve(
+pub(crate) fn resolve(
     command: &Command,
     config: &DurableRunnerConfig,
     home: &Path,
@@ -262,7 +262,9 @@ fn resolve(
     {
         return Err(invalid());
     }
-    provider.remove("runtimeOwnership");
+    if provider.get("kind").and_then(Value::as_str) != Some("acpx") {
+        provider.remove("runtimeOwnership");
+    }
     provider.insert("cwd".into(), json!(workspace));
     let mut instructions = provider
         .get("instructions")

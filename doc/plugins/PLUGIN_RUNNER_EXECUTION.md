@@ -66,6 +66,15 @@ const support = {
 ```
 
 OpenCode and ACPX require qualified launch profiles on the Runner host.
+Use a Runner build that supports the following PRP inputs.
+
+```ts
+const requiredRunnerInputs = {
+  "provider.runtimeOwnership": "agent_home",
+  "runner.suspend.includeStateReceipt": true,
+  "run.attach.paperclipNextAuthority.connection.mode": "retain",
+};
+```
 
 ## Prepare the environment
 
