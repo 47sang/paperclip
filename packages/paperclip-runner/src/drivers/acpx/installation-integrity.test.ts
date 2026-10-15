@@ -747,7 +747,7 @@ describe("ACPX installation integrity", () => {
     );
   });
 
-  it.runIf((process.platform === "linux" && process.arch === "x64") || (process.platform === "darwin" && ["arm64", "x64"].includes(process.arch)))(
+  it.runIf(["linux", "darwin"].includes(process.platform) && ["arm64", "x64"].includes(process.arch))(
     "resolves and pins the installed Claude ACP dependency graph",
     async () => {
       const profile = resolveQualifiedAcpxProfile("claude", "claude-sonnet-5");

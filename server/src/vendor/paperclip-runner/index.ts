@@ -62,6 +62,7 @@ export type {
   PrpVerificationReasonCode,
   PrpWireConnection,
   ReplayControlPlaneEventsInput,
+  RunnerExecutionDriver,
   RunnerProcessHandle,
   RunnerProcessLaunchSpec,
   StrictCompletionContractInput,
