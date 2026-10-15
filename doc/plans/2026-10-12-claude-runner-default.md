@@ -1,3 +1,135 @@
+# Claude default: refreshed plan — 2026-10-15
+
+This section supersedes the sequencing and baseline in the historical record below. Implementation is underway on the existing three-PR stack. The progress section below records current evidence; older entries are historical.
+
+## Finish line and baseline
+
+New Claude agents created through ordinary product entry points select Paperclip Runner automatically, use `claude-opus-5-5` unless an explicit model/provider override exists, and complete a useful task plus revision. Saved Legacy/native choices remain stable. Deliver tested, reviewable PRs; merge and production rollout remain separate.
+
+Fetched origin/master: `7fc2dc8b3236e1149ae32756b6153a503623404b`.
+Clean baseline checkout: `/private/tmp/claude-default-master-plan`, branch `codex/claude-default-master-plan`. Existing three PR branches and installed preview are preserved. This planning checkout is current master plus this record; it does not yet contain the Claude implementation.
+
+## What current master already supplies
+
+- Codex default on macOS ARM64/x64 and Linux ARM64/x64 via #15683 (`adb69e8f09`). Keep its current platform/libc checks, including the glibc 2.39 minimum and sandbox target qualification.
+- Existing native Claude ACPX profile: Claude ACP 0.73.0, SDK 0.3.286. Native Claude is not a new adapter implementation.
+- Pinned Claude Linux ARM64 executable admission, including actual digest `0292fa22ac2fd43e16be9d0e511ddd8347280d6e0ebaca744ef5b27e05d8d0f8`, landed in #16372 (`854ab294cc`). Reuse this implementation.
+- Network-safe libc detection and asynchronous startup probing (#16333/#16335), plus newer task recovery, repository admission, workspace retention, and snapshot isolation. These must survive integration.
+- Claude still has no automatic runner mapping: `paperclipRunnerProfileForHarness` and `agentRunnerAvailability` select Codex only. Legacy Claude defaults to Opus 5; generic ACPX defaults to Sonnet 5. Native Claude remains subject to the experimental gate.
+- Native setup's SSH architecture whitelist still excludes Linux ARM64. Executable admission alone does not prove onboarding/remote selection works.
+
+## Existing work and evidence
+
+| Work | Current state | Reuse / remaining gap |
+| --- | --- | --- |
+| Protocol prerequisite #15994 | Open, head dd82936c1d | Reconcile with master; retain only shared changes required for Claude and historical readers. |
+| Claude behavior #15993 | Open, head 4ee0d1d444 | Existing selection, UI, auth, effort and resume work; previous CI and review passed, but integration needs fresh verification. |
+| Platform qualification #15997 | Open, published bddff3c5e9; local 84426fef60 | ARM/package work and unpublished image artifact consumer. Preserve the work, remove duplicate landed ARM admission changes. |
+| Packaged Mac API task/revision | Passed on frozen source 2646b94533, including controller restart and independent files | Historical proof. Repeat relevant acceptance on the master-integrated candidate. |
+| Packaged ARM SSH API task/revision | Passed on the same frozen source | Historical proof. Revalidate final remote runtime and selection after integration. |
+| Linux x64 API acceptance | Failed before model startup due to image/npm pack mismatch | Build an image from the exact package producer artifacts, then run a fresh task/revision. |
+| Subscription | Existing flow retained; complete follow-up acceptance unverified | User redirected this work to API keys. Preserve flow and auth-routing controls; do not claim live subscription acceptance or request another CAPTCHA. |
+
+The two successful historical journeys remain at http://127.0.0.1:3115/CLAAAAAA/issues/CLAAAAAA-2 and /CLAAAAAA/issues/CLAAAAAA-3. They are not evidence for current master or a new candidate. Do not upgrade their data in place for the new verification run.
+
+## 1. Reconcile the existing implementation onto current master
+
+Use the existing PR stack; integrate master forward into its prerequisite, then cascade to behavior and platforms. The fresh checkout above provides the reference baseline. Preserve published history and the image fix. Do not wholesale replace current runtime files with old versions.
+
+An index-free merge rehearsal against the complete local stack found 25 overlapping changed files and six textual conflicts:
+
+- packages/paperclip-runner/README.md
+- packages/paperclip-runner/src/drivers/acpx/installation-integrity.ts
+- server/src/__tests__/agent-skills-routes.test.ts
+- server/src/__tests__/issue-update-comment-wakeup-routes.test.ts
+- ui/src/components/AgentConfigForm.render.test.tsx
+- ui/src/components/AgentConfigForm.tsx
+
+Resolve executable admission using master's landed ARM64 support; preserve newer UI and consolidated test structures while adding Claude cases. Independently review clean merges in native-session-executor, runner transport, heartbeat selection, agents routes, onboarding, and imports: textually clean does not establish correct recovery behavior.
+
+Review prerequisite scope before carrying it forward: the old branch advances Pi profile 22 to 25 as part of shared config admission. Keep changes demonstrably required for Claude transport and historical compatibility; isolate unrelated provider changes instead of making their qualification a new Claude gate. Do not drop required historical readers merely to reduce the diff.
+
+Exit: focused selection/UI/protocol/resume checks pass with current Codex behavior preserved; each remaining diff has a clear reason tied to Claude delivery.
+
+## 2. Prove the local default first
+
+First implementation delivery enables Apple Silicon only. Other Claude targets retain their current default until their package/execution gates pass.
+
+- Extend existing centralized resolution to `claude_local` -> `paperclip_runner`, `provider: acpx`, `acpxAgent: claude`. Graduate this profile only from the experimental gate.
+- Preserve request-level `runner: auto | paperclip | legacy`, discovery fields, and resolved stored configuration. No migration or bulk rewrite of saved agents.
+- Reuse Claude connections, secret storage, selected account, subscription actions, and built-in setup probes. Use the API key from ~/.secrets through the existing connection flow without exposing it.
+- Reuse the shared Advanced runner selector with Claude branding. Omit legacy-only defaults from native forms; incompatible custom execution settings require explicit Legacy with a useful error.
+- Apply ordinary Opus 5.5 defaults consistently while preserving explicit models, ANTHROPIC_MODEL, and provider routing.
+- Preserve effort admission before prompt/resume, permission semantics, instructions, skills, timeouts, workspace settings, cancellation and session continuity.
+
+Run the smallest faithful isolated local Product E2E case on the integrated candidate. Reuse a compatible verified daemon only if its protocol identity is compatible; any necessary Rust build runs in cloud and only the Mac target is needed initially. Do not begin a four-target packaging campaign to answer a local behavior question.
+
+Acceptance: ordinary New Agent/onboarding -> Claude Code -> existing API-key connection -> submit with no runner/model override. Inspect saved native/Opus 5.5 config directly, with enableNativeRunner=false. Produce a useful file, independently download it, restart the isolated controller, request a revision, download both versions and compare bytes, then reload task/agent and confirm the same session and persisted settings. The E2E fixture must not patch the runner after onboarding.
+
+Exit: two successful paid turns, independently verified artifacts, persisted settings, effort acknowledgment, exact controller/runtime identities, and a usable new preview. Failures are diagnosed locally before platform work proceeds.
+
+## 3. Close compatibility and creation-path gaps
+
+Use focused controls for:
+
+| Contract | Required evidence |
+| --- | --- |
+| All creation boundaries | UI, API/CLI, onboarding, hires/approval snapshots, built-ins, plugins and imports call the resolver. |
+| Saved configuration | Ordinary edits, restart, activation, export/import preserve saved Legacy/native and explicit model/provider values. Explicit changes invalidate sessions through existing revisions. |
+| Target/adapters | Disabled adapters, external overrides, unsupported OS/libc, qualified sandbox target, remote ARM setup, and unchanged Codex defaults. |
+| Auth and isolation | Selected account, company boundaries, secret forwarding, API billing attribution; existing subscription actions still route to Claude. |
+| Settings and failures | Effort before prompt/resume; permissions, instructions/skills, timeout, cancellation/cleanup; clear model/auth/package/incompatible-setting errors with no runner fallback. |
+| Protocol compatibility | Historical input readers and existing provider controls; no silent effort loss on resume. |
+| UI | Shared components, light/dark, narrow viewport and keyboard operation. |
+
+Update configuration docs, bundled agent-creation skill, feature maps and E2E documentation. Re-run only affected passing cases during iteration; final required checks remain mandatory.
+
+## 4. Qualify the remaining platforms
+
+After the local integrated candidate passes, freeze its runtime/package source and build in cloud. Reuse the prior four-target release mechanisms and the image artifact consumer where applicable.
+
+The observed x64 failure was real: its independently rebuilt image had a different lock/provider-pack manifest than npm. Preserve the rejection guard. The cloud image must consume the same exact-source, digest-verified daemon and provider pack as the public package, then verify both identities inside the resulting image. Do not rerun the old 2646 campaign merely because its command is available; qualify the newly integrated candidate.
+
+Before dispatch, verify current GitHub workflow publishing access. The previous OAuth token lacked workflow scope and SSH signing failed. If unchanged, this blocks publishing the prepared workflow only; local behavior/reconciliation can proceed. Inspect a successful push before dispatching the updated workflow.
+
+| Target | Required before enabling its automatic default |
+| --- | --- |
+| Apple Silicon | Local API pair above, then final packaged runtime verification. |
+| Linux x64 | Clean install, matching immutable image and package authority, ordinary selection, API task/revision, independent downloads and continuity. |
+| Linux ARM64 | Native cloud build, clean install, standard installed-host/SSH package selection, API task/revision and continuity. No ARM cloud-image production. |
+| Intel Mac | Cloud build and clean install/package admission. Attended provider execution is not required. |
+
+Preserve existing Linux x64 pack behavior and other providers' qualification boundaries. Additional defaults are enabled only after the corresponding evidence passes. Live subscription task/follow-up qualification remains explicitly unverified under the user's API-key steering.
+
+## 5. Delivery and operating limits
+
+Keep the approved prerequisite + two delivery boundaries: protocol compatibility, Claude behavior/Apple Silicon, remaining platforms. Reuse existing PRs where their scope still fits. Refresh exact-head CI and review after reconciliation; historical green checks are not current approval.
+
+Required before PR-ready handoff: pnpm -r typecheck, pnpm test:run, pnpm build, pnpm check:token-gates, applicable cloud package checks, current review 5/5 and resolved findings. Keep expensive builds and all Docker work in cloud. No paid retries run automatically.
+
+Retain the separate $50 Claude ceiling. The last recorded known rate-card estimate was $3.054638600, excluding unknown charges, with a $1 setup reservation. Reconcile actual current policies/usage before any paid work; unknown charges and failed holds stay reserved. Use fresh bounded fixtures within existing available allocation, never clear old holds to make acceptance proceed.
+
+Update this record with the integrated source, package/image digests, preview, artifact comparisons, reports, costs and PR checks. Finish with usable previews and reviewable PRs. No merge or production deployment is included.
+
+
+## Integrated implementation progress — 2026-10-15
+
+Current master `7fc2dc8b3236e1149ae32756b6153a503623404b` is merged forward through the three PRs. Protocol is `8b51137aed61bedcb0781bb82f31d8a6931f7304`; behavior is `77936b29731fd988226bb7cd9b5f5c459d45aa11`; platform is `84592191eb` (before this evidence update). Existing Codex behavior and master's landed ARM SDK admission are preserved. GitHub workflow scope is now verified and the cloud image consumer is published; the earlier access blocker is resolved.
+
+Focused verification: 343 selection/configuration checks; 849 skills, comment-routing and native-session checks; 203 protocol checks plus the runtime-host file's independent 55-test confirmation; runner TypeScript build; server TypeScript; 15 image-consumer controls. CI exposed a pre-existing snapshot worker timing failure: its test now uses its configured 30-second command deadline; all four cases pass. A current review found onboarding could remain busy after discovery changed the Auto resolution. The fix includes resolvedRunner in setup identity, prevents stale hires, and requires a manual reconnect. Its regression fails before the change; all 148 onboarding tests pass after it. Protocol has current-head Greptile 5/5. Remaining current-head CI/review is pending.
+
+Fresh preview: http://127.0.0.1:3105/CLA/issues/CLA-1. This is a new isolated data directory, `/private/tmp/claude-master-local-20261015`. Retained historical preview 3115 stays separate. Ordinary New Agent -> Claude Code -> saved Anthropic API key -> Model Default -> high effort -> Finish setup saved agent `5339638d-b41d-4a6f-a041-4e5d1698a8de` as `paperclip_runner`/`acpx`/`claude`/`claude-opus-5-5`. No runner/model was patched after creation. Only timeout (180 seconds) and concurrency (one) were bounded. Experimental native runner is false. The first existing CLI credential probe identified an outdated supplementary system CLI; the isolated PATH now uses the already-qualified 2.1.286 executable, preserving the user's CLI.
+
+First current-source run `58291208-459e-4de4-8b3e-5eff25d4e98c` succeeded on behavior `77936b2973`, API billing, high effort admitted, settled estimate $0.180427400. Its independently downloaded `claude-master-checklist-v1.md` is 160 bytes, SHA256 `fb94f834e1d33212aec13bc91e9b568e7161f96276bcd2525d812f4eb4a69616`. The follow-up `37e6164e-98e3-42fe-8847-2ee061629055` also succeeded after a controller restart, settled estimate $0.156077800. Its independently downloaded v2 is 217 bytes, SHA256 `60b89d58e6995d170b673a196995c7cf9021f9294a580b46cb82ef8ceeb2ed58`; v1 remains byte-identical. Task, provider and backend session IDs are identical across both runs. Both admitted high effort; saved configuration and Done status persist. Combined current-pair estimate $0.336505200; no pending/unpriced usage. Report: `/private/tmp/claude-master-local-proof-20261015/acceptance.json`. The local API gate is passed; final packaged proof remains separate. Evidence: `/private/tmp/claude-master-local-proof-20261015`; browser journal `/private/tmp/claude-master-live-ui-v3-20261015`.
+
+The local daemon is reused from verified runtime `2646b94533bac1eae0d30b11d3774b104eeaf981`, with its original manifest intact; Rust/protocol trees are byte-identical to the integrated behavior source. Darwin ARM64 daemon SHA256 is `094e5e809843efc3d16c796ee4271ff11fcb550afb927b3fa0e745d964bcba2d`. Current-source JS was rebuilt locally. No local Docker or Rust build ran. Final packaged identity and other-target acceptance remain pending.
+
+Budget allocation remains $50 total: $0.80 unused allowance was transferred from an existing paused fixture (cap $1 -> $0.20) to the fresh local fixture (cap $0.80, per-run reservation $0.50). No failed holds were cleared; automatic paid retries and timer heartbeats remain disabled. Prior unknown charges and the $1 setup reservation remain conservative reservations. Allocation receipt: `/private/tmp/claude-master-local-allocation-20261015.json`.
+
+---
+
+# Historical plan and evidence (retained)
+
 # Claude runner defaults
 
 Updated 2026-10-12.
