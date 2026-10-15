@@ -2367,6 +2367,14 @@ function OnboardingWizardInner({
         ownership: "personal",
         agentIds: [],
         allAgents: true,
+        // A press that already built the connection reconnects it instead of
+        // creating a second account and secret for the same gateway. The
+        // reference survives a cancel during the probe for the same reason.
+        ...(importedConnection ? { connectionId: importedConnection.connectionId } : {}),
+        // The environment this run resolves to, so the reachability judgement
+        // matches where the first agent will actually execute. Null means the
+        // surface resolved nothing, which is the same as not naming one.
+        ...(resolvedLoginEnvironmentId ? { environmentId: resolvedLoginEnvironmentId } : {}),
         baseUrl: snapshot.baseUrl,
         keyVariable: snapshot.keyVariable,
         model,

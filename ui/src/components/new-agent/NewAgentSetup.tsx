@@ -812,11 +812,12 @@ function Setup({
                         setConnection(next);
                         setRuntimeAiBinding(undefined);
                         // An import chose this agent's model on the card it was
-                        // confirmed on, so it lands in the field the hire reads.
-                        // Nothing else sets it: every other way of connecting
-                        // arrives with no opinion about the model.
-                        if (next.model) setModel(next.model);
-                        resetTest();
+                        // confirmed on, so it lands in the field the hire reads,
+                        // and the stale test result goes with it: the run that
+                        // passed ran on the previous model. Nothing else sets
+                        // it: every other way of connecting arrives with no
+                        // opinion about the model, and their test result stands.
+                        if (next.model) { setModel(next.model); resetTest(); }
                         setScreen("runtime");
                       }}
                     /> : <p role="status" className="text-sm text-muted-foreground">Loading connection settings…</p>}
