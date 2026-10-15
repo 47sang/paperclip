@@ -117,6 +117,218 @@ reminder; dismissing one clears the composer and stays effective after reload fo
 that person and task. Other inputs keep a pending indicator that can reopen them;
 resolving or skipping the input removes that indicator.
 
+## Task-row refresh: proposed specimen
+
+The task-row refresh is an explicitly authorized design change following the
+extraction run. Its review surface is **Design proposals → Task row design** in Storybook
+(`tasks-row-design`), using the production `IssueRow` with
+`presentation="task" appearance="refreshed"` and the shared `TaskRowGroup`.
+The existing row presentation remains the default while this specimen is reviewed.
+
+Stage this design-system refresh's new token, component, layout, and screen stories
+under **Design proposals**, in `ui/storybook/stories/design-proposals/`. Use
+`home: "design-proposals"`, `status: "proposed"`, and an explicit staging reason.
+These stories are review references and do not count as current production coverage.
+They continue to import shared components and the existing token layer; this is
+organizational separation, not a second implementation or token source. Use them
+for tasks explicitly implementing the refresh. After design review and adoption
+in the app, move each suite to its feature or Foundations home and update its
+classification while retaining its explicit story ID and exports.
+
+- Comfortable density is 44px; compact density is 32px. Comfortable is the default.
+  Compact is a preview for a future user preference, not a new app setting yet.
+- All text in proposed task rows and table headers uses the `sm` size token
+  (`--text-sm`, 14px) with a 16px line height. This includes metadata, IDs and tag
+  chips; keep the same type size at both row densities.
+- Titles use Inter: read titles are regular (400), muted foreground; unread titles
+  are semibold (600), foreground. Hover changes the row background and title to
+  foreground while preserving its read/unread weight. Keyboard focus reveals the
+  same title emphasis and retains a visible focus indicator.
+- Refreshed task rows indicate unread state through title typography alone. Do not
+  show the old blue unread dot or reserve space for it, including in inbox rows.
+- Task identifiers use bundled Paper Mono. All visual values live in the
+  `--task-row-*` token family in `ui/src/index.css`, mapped to the shared semantic
+  color tokens (`--foreground`, `--muted-foreground`, `--border`).
+- Keep an 8px gap between the status icon and title in both row specimens and
+  the complete column layout. Status icons show their text label in the shared
+  tooltip on hover or keyboard focus; clicking still opens the task. Use the
+  shared status label, including waiting/blocked context, rather than duplicating
+  status copy. Title text continues to use its marquee without a tooltip.
+- Titles stay on one line with ellipsis. Every truncated column uses the same
+  `CellMarquee`: hover reveals only the cell in that column, scrolling left once
+  at a constant speed until the last character is visible, then holding there.
+  Moving to another column or leaving the row resets immediately. Fitting cells
+  stay still. Keyboard focus also reveals truncated cells; Escape stops the
+  reveal. Recheck overflow when width, text, or fonts change. Reduced motion
+  jumps to the end without animation. There is no title tooltip; full text
+  remains accessible, and the full title stays in the row link's accessible name.
+  Truncated edges use a subtle 12px alpha fade into the actual row background,
+  including hover, selection and other highlights. Fitting cells have no fade.
+  The marquee also fades its clipped leading edge; once it reaches the end, the
+  trailing fade clears so the final character remains fully visible. Keep the
+  mask inside the focusable cell so keyboard focus outlines stay intact.
+- Each nesting level adds 24px inside the title area. Trailing metadata columns
+  stay aligned. Thin vertical guides communicate ancestry, with room for disclosure
+  controls. Disclosure controls retain independent keyboard and pointer behavior.
+- A root task and its visible descendants form one `TaskRowGroup`, bounded by a
+  separator above the parent and below its final visible descendant. Child rows
+  have no horizontal dividers. Adjacent groups share a single separator. The outer
+  nesting guide stops above the bottom separator with the same gap as between
+  its top and the parent's status icon.
+
+Review read/unread, actual hover/focus, long titles, both densities, and an expanded
+two-level hierarchy before composing the full task-list screen. Story fixtures
+show local UI behavior; they do not prove live persistence or task authorization.
+
+### Task-list columns
+
+The complete column order is **Task, Task ID, Created by, Assignee,
+Project, Parent Task, Tags, Worktree, Last updated**. The reusable
+`TaskListColumnHeader` and `IssueRow`'s `columnValues` share the `--task-list-*`
+width tokens and configurable column order. Review the complete composition in
+**Design proposals → Task row design → All columns**.
+
+- Created by is the recorded creator (human or agent); Assignee is the current
+  assignee. Both show names without avatars. Do not infer either from tree depth
+  or task status.
+- Task combines the status icon and title under one header and one Columns-menu
+  choice. Sorting Task uses the title. Status sorting is unavailable for now.
+- Parent Task refers to the structural parent; it can show its ID and title.
+- Last updated comes from `updatedAt`. Worktree shows the linked Git worktree's
+  branch name. Unassigned tasks say “Unassigned”; other missing values use “—”.
+- Default visibility is Task, Task ID, and Last updated. The All columns specimen
+  starts with all nine visible for review. Widths are provisional: preserve
+  a readable title area and scroll horizontally on narrower screens rather than
+  dropping requested fields. Nesting consumes title space; metadata stays aligned.
+- Fade clipped left/right edges into the background only while more content is
+  hidden on that side. Remove both fades when the table fits. Keep scrolling and
+  row controls usable through the fade.
+- Tag chips use muted-foreground text on a muted-highlight background
+  (`--muted-foreground` and `--muted-highlight`). In dark mode, muted-highlight
+  matches Paper's `--dark-color-muted-highlight` (`#333333`).
+- The column header stays 44px high in both row densities. Every visible header
+  is a keyboard-accessible sort button: a new column starts ascending and repeated
+  clicks toggle ascending/descending. The active label and direction arrow use
+  foreground on a persistent muted-highlight background; inactive labels use
+  muted foreground. Expose `aria-sort`.
+  All header backgrounds have 8px of padding on each side. Vertical padding stays 4px.
+  Preserve label alignment and column positions across hover states.
+  The Task header spans status and title and aligns its label with root-row
+  titles. Headers stay left-aligned, with sort arrows to the right. Sorting must
+  not move other columns or widen the gap between row status icons and task
+  titles. Every column uses the same 12px arrow.
+- Drag a header left or right to reorder the entire column, including Task's
+  status/title pair and its nested rows. A click still sorts; dragging never
+  changes the sort. Alt+Left/Right reorders a focused header. Headers and all
+  rows share one grid; widths, nesting and metadata alignment survive reordering.
+  Last updated is last in the default table order and flyout order.
+- Sorting keeps each parent before its descendants and sorts siblings at every
+  level. Task IDs and names use natural, case-insensitive ordering; timestamps use
+  their raw value. Tags sort by their
+  alphabetized names; missing values stay last in both directions. Equal values
+  retain their order. The initial collection uses Task ID ascending as its
+  default order, with no active header, direction arrow or persistent highlight.
+  A header becomes active only after the user sorts by it; the first click sorts
+  ascending.
+- A horizontal ellipsis stays pinned to the right edge of the header, outside
+  horizontal scrolling. Its “Columns” flyout lists all nine columns in their current order
+  with checkmarks on the right. Toggling columns updates both header and rows
+  immediately and keeps the flyout open. Keep at least one column visible; nesting
+  controls remain available even when Task is hidden. Reset defaults shows only
+  Task, Task ID, and Last updated and restores the default column order.
+  Reset also clears the active sort, direction arrow and persistent header highlight.
+  Other columns remain available in the menu; hiding and re-enabling a column
+  preserves its position until reset.
+  Hiding the sorted column clears the explicit sort and restores the default
+  collection order without highlighting another header.
+- The refresh's compact flyout uses the shared DropdownMenu primitives. The
+  Paper reference defines a 200px surface with an 8px radius, 12px content
+  padding, 32px items separated by 4px, regular-weight muted labels and 14px
+  checks on the right. Flyout text uses `sm` (14px) with a 20px line height;
+  the heading and Reset defaults use semibold foreground. Hover/focus promotes
+  labels and checks to foreground on muted-highlight. The dark surface matches
+  Paper's `--dark-color-background` (#1a1a1a), shared by the task list, nesting
+  groups, header controls, edge fades and the entire proposal canvas (including
+  its document/root background and surrounding content). The flyout has an
+  explicit 1px semantic border; the reset outline also uses the semantic tokens.
+  Table text retains its 16px line height.
+  The existing inbox picker remains tied to its older column contract and descriptions.
+  Sort, order and visibility changes in the specimen are local state; saving preferences
+  across navigation/reloads belongs to app adoption.
+
+### Task-list page proposal
+
+Review the complete composition in **Design proposals → Task list page**
+(`tasks-list-page-design--default`), alongside All Columns and No Results.
+This page remains proposed until the design owner approves the surrounding
+layout. The Default story shows Task, Task ID and Last updated; the row specimen
+and full page consume the same `TaskList` collection.
+
+- `DesignPageShell` composes the existing 240px `SidebarShell`, a 60px page
+  header, and scrolling main content with 24px insets. The sidebar uses muted;
+  the entire main pane uses Paper's background token. Desktop is the current
+  review scope; mobile composition remains to be designed.
+  Enable the shared shell's production resize handle, including its hover,
+  dragging and keyboard states. Sidebar width persists under the proposal's own
+  storage key, separate from the production sidebar preference.
+- Sidebar navigation labels use `sm` (14px). Icons match Paper and the existing
+  sidebar mappings: CircleCheck, MessageCircle, FolderOpen, Repeat, Package,
+  Users, Boxes, Unplug and History. The organization and account controls mount
+  `SidebarCompanyMenu` and `SidebarAccountMenu` directly, preserving their
+  production keyboard behavior and actions, with the shared refreshed flyout
+  appearance. Switching fixture
+  organizations changes the selection and never shows another company's tasks.
+  The sidebar follows Paper node `32TP-0`: 12px navigation insets, 8px item
+  margins and padding, 14px/150% labels, 2px row gaps and 16px section gaps.
+  Work and Org captions use the sans family rather than monospace. Recent Tasks
+  is a separate final section with five regular-weight, unindented links; it is
+  not nested beneath Tasks. The account footer has no divider above it.
+  Sidebar surface and right border alias `--muted` and `--border`, matching
+  Paper's dark-color-muted and dark-color-border. The task search field uses
+  `--background-alt` (Paper dark-color-background-alt: oklch(14.5% 0 0)).
+  The organization switcher has no caret in this proposal. Its hit area is
+  separate from an adjacent global-search button, which opens the production
+  `CommandPalette`; the toolbar input remains a task-list filter.
+  `TruncatedTextMarqueeProvider` opts sidebar and menu labels into the same
+  `CellMarquee` animation and alpha fade as table cells. Links and buttons own
+  focus; labels add no tab stops. Pointer exit resets immediately, Escape stops
+  reveal, fitting labels stay still, and reduced motion follows the shared rules.
+- `TaskListToolbar` composes shared buttons, input, tooltip, dropdown and filter
+  primitives. Controls are 44px high. A 32px gap separates the toolbar and table.
+  Page dimensions, spacing, type and surfaces live in the token layer under
+  `--design-page-*` and `--design-sidebar-*`.
+- Refreshed dropdowns and popovers share `FlyoutAppearanceProvider` and the
+  existing Radix primitives. `Flyout` / `FlyoutContent` compose a popover;
+  `FlyoutHeader` supports a simple title or profile details, and `FlyoutOptions`
+  groups the actions below it. Dropdowns reuse these sections and the appearance
+  provider while retaining menu keyboard behavior. Surfaces
+  use background, borders use border, hover/focus uses muted-highlight and
+  foreground. Unhighlighted labels and their checkmarks use
+  `--flyout-item-foreground`, bound to muted-foreground. Selection uses a checkmark,
+  including single-choice Views.
+  The shared `--shadow-flyout` token controls the subtle drop shadow. All flyout
+  visual values live under `--flyout-*`; menu-specific widths stay contextual.
+  The account flyout fits its contents and retains production Invite access
+  checks. The preview supplies owner access and loaded operator-policy fixtures.
+  This appearance remains opt-in while the proposal is reviewed.
+  Review the component separately in **Design proposals → Flyout**, with Columns,
+  Views and Profile examples. Its Shadow control previews a local override;
+  changing the saved `--shadow-flyout` token in `ui/src/index.css` updates every
+  refreshed flyout. Storybook controls do not persist token edits.
+- Search, unread/completed views and filters operate on fixtures. Matching
+  subtasks keep their ancestor chain for context; the result count distinguishes
+  matches from contextual parents. Expand/collapse applies to every nested level.
+  The grouping icon and menu are omitted from the proposed toolbar.
+- List/board switching preserves the list's local column state. The board and
+  New Task composer reuse existing components and are not new approved designs.
+  Sidebar links exercise the memory router; destination pages, creation API
+  behavior, saved preferences and production routes are outside this preview.
+
+The next milestone after full-page visual approval is the agent reference
+contract and a fresh-agent reproduction test using these components and tokens.
+The staged page itself does not prove that an unfamiliar agent can discover
+and reuse the design system.
+
 ## Enforcement (what "compliant" means for the extraction run)
 
 - **Zero visual change is proven, not promised:** Storybook visual snapshots are baselined before any refactor, and all snapshots match baseline after it. A change that alters rendered output must be intentional and human-approved.
