@@ -529,6 +529,68 @@ describe("importing from the local Claude configuration", () => {
     } finally { spy.mockRestore(); }
   });
 
+  it("matches the gateway port, not only the host, against a network allowlist", async () => {
+    const portAgentId = randomUUID();
+    await db.insert(agents).values({ id: portAgentId, companyId, name: "Port worker", adapterType: "claude_local", adapterConfig: { networkScope: "allowlist", networkAllowlist: ["127.0.0.1:9999"] } });
+    const { spy } = gateway();
+    try {
+      // The host matches, so a hostname-only check waves this through. The
+      // runtime proxy blocks the port, and the import has to say so first.
+      const refused = await request(app()).post(`${base}/import`).send(await named("Port worker gateway", [portAgentId]));
+      expect(refused.status).toBe(422);
+      expect(refused.body.code).toBe("ai_connection_network_allowlist");
+      expect(refused.body.error).toContain("127.0.0.1");
+      expect(spy).not.toHaveBeenCalled();
+      // The effective port lands, and so does the import.
+      await db.update(agents).set({ adapterConfig: { networkScope: "allowlist", networkAllowlist: ["127.0.0.1:4318"] } }).where(eq(agents.id, portAgentId));
+      const allowed = await request(app()).post(`${base}/import`).send(await named("Port worker gateway allowed", [portAgentId]));
+      expect(allowed.status, JSON.stringify(allowed.body)).toBe(201);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("judges a no-agent import against the execution environment the surface named", async () => {
+    const [local] = await db.select().from(environments).where(eq(environments.driver, "local")).limit(1);
+    const [sandbox] = await db.insert(environments).values({ name: "Named sandbox", driver: "sandbox", config: { provider: "daytona" } }).returning();
+    const { spy } = gateway();
+    try {
+      // A surface that names the local environment for the agent it is about to
+      // create imports cleanly, and one that names a sandbox is refused: the
+      // judgement follows the environment the operator chose for this agent, not
+      // the instance default, which can point somewhere they never picked.
+      const namedLocal = await named("Named local environment gateway");
+      const ok = await request(app()).post(`${base}/import`).send({ ...namedLocal, environmentId: local!.id });
+      expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+      const namedSandbox = await named("Named sandbox environment gateway");
+      const refused = await request(app()).post(`${base}/import`).send({ ...namedSandbox, environmentId: sandbox.id });
+      expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+      expect(refused.body.code).toBe("ai_connection_environment_unreachable");
+      expect((await service.list(companyId, "alice")).some(c => c.name === "Named sandbox environment gateway")).toBe(false);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("makes the imported account the operator's default for Anthropic", async () => {
+    // A user who already holds an older default has to end up on the account
+    // they just confirmed. Without this the gateway they imported is never the
+    // one a run reaches: the older account keeps being selected.
+    const older = await service.save(companyId, "alice", {
+      provider: "anthropic",
+      method: "api_key",
+      ownership: "personal",
+      name: "Older official key",
+      agentIds: [],
+      allAgents: true,
+    }, "fixture-older-key");
+    await service.setDefault(companyId, "alice", older.grantId);
+    const { spy } = gateway();
+    try {
+      const imported = await request(app()).post(`${base}/import`).send(await named("New default gateway"));
+      expect(imported.status, JSON.stringify(imported.body)).toBe(201);
+      const connections = await service.list(companyId, "alice");
+      expect(connections.find(c => c.id === imported.body.connectionId)?.isDefault).toBe(true);
+      expect(connections.find(c => c.id === older.connectionId)?.isDefault).toBe(false);
+    } finally { spy.mockRestore(); }
+  });
+
   it("imports for an agent whose execution environment is local", async () => {
     // The instance already owns its one local environment row, so the agent is
     // pointed at that rather than at a second one the unique index forbids.

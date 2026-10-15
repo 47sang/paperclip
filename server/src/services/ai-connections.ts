@@ -643,6 +643,17 @@ export function aiConnectionService(db: Db) {
     const id = reconnect?.connection.id ?? randomUUID();
     const grantId = reconnect?.grant.id ?? randomUUID();
     const endpoint = importedEndpoint(input);
+    // A reconnect that carries no endpoint information cannot serve an account
+    // that has one. The key it brings was verified against the official
+    // endpoint, and the old endpoint would be kept, so the next run would send
+    // a credential nobody proved on that gateway. Replacing the key of an
+    // imported account goes through the import route, which re-reads the file
+    // and probes the gateway the key actually belongs to.
+    if (reconnect && (reconnect.connection.config.ai as AiConnectionMetadata).baseUrl && !endpoint)
+      throw unprocessable(
+        "This account connects through a custom gateway. Re-import it from the local Claude configuration to replace its key.",
+        { code: "ai_connection_gateway_reconnect_requires_import" },
+      );
     const persist = () => withAccountHomeSecretMutationLock(undefined, companyId, () => db.transaction(async (tx) => {
       const secrets = secretService(tx);
       if (sessionId) {

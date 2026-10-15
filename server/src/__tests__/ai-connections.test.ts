@@ -2005,6 +2005,26 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
     expect(createAiConnectionSchema.safeParse({ provider: "anthropic", method: "api_key", ownership: "personal", name: "Typed key", apiKey: "fixture", allAgents: false, agentIds: [], baseUrl: endpoint.baseUrl }).success).toBe(false);
   });
 
+  it("refuses a reconnect that would send a key verified against the official endpoint to the old gateway", async () => {
+    const userId = "imported-reconnect-guard-user";
+    await db.insert(companyMemberships).values({ companyId, principalId: userId, principalType: "user", status: "active", membershipRole: "member" });
+    const imported = await importConnection(userId, "Guarded gateway", "http://127.0.0.1:4318/v1", "ANTHROPIC_API_KEY", "fixture-guarded");
+    // The ordinary API-key path: no endpoint in the request, so the old gateway
+    // would be kept while the new key was verified against the official one.
+    await expect(service.save(companyId, userId, {
+      provider: "anthropic",
+      method: "api_key",
+      ownership: "personal",
+      name: "Guarded gateway",
+      agentIds: [],
+      allAgents: true,
+      connectionId: imported.connectionId,
+    }, "fixture-replacement-key")).rejects.toThrow(/Re-import it from the local Claude configuration/);
+    // The refused attempt leaves the connection on the gateway it imported.
+    const [row] = await db.select().from(toolConnections).where(eq(toolConnections.id, imported.connectionId));
+    expect((row.config.ai as { baseUrl?: string }).baseUrl).toBe("http://127.0.0.1:4318/v1");
+  });
+
   it("carries the imported endpoint into the runtime selection and the account list", async () => {
     const userId = "imported-attribution-user";
     await db.insert(companyMemberships).values({ companyId, principalId: userId, principalType: "user", status: "active", membershipRole: "member" });

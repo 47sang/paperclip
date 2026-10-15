@@ -299,15 +299,25 @@ export async function verifyGatewayEndpoint(
     );
 }
 
-function allowlistCovers(allowlist: unknown, hostname: string): boolean {
+/**
+ * Whether an allowlist entry covers the gateway, under the same rules the
+ * local-process sandbox proxy applies (`isNetworkTargetAllowed`): the hostname
+ * matches exactly, and an entry that names a port must match the gateway's
+ * effective port. An entry without a port covers every port, so a bare
+ * `gateway.example` still admits `https://gateway.example:9443`.
+ */
+function allowlistCovers(allowlist: unknown, gateway: URL): boolean {
   if (!Array.isArray(allowlist)) return false;
+  const hostname = gateway.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const port = gateway.port || (gateway.protocol === "https:" ? "443" : "80");
   return allowlist.some((entry) => {
     if (typeof entry !== "string" || !entry.trim()) return false;
     const candidate = entry.trim().includes("://")
       ? entry.trim()
       : `https://${entry.trim()}`;
     try {
-      return new URL(candidate).hostname.toLowerCase() === hostname;
+      const rule = new URL(candidate);
+      return rule.hostname.toLowerCase() === hostname && (!rule.port || rule.port === port);
     } catch {
       return false;
     }
@@ -409,7 +419,7 @@ function unreachableUnderPolicy(
 export async function assertImportedGatewayReachable(
   db: Db,
   companyId: string,
-  input: Pick<LocalClaudeConfigImportInput, "agentIds" | "allAgents">,
+  input: Pick<LocalClaudeConfigImportInput, "agentIds" | "allAgents" | "environmentId">,
   baseUrl: string,
 ) {
   const [localEnvironment] = await db
@@ -445,7 +455,8 @@ export async function assertImportedGatewayReachable(
         .from(agents)
         .where(and(eq(agents.companyId, companyId), inArray(agents.id, targetAgentIds)))
     : [];
-  const gatewayHost = new URL(baseUrl).hostname;
+  const gatewayUrl = new URL(baseUrl);
+  const gatewayHost = gatewayUrl.hostname;
   /** Whether an instance policy moves execution off the environment a run resolved to. */
   const forcedFor = (resolvedEnvironmentId: string | null) =>
     forcedExecutionOverride(policies, resolvedEnvironmentId, localEnvironment?.id ?? null);
@@ -469,7 +480,7 @@ export async function assertImportedGatewayReachable(
         { code: "ai_connection_environment_unreachable" },
       );
     const networkScope = agent.adapterConfig?.networkScope;
-    if (networkScope === "allowlist" && !allowlistCovers(agent.adapterConfig?.networkAllowlist, gatewayHost))
+    if (networkScope === "allowlist" && !allowlistCovers(agent.adapterConfig?.networkAllowlist, gatewayUrl))
       throw unprocessable(
         `Add ${gatewayHost} to ${agent.name}'s network allowlist: that agent's network egress is limited to an allowlist, and the gateway host is not on it.`,
         { code: "ai_connection_network_allowlist" },
@@ -477,9 +488,12 @@ export async function assertImportedGatewayReachable(
   }
   // A surface with no agent yet — onboarding, the new-agent wizard — still has
   // to refuse an import for a default environment nobody can reach, and the
-  // instance policies move that environment just as they move an agent's.
+  // instance policies move that environment just as they move an agent's. A
+  // surface that selected an environment for the agent it is about to create
+  // names it, and that choice outranks the instance default: the operator
+  // picked where this agent runs, and the import is judged there.
   if (!targets.length) {
-    const environmentId = instanceDefault?.defaultEnvironmentId ?? localEnvironment?.id ?? null;
+    const environmentId = input.environmentId ?? instanceDefault?.defaultEnvironmentId ?? localEnvironment?.id ?? null;
     const forced = forcedFor(environmentId);
     if (forced)
       throw unprocessable(

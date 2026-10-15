@@ -353,6 +353,14 @@ export const localClaudeConfigImportInputSchema = z
     agentIds: z.array(z.string().uuid()).max(1000).default([]),
     allAgents: z.boolean().default(false),
     connectionId: z.string().uuid().optional(),
+    /**
+     * The execution environment the importing surface selected, when it has
+     * one. A surface with no agent yet — onboarding, the new-agent wizard —
+     * judges reachability against the environment the run will actually use,
+     * not against the instance default, which can point somewhere the operator
+     * never chose for this agent.
+     */
+    environmentId: z.string().uuid().nullish(),
     baseUrl: z.string().url(),
     keyVariable: aiKeyVariableSchema,
     confirm: z

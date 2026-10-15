@@ -233,35 +233,41 @@ export function aiConnectionRoutes(db: Db, options: Parameters<typeof supportsLo
         read.snapshot.keyVariable,
       );
       res.setHeader("Cache-Control", "no-store");
-      res.status(201).json(
-        await service.save(
-          companyId,
-          userId,
-          {
-            provider: "anthropic",
-            method: "api_key",
-            ownership: input.ownership,
-            name: input.name,
-            agentIds: input.agentIds,
-            allAgents: input.allAgents,
-            connectionId: input.connectionId,
-            baseUrl: read.snapshot.baseUrl,
-            keyVariable: read.snapshot.keyVariable,
-            // The ladder is assembled here rather than taken from the payload:
-            // `model` is what the operator confirmed on the card, and the
-            // alternatives are the ones the file they confirmed actually holds.
-            // A caller that named them itself would be choosing models this
-            // machine never configured.
-            models: {
-              default: input.model,
-              alternatives: read.snapshot.models.alternatives,
-            },
+      const saved = await service.save(
+        companyId,
+        userId,
+        {
+          provider: "anthropic",
+          method: "api_key",
+          ownership: input.ownership,
+          name: input.name,
+          agentIds: input.agentIds,
+          allAgents: input.allAgents,
+          connectionId: input.connectionId,
+          baseUrl: read.snapshot.baseUrl,
+          keyVariable: read.snapshot.keyVariable,
+          // The ladder is assembled here rather than taken from the payload:
+          // `model` is what the operator confirmed on the card, and the
+          // alternatives are the ones the file they confirmed actually holds.
+          // A caller that named them itself would be choosing models this
+          // machine never configured.
+          models: {
+            default: input.model,
+            alternatives: read.snapshot.models.alternatives,
           },
-          read.snapshot.key,
-          undefined,
-          attemptStartedAt,
-        ),
+        },
+        read.snapshot.key,
+        undefined,
+        attemptStartedAt,
       );
+      // The import is the account this surface means to use, so it becomes the
+      // operator's default for Anthropic API keys. Without this, a user who
+      // already holds an older default keeps testing and running against that
+      // account: the gateway they just confirmed is never the one a run
+      // reaches. A shared import names no personal default, so it is skipped.
+      if (input.ownership === "personal")
+        await service.setDefault(companyId, userId, saved.grantId);
+      res.status(201).json(saved);
     },
   );
   router.post("/companies/:companyId/ai-connection-pools", async (req, res) => {
