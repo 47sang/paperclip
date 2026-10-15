@@ -489,6 +489,7 @@ describe.skipIf(!support.supported)("heartbeat workspace preparation boundary", 
   it.each([
     { transport: "local", descriptor: "absent" },
     { transport: "ssh", descriptor: "absent" },
+    { transport: "task", descriptor: "absent" },
     { transport: "daytona", descriptor: "valid" },
     { transport: "daytona", descriptor: "absent" },
     { transport: "daytona", descriptor: "corrupt" },
@@ -519,7 +520,8 @@ describe.skipIf(!support.supported)("heartbeat workspace preparation boundary", 
       : transport === "ssh" ? { kind: "remote", transport: "ssh", remoteCwd,
         spec: { host: "fixture.invalid", port: 22, username: "fixture", remoteWorkspacePath: remoteCwd,
           privateKey: null, knownHosts: null, strictHostKeyChecking: true, remoteCwd } }
-      : { kind: "remote", transport: "sandbox", providerKey: "daytona", remoteCwd };
+      : { kind: "remote", transport: "sandbox", providerKey: "daytona", remoteCwd,
+          ...(transport === "task" ? { runnerTask: vi.fn() } : {}) };
     const realize = input.services.envOrchestrator.realizeForRun;
     vi.spyOn(input.services.envOrchestrator, "realizeForRun").mockImplementation(async args => ({
       ...await realize(args), executionTarget: target,
@@ -543,7 +545,7 @@ describe.skipIf(!support.supported)("heartbeat workspace preparation boundary", 
     if (transport !== "daytona" || descriptor === "valid") {
       const result = await prepareHeartbeatWorkspace(db, input);
       expect(result.executionTarget).toEqual(target);
-      if (transport === "ssh") expect(reserve).not.toHaveBeenCalled();
+      if (transport === "ssh" || transport === "task") expect(reserve).not.toHaveBeenCalled();
       else expect(reserve).toHaveBeenCalledWith({ companyId: issue.companyId, issueId: issue.id,
         workspaceId: first.persistedExecutionWorkspace!.id, cwd: admittedRoot, agentId: input.agent.id, runId: input.run.id });
       if (transport !== "daytona") {

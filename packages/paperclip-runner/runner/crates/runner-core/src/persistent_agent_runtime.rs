@@ -262,16 +262,12 @@ pub(crate) fn resolve(
     {
         return Err(invalid());
     }
-    if provider.get("kind").and_then(Value::as_str) != Some("acpx") {
-        provider.remove("runtimeOwnership");
-    }
     provider.insert("cwd".into(), json!(workspace));
     let mut instructions = provider
         .get("instructions")
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_owned();
-    let acpx = provider.get("kind").and_then(Value::as_str) == Some("acpx");
     if let Some(context) = provider
         .get_mut("runtimeContext")
         .filter(|value| !value.is_null())
@@ -286,10 +282,8 @@ pub(crate) fn resolve(
         instructions.push_str(std::str::from_utf8(&content).map_err(|_| invalid())?);
         instructions.push_str("\n\nYour persistent agent directory is available through AGENT_HOME. Changes remain on this computer. Write task deliverables in the task workspace.");
         context["instructions"]["bundle"]["rootPath"] = json!(home);
-        if acpx {
-            context["instructions"]["workingCopy"] =
-                json!({"kind": "agent_files", "rootPath": home, "entryPath": entry});
-        }
+        context["instructions"]["workingCopy"] =
+            json!({"kind": "agent_files", "rootPath": home, "entryPath": entry});
         if let Some(skills) = context.get_mut("skills").and_then(Value::as_array_mut) {
             for skill in skills {
                 let relative = skill
@@ -320,6 +314,10 @@ pub(crate) fn resolve(
                 .ok_or_else(invalid)?;
             provider.insert("command".into(), json!(profile.command.path));
             provider.insert("args".into(), json!([profile.proxy_script.path]));
+            provider.insert(
+                "runtimeDirectory".into(),
+                json!(config.state_dir.join("opencode")),
+            );
         }
         Some("acpx") => {
             let profile = config.acpx_launch_profile.as_ref().ok_or_else(invalid)?;

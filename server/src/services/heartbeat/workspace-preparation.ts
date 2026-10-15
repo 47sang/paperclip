@@ -1147,7 +1147,8 @@ export async function prepareHeartbeatWorkspace(db: Db, input: HeartbeatWorkspac
   const workspaceRealization = realizationResult.workspaceRealization;
   const executionTarget = realizationResult.executionTarget;
   if (!isDotRun && issueId && (persistedNativeExecutionInput || nativeRecoveryExecutionWorkspaceId)
-      && !(executionTarget?.kind === "remote" && executionTarget.transport === "ssh")) {
+      && !(executionTarget?.kind === "remote" && (executionTarget.transport === "ssh"
+        || (executionTarget.transport === "sandbox" && executionTarget.runnerTask)))) {
     const workspaceId = persistedNativeExecutionInput?.binding.executionWorkspaceId ?? nativeRecoveryExecutionWorkspaceId!;
     const reference = readNativeWorkspaceSyncReference(parseObject(run.runnerProfileJson).nativeWorkspaceSync);
     if (!reference && executionTarget?.kind === "remote" && executionTarget.transport === "sandbox") {

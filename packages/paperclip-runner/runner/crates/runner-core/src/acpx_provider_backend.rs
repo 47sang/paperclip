@@ -155,7 +155,7 @@ struct AcpxProviderDescriptor {
 // Only controller-authenticated run grants move between provider lifetimes.
 // Keep prompt, bundle/skill identities, assignment policy, and unknown fields
 // in this comparison; a new filesystem copy is not a new provider profile.
-fn runtime_context_session_identity(context: &Value) -> Option<Value> {
+pub(crate) fn runtime_context_session_identity(context: &Value) -> Option<Value> {
     let mut identity = context.clone();
     for pointer in [
         "/instructions/bundle/rootPath",
@@ -378,6 +378,7 @@ impl AcpxProviderDescriptor {
             provider_policy: self.provider_policy.clone(),
             system_instructions: self.instructions.clone(),
             runtime_context: self.runtime_context.clone(),
+            runtime_ownership: self.runtime_ownership.clone(),
             tool_set: provider_tool_set,
             expected_identity,
         })

@@ -71,6 +71,7 @@ Use a Runner build that supports the following PRP inputs.
 ```ts
 const requiredRunnerInputs = {
   "provider.runtimeOwnership": "agent_home",
+  "provider.opencodePermissionMode": "allow | ask | deny",
   "runner.suspend.includeStateReceipt": true,
   "run.attach.paperclipNextAuthority.connection.mode": "retain",
 };
@@ -105,6 +106,20 @@ const launcherEnvironment = {
 ```
 
 The Runner resolves instruction entries and assigned skill paths inside the installed agent home. It resolves `codex` through its local `PATH`. The installed launch profiles supply other provider executables.
+
+```ts
+const executionAuthority = {
+  permissions: "Core -> PRP -> provider",
+  assignedMcpTools: "provider -> PRP -> Core gateway",
+  installedInstructions: "Runner reads on each new run",
+  installedSkills: "Runner resolves -> provider",
+  installedCodexAccount: "CODEX_HOME/auth.json or HOME/.codex/auth.json",
+};
+```
+
+ACPX uses its existing private credential isolation for an installed Codex account. It reads the local account file when no explicit API key is configured. It does not send the account file to Core. Credential refresh remains part of the separate account workflow.
+
+Keep Runner state and credential stores outside the writable agent home. Keep the selected model, permission policy, and assigned resource identities unchanged when you resume a provider session. Installed instruction text can change between runs.
 
 A persistent computer keeps its agent home between runs. Core does not create a per-run copy or collect it after execution. Existing built-in ephemeral sandbox drivers keep their materialization and synchronization behavior.
 

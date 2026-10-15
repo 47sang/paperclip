@@ -137,6 +137,7 @@ describe("plugin Runner setup", () => {
         expect(retained).toHaveBeenCalledOnce();
         await writeFile(join(resources.provider_state!, "persistent-file"), "keep across runs");
         for (const run of ["next", "third"]) {
+          await writeFile(join(resources.provider_state!, "AGENTS.md"), `Installed persistent instructions ${run}`);
           const nextOwner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", resumeFrom: "task", pollMs: 1 });
           const second = createRunnerdCodexTransport({ ...nextOwner.driver, stateDirectory, runnerArtifact: artifact,
             runtimeContext: context(run), prpIdentity: { ...identity, runId: `run-${run}`, turnId: `turn-${run}`, itemId: `item-${run}` },
@@ -149,9 +150,9 @@ describe("plugin Runner setup", () => {
         }
         expect(await readFile(join(resources.provider_state!, "persistent-file"), "utf8")).toBe("keep across runs");
         const saved = JSON.parse(await readFile(join(resources.runner_state!, "codex-provider-state.json"), "utf8"));
-        expect(saved.config.instructions).toContain("Installed persistent instructions");
+        expect(saved.config.instructions).toContain("Installed persistent instructions third");
         const journal = JSON.parse(await readFile(join(stateDirectory, "control-plane/control-plane-state.json"), "utf8"));
-        expect(journal.runAttachTemplate.provider.runtimeContext.mcp.bindingId).toBe("third");
+        expect(journal.runAttachTemplate.provider.runtimeContext.mcp.bindingId).toBeNull();
         expect(journal.runAttachTemplate.provider.runtimeContext.instructions.bundle.rootPath).toBe(".");
         await expect(readFile(join(stateDirectory, "runner/runner-state.json"))).rejects.toMatchObject({ code: "ENOENT" });
         expect(operations.filter(op => op.kind === "submit")).toHaveLength(3);

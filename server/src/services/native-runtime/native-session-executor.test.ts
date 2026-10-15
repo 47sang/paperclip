@@ -10136,7 +10136,12 @@ describe("runnerd provider runtime wiring", () => {
     expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
   });
 
-  it("uses a task-only driver without exposing Core paths or transferring the agent home", async () => {
+  it.each(["codex", "opencode", "acpx"] as const)("uses a task-only %s driver without exposing Core paths or transferring the agent home", async (kind) => {
+    const taskExecution = { ...execution, provider: kind === "codex" ? execution.provider
+      : kind === "opencode" ? { kind, model: "openai/test", permissionMode: "deny" }
+      : { kind, agent: "claude", model: "claude-sonnet-4-6", permissionMode: "deny-all" } } as NativeExecutionInput;
+    const assignedMcpTools = { definitions: () => [], has: () => false, execute: vi.fn() };
+    state.createAssignedMcpTools.mockResolvedValueOnce(assignedMcpTools);
     const launcher = vi.fn();
     const registration = vi.fn();
     const driver = { persistentAgentHome: true, runnerProcessLauncher: launcher, controlPlaneRegistration: registration };
@@ -10149,11 +10154,15 @@ describe("runnerd provider runtime wiring", () => {
       remoteCwd: "/unused", runnerTask: task, runnerTaskProjectIds: ["10000000-0000-4000-8000-000000000001"] } as const;
     state.createBackend.mockClear(); state.createTransport.mockClear();
     try {
-      await expect(createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "runner", runnerExecutionTarget: target }))
+      await expect(createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "runner", runnerExecutionTarget: target }))
         .rejects.toThrow("runner_ingress_unavailable");
-      await createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "runner", runnerExecutionTarget: target,
+      await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "runner", runnerExecutionTarget: target,
         runnerIngressAuthorized: true, managedAiCredentialIdentity: "selected-account-revision",
-        runnerEnvironment: { HOME: "/controller/private", PATH: "/controller/bin", OPENAI_API_KEY: "fixture-secret" } });
+        runnerEnvironment: { HOME: "/controller/private", PATH: "/controller/bin", OPENAI_API_KEY: "fixture-secret",
+          PAPERCLIP_NATIVE_MCP_NAME: "assigned", PAPERCLIP_NATIVE_MCP_URL: "http://localhost/mcp/gateways/assigned-test",
+          PAPERCLIP_NATIVE_MCP_TOKEN: "fixture-mcp-secret" } });
+      expect(state.toolAuthorityDefinitions).toHaveBeenCalledWith(expect.objectContaining({ assignedMcpTools }));
+      expect(state.createAssignedMcpTools).toHaveBeenCalledWith(expect.objectContaining({ gatewayPublicId: "assigned-test", bearerToken: "fixture-mcp-secret" }));
       expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: target.runnerTaskProjectIds,
         credentialIdentity: "selected-account-revision" }));
       expect(state.createBackend.mock.calls.at(-1)![1]).toMatchObject({ workingDirectoryAuthority: "remote_runner", environment: {} });

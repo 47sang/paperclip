@@ -4055,8 +4055,10 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       const descriptor = runAttachTemplate.provider as Record<string, unknown>;
       for (const key of ["command", "args", "sidecarCommand", "sidecarArgs", "runtimeDirectory", "cwd", "runtimeContext"]) delete descriptor[key];
       descriptor.runtimeOwnership = "agent_home";
+      if (this.options.provider === "opencode") descriptor.opencodePermissionMode = this.options.opencodePermissionMode ?? "allow";
       descriptor.runtimeContext = sourceRuntimeContext ? {
         ...sourceRuntimeContext,
+        mcp: { ...sourceRuntimeContext.mcp, bindingId: null },
         instructions: { entryPath: sourceRuntimeContext.instructions.entryPath,
           bundle: { ...sourceRuntimeContext.instructions.bundle, rootPath: "." } },
         skills: sourceRuntimeContext.skills.map(skill => ({ ...skill, bundle: { ...skill.bundle, rootPath: `skills/${skill.runtimeName}` } })),
