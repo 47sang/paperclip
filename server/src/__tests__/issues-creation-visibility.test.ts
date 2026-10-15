@@ -132,7 +132,7 @@ describeEmbeddedPostgres("issue creation visibility", () => {
     await ctx.db.delete(issues).where(eq(issues.id, ids.private!));
     expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(3);
     await ctx.db.insert(issueComments).values({ companyId, issueId: ids.github!, authorUserId: userId, body: "Direct API reply" });
-    const beforeReply = await request(app).get(`${path}?includeRoutineExecutions=true`).expect(200);
+    const beforeReply = await request(app).get(`${path}?includeRoutineExecutions=true&inboxArchivedByUserId=me`).expect(200);
     const imported = beforeReply.body.find((issue: { id: string }) => issue.id === ids.slack);
     expect(imported.myLastTouchAt).toBeNull();
     expect(imported.isUnreadForMe).toBe(false);
