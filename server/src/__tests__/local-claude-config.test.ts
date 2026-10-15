@@ -588,6 +588,13 @@ describe("importing from the local Claude configuration", () => {
       const connections = await service.list(companyId, "alice");
       expect(connections.find(c => c.id === imported.body.connectionId)?.isDefault).toBe(true);
       expect(connections.find(c => c.id === older.connectionId)?.isDefault).toBe(false);
+      // A re-import repairs the endpoint without taking the default: the
+      // operator picked that default on purpose (PRODUCT #34).
+      const again = await request(app()).post(`${base}/import`).send({ ...confirmOf(GATEWAY, "ANTHROPIC_API_KEY", "New default gateway"), connectionId: imported.body.connectionId });
+      expect(again.status, JSON.stringify(again.body)).toBe(201);
+      const after = await service.list(companyId, "alice");
+      expect(after.find(c => c.id === imported.body.connectionId)?.isDefault).toBe(true);
+      expect(after.find(c => c.id === older.connectionId)?.isDefault).toBe(false);
     } finally { spy.mockRestore(); }
   });
 

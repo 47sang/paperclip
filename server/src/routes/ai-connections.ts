@@ -260,12 +260,15 @@ export function aiConnectionRoutes(db: Db, options: Parameters<typeof supportsLo
         undefined,
         attemptStartedAt,
       );
-      // The import is the account this surface means to use, so it becomes the
-      // operator's default for Anthropic API keys. Without this, a user who
-      // already holds an older default keeps testing and running against that
-      // account: the gateway they just confirmed is never the one a run
-      // reaches. A shared import names no personal default, so it is skipped.
-      if (input.ownership === "personal")
+      // The import is the account this surface means to use, so a first import
+      // becomes the operator's default for Anthropic API keys. Without this, a
+      // user who already holds an older default keeps testing and running
+      // against that account: the gateway they just confirmed is never the one
+      // a run reaches. A re-import keeps the default as it stands — the
+      // operator chose that default on purpose, and repairing one account's
+      // endpoint is not a reason to overrule it (PRODUCT #34). A shared import
+      // names no personal default either way.
+      if (input.ownership === "personal" && !input.connectionId)
         await service.setDefault(companyId, userId, saved.grantId);
       res.status(201).json(saved);
     },
