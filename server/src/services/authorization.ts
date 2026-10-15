@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { withHumanDirectedWork } from "./human-directed-work.js";
 import { hasOwnerChatInstructionAuthority } from "./owner-chat-instruction-authority.js";
+import { canonicalExecutionUuid } from "./execution-identity.js";
 import {
   agents,
   approvals,
@@ -973,7 +974,7 @@ export function authorizationService(db: Db | DbTransaction) {
         id: heartbeatRuns.id,
         companyId: heartbeatRuns.companyId,
         agentId: heartbeatRuns.agentId,
-        contextSnapshot: heartbeatRuns.contextSnapshot,
+        contextSnapshot: sql<Record<string, unknown>>`jsonb_build_object('executionPolicy', ${heartbeatRuns.contextSnapshot}->'executionPolicy')`,
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, runId))
@@ -991,7 +992,7 @@ export function authorizationService(db: Db | DbTransaction) {
       .select({
         companyId: heartbeatRuns.companyId,
         agentId: heartbeatRuns.agentId,
-        contextSnapshot: heartbeatRuns.contextSnapshot,
+        contextSnapshot: sql<Record<string, unknown>>`jsonb_build_object('issueId', ${heartbeatRuns.contextSnapshot}->'issueId', 'taskId', ${heartbeatRuns.contextSnapshot}->'taskId')`,
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, runId))
@@ -2769,7 +2770,7 @@ export async function executionWorkspaceReadSqlCondition(db: Db | DbTransaction,
       select 1 from ${projects} where ${projects.id} = ${executionWorkspaces.projectId}
         and ${projects.companyId} = ${executionWorkspaces.companyId} and ${projectCondition}))
     and not exists (select 1 from jsonb_object_keys(coalesce(${executionWorkspaces.metadata}->'_issuePrivacySources', '{}'::jsonb)) source(id)
-      where not exists (select 1 from ${issues} where ${issues.id}::text = source.id
+      where not exists (select 1 from ${issues} where ${issues.id} = ${canonicalExecutionUuid(sql`source.id`)}
         and ${issues.companyId} = ${executionWorkspaces.companyId} and ${issueCondition}))
     and not exists (select 1 from ${issues}
       where ${issues.companyId} = ${executionWorkspaces.companyId}

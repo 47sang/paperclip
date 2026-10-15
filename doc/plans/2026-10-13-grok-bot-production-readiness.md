@@ -156,3 +156,69 @@ The supporting Cloud ingress candidate passes typecheck, routing smoke and its f
 The next review corrections apply the native deliverable catalog's current work-mode policy to upload-ticket issuance and use. Confirmed rejected deliveries have an explicit operator retry; each retry retains the prior receipt, reserves one idempotent new intent and rechecks binding, grant, routine revision and work-session authority. Unknown or accepted delivery remains single-send. Thread Stop uses the selected run and its agent. Recovery locks all of the agent's current and retired bindings before routine rows. Historical Copilot v17 inputs remain decodable while new launch admission stays pinned to v18.
 
 The focused rendered UI regressions pass (144 tests), as do OpenAPI route coverage (21 tests) and Runner contract/integrity/history checks (82 tests). The current server fixture attempt could not initialize PostgreSQL because the host exhausted its shared-memory slots; no server-test pass is inferred from that attempt. Clean-worker CI must execute the file-policy, rejected-feedback and lock-order regressions before hand-off.
+
+
+## October 14 setup qualification follow-up
+
+The merged candidate passed source checks and was deployed to the approved staging
+workspace. The natural Grok picker and Save & exit recovery were observed there.
+The actual Grok desktop client reused its custom MCP plugin and opened the shared
+agent authorization flow with its registered Cursor client identity.
+
+Setup stopped before granting access: the masked pairing field lacked a Copy
+button, and the pending authorization action still named Dot. Add an explicit
+Copy code control through the shared clipboard helper, keep the code masked and
+out of setup prompts, and use a provider-neutral approval action. Preserve the
+fixed company, agent, authorizing person and permissions preview. Requalify the
+rendered copy and authorization path on the deployed follow-up candidate before
+running work cases. This is not yet evidence of an authenticated candidate reply
+or a completed managed Runner journey.
+
+
+## October 14 — live file-completion correction
+
+The deployed real Grok client completed agent OAuth, renewed its rotating refresh
+token, acknowledged a readiness challenge, accepted an ordinary assignment, and
+asked a two-choice question. The human selected setup simplicity. Two continuation
+sends received HTTP 400. Explicit inspection, recovery and re-verification let the
+same task continue without a Grok chat work nudge.
+
+The Bot saved a 421-word comparison document and a CSV with three rows. Canonical
+completion rejected the file because the authenticated upload did not persist the
+verified native publication receipt. The real managed run later exited unexpectedly;
+its precise cause remains under investigation. All three managed leases have
+successful cleanup receipts. These observations are failed acceptance evidence,
+not a passed release campaign. Private records retain task, run, assignment,
+OAuth lifecycle, dispatch, lease, artifact and completion-feedback references.
+
+The follow-up records a server-owned external publication receipt in the same
+transaction as a verified file upload. Completion checks the receipt against the
+actual upload, assignment and exact stored metadata. Personal uploads do not gain
+agent authority. The real Rust regression now requests a file and must pass the
+normal semantic finish and finalization paths with that file's evidence. Deployed
+requalification, proactive work, actual controller restart and active-session stop
+remain required before the release contract is complete.
+
+The deployed Stop action also rejected the lingering assignment after the managed
+run had failed. The follow-up permits a fence for that exact terminal run's active
+assignment, while stale Stop calls cannot touch successor work. Known remote
+Runner lease/reconnect failures retain a closed diagnostic code; raw stderr and
+transport credentials stay out of that error. Qualification access was revoked
+while the correction is reviewed. No successful active-session Stop or restart
+qualification is inferred from this cleanup.
+
+The upload/document overlap regression uses the real admitted Rust Grok work
+session, native document authority, and authenticated HTTP upload. With the
+original run-before-task upload order, the upload returned 503. With the shared
+task-before-run order, both writes and their durable receipts committed, and
+normal file completion passed. This is protocol evidence; it does not replace
+the remaining real-client acceptance gates.
+
+A second overlap regression uses an actual admitted Rust Grok session and holds
+the upload's storage response while disconnect runs. The former assignment-first
+order prevented disconnect from completing. Preliminary upload access now stays
+read-only for agent sessions; publication acquires the grant before retaining
+assignment authority. Disconnect completes while storage is pending, and the
+late upload returns 403 with no attachment or publication receipt. Person write
+checks remain in place. The full repository command was interrupted when this
+new review finding arrived; its partial output is not a passing test result.
