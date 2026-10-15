@@ -13,8 +13,12 @@ test('release image consumes one successful exact-source producer set', () => {
   assert.deepEqual(selectReleaseArtifacts(artifacts, '123', 2), artifacts);
 });
 
+test('frozen runtime source can differ from workflow dispatch source', () => {
+  assert.doesNotThrow(() => validateReleaseRun({ ...run, head_sha: 'c'.repeat(40) }, source));
+});
+
 for (const [name, patch] of [
-  ['different source', { head_sha: 'c'.repeat(40) }],
+  ['invalid workflow source', { head_sha: 'not-a-sha' }],
   ['incomplete producer', { conclusion: null }],
   ['failed producer', { conclusion: 'failure' }],
   ['unrelated workflow', { path: '.github/workflows/ci.yml' }],

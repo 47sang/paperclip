@@ -10,9 +10,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { verifyReleaseProviderPack } from '../packages/paperclip-runner/scripts/release-provider-pack.mjs';
 
 export function validateReleaseRun(run, source) {
-  if (!/^[a-f0-9]{40}$/.test(source) || run.head_sha !== source || run.conclusion !== 'success'
+  if (!/^[a-f0-9]{40}$/.test(source) || !/^[a-f0-9]{40}$/.test(run.head_sha ?? '') || run.conclusion !== 'success'
     || run.path !== '.github/workflows/release-smoke.yml' || run.repository?.full_name !== 'paperclipai/paperclip') {
-    throw Error('Image inputs require a successful exact-source Release Smoke run in paperclipai/paperclip');
+    throw Error('Image inputs require a successful repository-owned Release Smoke run in paperclipai/paperclip');
   }
 }
 
@@ -142,7 +142,7 @@ z.extractall(dest)
   await copyFile(new URL('../docker/daytona-runner/Dockerfile.release', import.meta.url), join(output, 'Dockerfile'));
   await copyFile(join(dirs[0], 'linux-x64/provider-pack.json'), join(output, 'provider-pack.json'));
   for (const dir of dirs) await rm(dir, { recursive: true });
-  const evidence = { sourceRevision: source, producerRunId: runId, producerAttempt: run.run_attempt, providerPackDigest: pack.digest,
+  const evidence = { sourceRevision: source, producerRunId: runId, producerWorkflowSource: run.head_sha, producerAttempt: run.run_attempt, providerPackDigest: pack.digest,
     daemonSha256: sha256, baseImage: process.env.RELEASE_BASE_IMAGE, artifacts: selected.map(a => ({ id: a.id, name: a.name, digest: a.digest })), providerCalls: 0 };
   await writeFile(resolve(output, '../release-image-inputs.json'), JSON.stringify(evidence, null, 2) + '\n');
   console.log(JSON.stringify(evidence));
