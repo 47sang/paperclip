@@ -80,3 +80,5 @@ inspected recovery hold before admitting another assignment.
 stops future dispatch. Remote Grok execution may continue. Open the Grok Bot app
 to inspect it. Paperclip shows reported activity, not a complete remote transcript
 or computer recording.
+
+The admitted Grok execution contract has no access to the Runner's workspace files. Its managed Runner still keeps durable recovery state, but stopping that session does not require workspace file repair. Inspect the Bot in Grok, clear the connection's recovery hold in the agent's Runtime settings, and verify the routine again before assigning new work. This records inspection without asserting global Grok termination.
