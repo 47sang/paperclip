@@ -33,6 +33,7 @@ import {
   parseGeminiVersionParts,
   referencedSourceContentSignature,
   rewriteGeminiAcpFlagForVersion,
+  summarizeAcpProcessTerminal,
   summarizeAcpStopActivity,
   summarizeAcpxTurnUsage,
   type AcpxEngineExecutorOptions,
@@ -3512,6 +3513,39 @@ describe("summarizeAcpStopActivity", () => {
 
   it("omits the event age when no event preceded the stop", () => {
     expect(summarizeAcpStopActivity(10_000, null, [])).toEqual({});
+  });
+});
+
+describe("summarizeAcpProcessTerminal", () => {
+  it("reports nothing before the process session records terminal evidence", () => {
+    expect(summarizeAcpProcessTerminal(null)).toEqual({});
+    expect(summarizeAcpProcessTerminal(undefined)).toEqual({});
+  });
+
+  it("reports a signal-killed remote process", () => {
+    expect(summarizeAcpProcessTerminal({
+      source: "remote_event", outcome: "exit", exitCode: "unknown", signal: "SIGKILL",
+    })).toEqual({
+      acpProcessTerminalSource: "remote_event",
+      acpProcessTerminalOutcome: "exit",
+      acpProcessTerminalSignal: "SIGKILL",
+    });
+  });
+
+  it("reports an exit code and omits an unknown signal", () => {
+    expect(summarizeAcpProcessTerminal({
+      source: "remote_event", outcome: "exit", exitCode: 137, signal: "unknown",
+    })).toEqual({
+      acpProcessTerminalSource: "remote_event",
+      acpProcessTerminalOutcome: "exit",
+      acpProcessTerminalExitCode: 137,
+    });
+  });
+
+  it("reports a host proxy close with no exit details", () => {
+    expect(summarizeAcpProcessTerminal({
+      source: "proxy_close", outcome: "error", exitCode: "unknown", signal: "unknown",
+    })).toEqual({ acpProcessTerminalSource: "proxy_close", acpProcessTerminalOutcome: "error" });
   });
 });
 
