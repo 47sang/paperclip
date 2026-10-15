@@ -81,12 +81,6 @@ const QUALIFIED_CLAUDE_DARWIN_RUNTIMES = {
   }),
 };
 
-const QUALIFIED_CLAUDE_LINUX_ARM64_RUNTIME = Object.freeze({
-  ...QUALIFIED_CLAUDE_LINUX_X64_RUNTIME,
-  packageName: "@anthropic-ai/claude-agent-sdk-linux-arm64",
-  executableDigest: "sha256:0292fa22ac2fd43e16be9d0e511ddd8347280d6e0ebaca744ef5b27e05d8d0f8",
-});
-
 const QUALIFIED_CODEX_LINUX_X64_RUNTIME = Object.freeze({
   runtimePackageName: "@openai/codex",
   runtimePackageVersion: "0.160.0",
