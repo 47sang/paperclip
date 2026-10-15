@@ -4659,7 +4659,10 @@ export function createAcpxEngineExecutor(deps: AcpxEngineExecutorOptions = {}) {
             ...referencedProjectStagingFailuresField,
             model: prepared.requestedModel || null,
             clearSession,
-            resultJson: { phase: "ensure_session" },
+            resultJson: {
+              phase: "ensure_session",
+              ...summarizeAcpProcessTerminal(prepared.processSessionBridge?.readTerminalEvidence?.()),
+            },
             summary: message,
           };
           return settleFor("handshake", err);
@@ -4689,7 +4692,10 @@ export function createAcpxEngineExecutor(deps: AcpxEngineExecutorOptions = {}) {
             ...billingFields,
             ...referencedProjectStagingFailuresField,
             model: prepared.requestedModel || null,
-            resultJson: { phase: "ensure_session" },
+            resultJson: {
+              phase: "ensure_session",
+              ...summarizeAcpProcessTerminal(prepared.processSessionBridge?.readTerminalEvidence?.()),
+            },
             summary: "ACPX did not return a runtime session handle.",
           };
           return settleFor(
@@ -4729,7 +4735,10 @@ export function createAcpxEngineExecutor(deps: AcpxEngineExecutorOptions = {}) {
           ...referencedProjectStagingFailuresField,
           model: prepared.requestedModel || null,
           clearSession,
-          resultJson: { phase: "create_runtime" },
+          resultJson: {
+            phase: "create_runtime",
+            ...summarizeAcpProcessTerminal(prepared.processSessionBridge?.readTerminalEvidence?.()),
+          },
           summary: message,
         };
         return settleFor("runtime_create", err);
@@ -4786,6 +4795,7 @@ export function createAcpxEngineExecutor(deps: AcpxEngineExecutorOptions = {}) {
             requestedModel: prepared.requestedModel || null,
             requestedThinkingEffort: prepared.requestedThinkingEffort || null,
             fastMode: prepared.fastMode,
+            ...summarizeAcpProcessTerminal(prepared.processSessionBridge?.readTerminalEvidence?.()),
           },
           summary: message,
         };
