@@ -9,7 +9,10 @@ import {
 } from "./NewAgent.test-support";
 
 describe("New agent setup", () => {
-  it.each(["paperclip", "legacy"] as const)("qualifies new managed Claude on explicit setup and saves measured %s defaults", async measured => {
+  it.each([
+    ["paperclip", "Connect"], ["legacy", "Connect"],
+    ["paperclip", "Finish setup"], ["legacy", "Finish setup"],
+  ] as const)("qualifies new managed Claude and saves measured %s defaults through %s", async (measured, step) => {
     const image = `registry.example.test/runtime@sha256:${"a".repeat(64)}`;
     envApi.list.mockResolvedValue([{ id: "sandbox-1", driver: "sandbox", config: { provider: "daytona", image } }]);
     settings.get.mockResolvedValue({ defaultEnvironmentId: "sandbox-1" });
@@ -32,12 +35,30 @@ describe("New agent setup", () => {
     api.testEnvironment.mockImplementation(async () => { calls.push("adapter"); return pass; });
     await render("claude_local");
     expect(envApi.probe).not.toHaveBeenCalled();
-    await click("ClaudeSubscription");
-    calls.length = 0;
-    await click("Use saved subscription");
+    if (step === "Connect") {
+      await click("ClaudeSubscription");
+      calls.length = 0;
+      await click("Use saved subscription");
+    } else {
+      managedApi.list.mockResolvedValue({ currentUserId: "user-1", connections: [{
+        id: "00000000-0000-4000-8000-000000000021", grantId: "00000000-0000-4000-8000-000000000022", companyId: "company-1",
+        provider: "openrouter", method: "api_key", name: "Company OpenRouter", ownership: "shared", isDefault: false, status: "connected",
+        routing: { kind: "openrouter", protocol: "messages", auth: "bearer", models: [] },
+      }] } as any);
+      await click("AdvancedCustom Gateway");
+      const picker = container.querySelector('[role="combobox"][aria-label="Connection"]')!;
+      await act(async () => picker.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+      await settle();
+      const option = [...document.querySelectorAll('[role="option"]')].find(node => node.textContent?.includes("Company OpenRouter")) as HTMLElement;
+      await act(async () => option.click());
+      await settle();
+      await click("Use connection");
+      expect(api.testEnvironment).not.toHaveBeenCalled();
+      calls.length = 0;
+    }
+    await click("Finish setup");
     expect(calls).toEqual(["discovery-before", "platform", "discovery-after", "adapter"]);
     expect(envApi.probe).toHaveBeenCalledExactlyOnceWith("sandbox-1", "company-1");
-    await click("Finish setup");
     expect(api.testEnvironment).toHaveBeenCalledTimes(1);
     expect(api.hire).toHaveBeenCalledTimes(1);
     const tested = api.testEnvironment.mock.calls[0][2].adapterConfig;
