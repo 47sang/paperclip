@@ -201,6 +201,53 @@ describeEmbeddedPostgres("issue creation visibility", () => {
     expect(read.body[0].isUnreadForMe).toBe(false);
   });
 
+  it.each(["request_checkbox_confirmation", "request_item_verdicts"] as const)("resurfaces archived automatic work for an addressed %s", async (kind) => {
+    const { companyId, userId, actor } = await seedCompanyWithBoardAccess(ctx.db, "Archived requests");
+    await ctx.db.insert(authUsers).values({ id: userId, name: "Recipient", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
+    const [agent] = await ctx.db.insert(agents).values({ companyId, name: "Requester", role: "engineer", adapterType: "process" }).returning();
+    const tasks = await ctx.db.insert(issues).values(["addressed", "otherRecipient"].map((title) => ({
+      companyId, title, originKind: "chat_channel", status: "todo",
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    }))).returning();
+    const svc = issueService(ctx.db);
+    for (const task of tasks) {
+      await svc.archiveInbox(companyId, task.id, userId, new Date("2026-01-02"));
+      await svc.markRead(companyId, task.id, userId, new Date("2026-01-02"));
+    }
+    const app = routeApp(ctx.db, actor, issueRoutes);
+    const path = `/api/companies/${companyId}/issues`;
+    const mineQuery = "touchedByUserId=me&inboxArchivedByUserId=me";
+    const unreadQuery = "unreadForUserId=me&inboxArchivedByUserId=me";
+    await request(app).get(`${path}?${mineQuery}`).expect(200).expect([]);
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(0);
+    const input = kind === "request_checkbox_confirmation"
+      ? { kind, payload: { version: 1 as const, prompt: "Select the result.", options: [{ id: "result", label: "Result" }] } }
+      : { kind, payload: { version: 1 as const, prompt: "Review the result.", items: [{ id: "result", label: "Result" }] } };
+    await issueThreadInteractionService(ctx.db).create(tasks[0]!, {
+      ...input, addresseeUserId: userId, resolverPolicy: "human_only",
+    }, { agentId: agent!.id });
+    await ctx.db.insert(issueThreadInteractions).values({
+      companyId, issueId: tasks[1]!.id, kind, addresseeUserId: "someone-else",
+      effectiveResolverPolicy: "human_only", payload: input.payload,
+    });
+    for (const view of ["", "&view=compact"]) {
+      for (const query of [mineQuery, unreadQuery]) {
+        const result = await request(app).get(`${path}?${query}${view}`).expect(200);
+        expect(result.body.map((row: { id: string }) => row.id)).toEqual([tasks[0]!.id]);
+        expect(result.body[0].isUnreadForMe).toBe(true);
+      }
+    }
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(1);
+    await svc.markRead(companyId, tasks[0]!.id, userId);
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(0);
+    const read = await request(app).get(`${path}?${mineQuery}`).expect(200);
+    expect(read.body.map((row: { id: string }) => row.id)).toEqual([tasks[0]!.id]);
+    expect(read.body[0].isUnreadForMe).toBe(false);
+    await svc.archiveInbox(companyId, tasks[0]!.id, userId);
+    await request(app).get(`${path}?${mineQuery}`).expect(200).expect([]);
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(0);
+  });
+
   it("excludes historical and closed requests while preserving current questions and authorization requests", async () => {
     const { companyId, userId, actor } = await seedCompanyWithBoardAccess(ctx.db, "Current requests");
     const names = ["historical", "done", "cancelled", "current", "authorization"];

@@ -2949,6 +2949,7 @@ function inboxVisibleForUserCondition(companyId: string, userId: string) {
               )
               AND ${issueThreadInteractions.createdAt} > ${issueInboxArchives.archivedAt}
           )
+          OR ${pendingUserRequestCondition(companyId, userId, sql`${issueInboxArchives.archivedAt}`)}
           OR EXISTS (
             SELECT 1
             FROM ${activityLog}
