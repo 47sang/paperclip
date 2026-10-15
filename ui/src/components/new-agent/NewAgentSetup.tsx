@@ -481,8 +481,8 @@ function Setup({
     };
   }
 
-  async function runTest(nextConnection = connection): Promise<boolean> {
-    if (!ready) return false;
+  async function runTest(nextConnection = connection): Promise<Record<string, unknown> | null> {
+    if (!ready) return null;
     const run = ++generation.current;
     const setupEnvironment = setupEnvironmentRef.current;
     setTestState("running");
@@ -497,7 +497,7 @@ function Setup({
         isCurrent: () => run === generation.current && setupEnvironmentRef.current === setupEnvironment,
       });
       if (run !== generation.current || setupEnvironmentRef.current !== setupEnvironment
-        || (needsClaudeSetupQualification(selection) && !qualified)) return false;
+        || (needsClaudeSetupQualification(selection) && !qualified)) return null;
       if (qualified) {
         qualificationTransition.current = { run, companyId, environmentId, runner: qualified.runner };
         cache.setQueryData(queryKeys.adapters.availability(companyId, environmentId), qualified.adapters);
@@ -513,7 +513,7 @@ function Setup({
         aiConnection: runtimeAiBinding ?? nextConnection?.aiConnection,
         environmentId,
       });
-      if (run !== generation.current) return false;
+      if (run !== generation.current) return null;
       setResult(tested);
       setTestState(blocking(tested) ? "fail" : tested.status);
       return (
@@ -522,7 +522,7 @@ function Setup({
           tested.checks.some((check) =>
             check.code.endsWith("hello_probe_passed"),
           ))
-      );
+      ) ? config : null;
     } catch (cause) {
       if (run === generation.current) {
         setError(
@@ -530,7 +530,7 @@ function Setup({
         );
         setTestState("fail");
       }
-      return false;
+      return null;
     }
   }
   async function finish() {
@@ -551,11 +551,11 @@ function Setup({
     const staged: Array<{ remove: () => Promise<unknown> }> = [];
     let hired = false;
     try {
-      if (connectionAdapter && testState === "idle" && !(await runTest())) return;
-      const config = preparedConfig();
       const credentials = pendingCredentials();
-      // Untested entered keys must pass a probe before they can be stored.
-      if (Object.keys(credentials).length && !(await runTest())) return;
+      const config = (connectionAdapter && testState === "idle") || Object.keys(credentials).length
+        ? await runTest()
+        : preparedConfig();
+      if (!config) return;
       for (const [key, value] of Object.entries(credentials)) {
         const store = connectionAdapter
           ? storeProviderApiKey
@@ -828,7 +828,7 @@ function Setup({
                         setRuntimeAiBinding(undefined);
                         resetTest();
                       }}
-                      testConnection={runTest}
+                      testConnection={async next => (await runTest(next)) !== null}
                       testError={
                         error ??
                         (
