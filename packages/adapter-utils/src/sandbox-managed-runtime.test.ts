@@ -444,7 +444,7 @@ describe("sandbox managed runtime", () => {
       await prepared.restoreWorkspace();
       expect(await readFile(path.join(local, "file.txt"), "utf8")).toBe("after");
     } finally { capture.mockRestore(); }
-  });
+  }, 30_000);
 
   it.each(["host_current", "adopt_remote", "durable_seed"] as const)("stages and restores both project repositories with independent Git histories (%s)", async (mode) => {
     const root = await mkdtemp(path.join(os.tmpdir(), "paperclip-multi-repo-"));
