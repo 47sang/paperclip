@@ -117,18 +117,70 @@ reminder; dismissing one clears the composer and stays effective after reload fo
 that person and task. Other inputs keep a pending indicator that can reopen them;
 resolving or skipping the input removes that indicator.
 
+## Proposed dark-mode color foundation
+
+Review **Design proposals → Foundations → Colors (dark mode)** in Storybook
+(`design-foundations-colors`): Token reference, Surfaces & elevation, and
+Text & interaction. The palette comes from the [Paper Dark mode frame](https://app.paper.design/file/01KZ5QQTS4TG2VADP7ZVGJNQY4/p-L-0/3LXU-2)
+and the designer's usage rules. These color values and usage rules apply only
+to dark mode; this proposal does not define a light-mode palette. It remains
+proposed until visual approval.
+
+Paper's `dark-color-*` names map to theme-independent CSS tokens in
+`ui/src/index.css`; do not introduce a second token file or copy colors into
+components/stories. The token-reference story reads values from the active CSS.
+
+| Paper name | Code token | Intended use |
+| --- | --- | --- |
+| `dark-color-foreground` | `--foreground` | Headings, header labels, emphasized text, unread task titles |
+| `dark-color-background` | `--background` | Center/right panes, lowest card surface, menus and popovers |
+| `dark-color-background-alt` | `--background-alt` | Text inputs and search fields |
+| `dark-color-muted` | `--muted` | Left sidebar and highest card surface |
+| `dark-color-muted-highlight` | `--muted-highlight` | Hover backgrounds; preserve documented selection/sort behavior |
+| `dark-color-muted-alt` | `--muted-alt` | Middle card surface |
+| `dark-color-muted-foreground` | `--muted-foreground` | Default text, secondary labels, metadata, read task titles |
+| `dark-color-border` | `--border` | Shared dividers, input outlines and card borders |
+
+The border is translucent: its rendered shade depends on the surface beneath it.
+Keep that alpha value rather than replacing it with a different opaque gray for
+each background. Card surface levels share this border and do not automatically
+add shadows. Use the existing `Card` with `elevation="low"`, `"middle"`, or `"high"`;
+omitting elevation keeps its default surface. These new surface mappings apply
+only in the proposed dark theme.
+
+Most text is muted foreground. Foreground is an intentional exception for
+headings, header labels and emphasis. Task-title read/unread weight and hover
+rules below remain in force. Task-status colors keep their existing semantic
+meaning and are outside this neutral-palette reference.
+
+The Storybook proposal decorator adds `.design-proposal-theme`. Dark semantic
+overrides are scoped to its presence on the document so portaled menus inherit
+the same colors. Leaving a proposal removes that scope. Existing production
+stories and the app's default theme retain their existing appearance; the
+light palette has not been redesigned by this proposal. The sidebar, page shell,
+task list, shared inputs, card levels and refreshed flyouts consume these same
+semantic tokens.
+
 ## Task-row refresh: proposed specimen
 
 The task-row refresh is an explicitly authorized design change following the
-extraction run. Its review surface is **Design proposals → Task row design** in Storybook
+extraction run. Its review surface is **Design proposals → Components → Task list** in Storybook
 (`tasks-row-design`), using the production `IssueRow` with
 `presentation="task" appearance="refreshed"` and the shared `TaskRowGroup`.
 The existing row presentation remains the default while this specimen is reviewed.
 
 Stage this design-system refresh's new token, component, layout, and screen stories
-under **Design proposals**, in `ui/storybook/stories/design-proposals/`. Use
+under **Design proposals**, in `ui/storybook/stories/design-proposals/`. Organize
+sidebar titles by Foundations (tokens), Components (reusable UI), Layouts
+(reusable page structures), Pages (complete screens), Patterns (shared behavior),
+and Guidelines (usage and contribution rules). Add groups as stories exist;
+do not create empty placeholder stories. Use
 `home: "design-proposals"`, `status: "proposed"`, and an explicit staging reason.
 These stories are review references and do not count as current production coverage.
+All Design proposals opt into `AvatarInitialProvider`: text fallback avatars use
+one uppercase character, the first initial. This includes the sidebar account
+control, account/profile headers, identity avatars and failed agent-image
+fallbacks. Uploaded images and organization artwork keep their existing rendering.
 They continue to import shared components and the existing token layer; this is
 organizational separation, not a second implementation or token source. Use them
 for tasks explicitly implementing the refresh. After design review and adoption
@@ -186,7 +238,7 @@ The complete column order is **Task, Task ID, Created by, Assignee,
 Project, Parent Task, Tags, Worktree, Last updated**. The reusable
 `TaskListColumnHeader` and `IssueRow`'s `columnValues` share the `--task-list-*`
 width tokens and configurable column order. Review the complete composition in
-**Design proposals → Task row design → All columns**.
+**Design proposals → Components → Task list → All columns**.
 
 - Created by is the recorded creator (human or agent); Assignee is the current
   assignee. Both show names without avatars. Do not infer either from tree depth
@@ -258,7 +310,7 @@ width tokens and configurable column order. Review the complete composition in
 
 ### Task-list page proposal
 
-Review the complete composition in **Design proposals → Task list page**
+Review the complete composition in **Design proposals → Pages → Tasks**
 (`tasks-list-page-design--default`), alongside All Columns and No Results.
 This page remains proposed until the design owner approves the surrounding
 layout. The Default story shows Task, Task ID and Last updated; the row specimen
@@ -271,6 +323,18 @@ and full page consume the same `TaskList` collection.
   Enable the shared shell's production resize handle, including its hover,
   dragging and keyboard states. Sidebar width persists under the proposal's own
   storage key, separate from the production sidebar preference.
+- `DesignSidebar` is the shared proposed navigation component used by this page
+  and **Design proposals → Components → Sidebar**. Refine its Default, Narrow,
+  Long Labels, Many Recent Tasks, Empty Recent Tasks, Organization Menu and
+  Account Menu stories, then review the Tasks page in context. Both compositions
+  use the same component and CSS tokens. The caller supplies recent tasks and
+  the New Task action; recents are filtered to the selected company.
+  The Recent Tasks heading stays fixed while its list scrolls independently.
+  The list uses the existing `scrollbar-while-scrolling` utility and shared idle
+  timer token; hovering alone does not reveal its scrollbar.
+  Standalone examples use separate width preferences and share the page's owner-access
+  fixture boundary, existing dialogs, marquee and Popover appearance. Navigation
+  remains fixture based; mobile composition and backend behavior are not proved.
 - Sidebar navigation labels use `sm` (14px). Icons match Paper and the existing
   sidebar mappings: CircleCheck, MessageCircle, FolderOpen, Repeat, Package,
   Users, Boxes, Unplug and History. The organization and account controls mount
@@ -291,12 +355,22 @@ and full page consume the same `TaskList` collection.
   `CommandPalette`; the toolbar input remains a task-list filter.
   `TruncatedTextMarqueeProvider` opts sidebar and menu labels into the same
   `CellMarquee` animation and alpha fade as table cells. Links and buttons own
-  focus; labels add no tab stops. Pointer exit resets immediately, Escape stops
+  focus; labels add no tab stops. Organization-menu state changes reset the
+  trigger title; restored focus after dismissal does not restart it outside the
+  hit area. Fresh pointer interaction or tabbing away and back can reveal it.
+  Pointer exit resets immediately, Escape stops
   reveal, fitting labels stay still, and reduced motion follows the shared rules.
 - `TaskListToolbar` composes shared buttons, input, tooltip, dropdown and filter
   primitives. Controls are 44px high. A 32px gap separates the toolbar and table.
   Page dimensions, spacing, type and surfaces live in the token layer under
   `--design-page-*` and `--design-sidebar-*`.
+  The filter popover uses Paper's five peer groups in order: Status, Project,
+  Creator, Assignee, Label. All but Status have an always-visible search field.
+  Desktop groups are 200px wide with 16px gaps and 12px body insets; groups wrap
+  on smaller viewports. Checkbox rows use the existing filter state and toggle
+  helpers, with Clear resetting the active filters. This opt-in `refreshed`
+  presentation omits the old quick-filter and visibility sections and inherits
+  the shared Popover surface, highlight and `--shadow-flyout` token.
 - Refreshed dropdowns and popovers share `FlyoutAppearanceProvider` and the
   existing Radix primitives. `Flyout` / `FlyoutContent` compose a popover;
   `FlyoutHeader` supports a simple title or profile details, and `FlyoutOptions`
@@ -311,18 +385,28 @@ and full page consume the same `TaskList` collection.
   The account flyout fits its contents and retains production Invite access
   checks. The preview supplies owner access and loaded operator-policy fixtures.
   This appearance remains opt-in while the proposal is reviewed.
-  Review the component separately in **Design proposals → Flyout**, with Columns,
+  Review the component separately in **Design proposals → Components → Popover**, with Columns,
   Views and Profile examples. Its Shadow control previews a local override;
   changing the saved `--shadow-flyout` token in `ui/src/index.css` updates every
   refreshed flyout. Storybook controls do not persist token edits.
-- Search, unread/completed views and filters operate on fixtures. Matching
+- Views appear in this order: Inbox, Unread, Needs attention, All tasks. Inbox includes
+  tasks created by or assigned to the current user. Unread uses the task unread
+  state; Needs attention includes both blocked and in-review statuses. New users start
+  on All tasks. The last view persists in browser storage per user, across the
+  proposal stories and organizations, under an isolated design-proposal key.
+  Invalid or unavailable storage falls back to All tasks; changing views still
+  works if storage is denied. Cross-device preference sync requires app integration.
+  Search, views and filters operate on fixtures. Matching
   subtasks keep their ancestor chain for context; the result count distinguishes
   matches from contextual parents. Expand/collapse applies to every nested level.
   The grouping icon and menu are omitted from the proposed toolbar.
 - List/board switching preserves the list's local column state. The board and
   New Task composer reuse existing components and are not new approved designs.
+  The proposed board uses one horizontal scroll viewport. It shares the task
+  table's edge detection and fade tokens, showing each fade only while content
+  is clipped on that side; resize and scrolling update the indicators.
   Sidebar links exercise the memory router; destination pages, creation API
-  behavior, saved preferences and production routes are outside this preview.
+  behavior, production preferences and production routes are outside this preview.
 
 The next milestone after full-page visual approval is the agent reference
 contract and a fresh-agent reproduction test using these components and tokens.

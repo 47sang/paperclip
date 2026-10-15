@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Flyout, FlyoutAppearanceProvider, FlyoutContent, FlyoutHeader, FlyoutOptions, FlyoutTrigger } from "@/components/ui/flyout";
 import { allTaskListColumns, defaultTaskListColumns, taskListColumns, type TaskListColumnId } from "@/lib/task-list";
+import { taskListViews, type TaskListView } from "@/lib/task-list-views";
 
 export type FlyoutPreviewProps = { mode: "columns" | "views" | "profile"; shadow?: string };
 
@@ -12,14 +13,14 @@ export type FlyoutPreviewProps = { mode: "columns" | "views" | "profile"; shadow
  * Shadow overrides stay local to this preview; the saved default is a token. */
 export function FlyoutPreview({ mode, shadow }: FlyoutPreviewProps) {
   const [columns, setColumns] = useState<readonly TaskListColumnId[]>(defaultTaskListColumns);
-  const [view, setView] = useState("All tasks");
+  const [view, setView] = useState<TaskListView>("all");
   const [lastAction, setLastAction] = useState("");
   const title = mode === "profile" ? "Account" : mode === "views" ? "Views" : "Columns";
   const profileActions = [{ label: "Settings", icon: Settings }, { label: "Invite", icon: UserPlus }, { label: "Documentation", icon: BookOpen }, { label: "Switch to light mode", icon: Sun }];
   return (
     <main className="task-row-design-preview min-h-screen p-12 text-foreground" data-testid="flyout-design-preview">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        <h1 className="text-2xl font-semibold">Flyout</h1>
+        <h1 className="text-2xl font-semibold">Popover</h1>
         <p className="text-sm text-muted-foreground">Shared title block, options, selection marks and shadow. Hover or focus an option to inspect its highlight.</p>
         <p className="text-sm text-muted-foreground">The Shadow control previews a CSS box-shadow. Clear it to inherit the shared --shadow-flyout token.</p>
         <div className="mt-6 flex justify-center">
@@ -28,8 +29,8 @@ export function FlyoutPreview({ mode, shadow }: FlyoutPreviewProps) {
               <DropdownMenuTrigger asChild><Button variant="outline">Views</Button></DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-(--flyout-width)" style={shadow ? { "--shadow-flyout": shadow } as CSSProperties : undefined}>
                 <DropdownMenuLabel asChild><FlyoutHeader>Views</FlyoutHeader></DropdownMenuLabel>
-                <DropdownMenuRadioGroup asChild value={view} onValueChange={setView}><FlyoutOptions>
-                  {["All tasks", "Unread", "Completed"].map(label => <DropdownMenuRadioItem key={label} value={label}>{label}</DropdownMenuRadioItem>)}
+                <DropdownMenuRadioGroup asChild value={view} onValueChange={value => setView(value as TaskListView)}><FlyoutOptions>
+                  {taskListViews.map(({ value, label }) => <DropdownMenuRadioItem key={value} value={value}>{label}</DropdownMenuRadioItem>)}
                 </FlyoutOptions></DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu></FlyoutAppearanceProvider>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useId, type CSSProperties, type ReactNode } from "react";
 import { DndContext, PointerSensor, closestCenter, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { allTaskListColumns, defaultTaskListColumns, reorderTaskListColumns, taskListColumnStart, taskListColumns, type TaskListColumnId, type TaskListSort } from "../lib/task-list";
 import { CellMarquee } from "./CellMarquee";
 import { FlyoutAppearanceProvider, FlyoutHeader, FlyoutOptions } from "./ui/flyout";
+import { useHorizontalScrollEdges } from "@/hooks/useHorizontalScrollEdges";
 
 export { taskListColumns } from "../lib/task-list";
 export type { TaskListColumnId, TaskListSort } from "../lib/task-list";
@@ -37,29 +38,8 @@ export function TaskListViewport({ children, visibleColumns = defaultTaskListCol
   columnOrder?: readonly TaskListColumnId[];
   controls?: ReactNode;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
+  const { scrollRef, contentRef, edges } = useHorizontalScrollEdges();
   const orderedColumns = columnOrder.filter(id => visibleColumns.includes(id));
-
-  useLayoutEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    const measure = () => {
-      const left = scroller.scrollLeft > 1;
-      const right = scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 1;
-      setEdges(current => current.left === left && current.right === right ? current : { left, right });
-    };
-    measure();
-    scroller.addEventListener("scroll", measure, { passive: true });
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    observer?.observe(scroller);
-    if (contentRef.current) observer?.observe(contentRef.current);
-    return () => {
-      scroller.removeEventListener("scroll", measure);
-      observer?.disconnect();
-    };
-  }, []);
 
   return (
     <ColumnContext.Provider value={{ columns: orderedColumns, order: columnOrder }}>

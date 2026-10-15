@@ -59,6 +59,14 @@ changes. Compare the built `index.json` when changing navigation.
 
 **Design proposals** is a separate top-level review section. Its stories live in
 `ui/storybook/stories/design-proposals/`, with titles beginning `Design proposals/`.
+Group these titles by **Foundations** (tokens), **Components** (reusable UI),
+**Layouts** (page structures), **Pages** (complete screens), **Patterns** (shared
+behavior) and **Guidelines** (usage and contribution rules), in that order.
+Create a group when there are stories for it; do not add empty placeholders.
+For example, color tokens belong in `Design proposals/Foundations/Colors (dark mode)`,
+the task table in `Design proposals/Components/Task list`, and its complete page
+in `Design proposals/Pages/Tasks`. Preserve explicit story IDs and exports when
+reorganizing so links and browser tests remain valid.
 Retain capability references so proposals remain discoverable from the feature
 guide, but never count them as current production examples. Keep using shared
 components and tokens rather than creating a parallel design implementation.

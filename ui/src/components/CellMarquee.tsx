@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 /** Row overlays keep navigation intact; the row reports the cell under the pointer. */
 export const HoveredCellContext = createContext<string | null>(null);
 
-export function CellMarquee({ children, cell, active = false, className, slot = "cell-marquee", contentSlot = "cell-marquee-content", tabbable = true, interactWithParent = false }: {
+export function CellMarquee({ children, cell, active = false, className, slot = "cell-marquee", contentSlot = "cell-marquee-content", tabbable = true, interactWithParent = false, resetKey }: {
   children: ReactNode;
   cell: string;
   active?: boolean;
@@ -14,10 +14,14 @@ export function CellMarquee({ children, cell, active = false, className, slot = 
   tabbable?: boolean;
   /** Labels inside links/buttons reuse that control's pointer and keyboard target. */
   interactWithParent?: boolean;
+  /** Reset when a parent menu changes state, without replaying on restored focus. */
+  resetKey?: string | number | boolean;
 }) {
   const hoveredCell = useContext(HoveredCellContext);
   const viewportRef = useRef<HTMLSpanElement>(null);
   const contentRef = useRef<HTMLSpanElement>(null);
+  const previousResetKey = useRef(resetKey);
+  const ignoreRestoredFocus = useRef(false);
   const [overflow, setOverflow] = useState(0);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -27,6 +31,18 @@ export function CellMarquee({ children, cell, active = false, className, slot = 
   const hovered = hoveredCell === cell || parentHovered;
   const activated = hovered || ((active || focused || parentFocused) && (hoveredCell === null || hovered));
   const revealing = overflow > 0 && activated && !dismissed;
+
+  useLayoutEffect(() => {
+    if (previousResetKey.current === resetKey) return;
+    previousResetKey.current = resetKey;
+    const owner = viewportRef.current?.closest<HTMLElement>('a, button, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]');
+    // Menus restore focus to their trigger on dismissal. That is not a new
+    // request to reveal its label; resume on pointer interaction or a new focus.
+    ignoreRestoredFocus.current = true;
+    setParentHovered(owner?.matches(":hover") ?? false);
+    setFocused(false);
+    setParentFocused(false);
+  }, [resetKey]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -57,13 +73,19 @@ export function CellMarquee({ children, cell, active = false, className, slot = 
     const control = viewport.closest<HTMLElement>('a, button, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]');
     const owner = control ?? viewport.closest<HTMLElement>("[data-marquee-surface]") ?? viewport;
     const move = (event: MouseEvent) => {
+      ignoreRestoredFocus.current = false;
       if (control) { setParentHovered(true); return; }
       const rect = viewport.getBoundingClientRect();
       setParentHovered(event.clientX >= rect.left && event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom);
     };
     const leave = () => setParentHovered(false);
-    const focus = () => setParentFocused(true);
-    const blur = (event: FocusEvent) => { if (!(event.relatedTarget instanceof Node && owner.contains(event.relatedTarget))) setParentFocused(false); };
+    const focus = () => { if (!ignoreRestoredFocus.current) setParentFocused(true); };
+    const blur = (event: FocusEvent) => {
+      if (!(event.relatedTarget instanceof Node && owner.contains(event.relatedTarget))) {
+        ignoreRestoredFocus.current = false;
+        setParentFocused(false);
+      }
+    };
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") setDismissed(true); };
     owner.addEventListener("mouseenter", move);
     owner.addEventListener("mousemove", move);

@@ -3,7 +3,7 @@ import { FlyoutPreview } from "../../support/design-proposals/FlyoutPreview";
 
 const meta = {
   id: "design-flyout",
-  title: "Design proposals/Flyout",
+  title: "Design proposals/Components/Popover",
   component: FlyoutPreview,
   globals: { theme: "dark" },
   args: { mode: "columns", shadow: "" },
@@ -21,7 +21,7 @@ const meta = {
       exception: "Shared flyout component and shadow tuning reference staged with the task-list design refresh.",
       implementation: "production",
       boundary: "fixtures",
-      notes: "Isolates the shared flyout composition used by the proposed page menus. Columns demonstrates toggle buttons and inherited-color checks; Views uses the existing radio-menu semantics with checkmarks; Profile demonstrates a rich header and compact actions including Invite. State and profile actions are local fixtures, not production navigation, invitation or permission evidence. Shadow controls affect this preview only; approved values belong in the shared --shadow-flyout token.",
+      notes: "Isolates the shared flyout composition used by the proposed page menus. Columns demonstrates toggle buttons and inherited-color checks; Views shares the page choices Inbox, Unread, Needs attention and All tasks, using existing radio-menu semantics with checkmarks; Profile demonstrates a rich header and compact actions including Invite. State and profile actions are local fixtures, not production navigation, invitation or permission evidence. Shadow controls affect this preview only; approved values belong in the shared --shadow-flyout token.",
     },
   },
 } satisfies Meta<typeof FlyoutPreview>;

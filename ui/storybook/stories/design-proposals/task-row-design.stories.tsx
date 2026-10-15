@@ -167,14 +167,14 @@ function TaskRowSpecimen() {
         <p className="text-xs leading-relaxed text-muted-foreground">Vertical guides connect nested tasks. One boundary encloses each parent and all its visible descendants; child rows have no horizontal separators.</p>
       </section>
       <StateSamples />
-      <footer className="text-xs leading-relaxed text-muted-foreground">This specimen uses the production task-row component with fixture data. Review the full composition under Design proposals → Task list page. Compact density is available as a separate preview; the app’s density setting follows app adoption.</footer>
+      <footer className="text-xs leading-relaxed text-muted-foreground">This specimen uses the production task-row component with fixture data. Review the full composition under Design proposals → Pages → Tasks. Compact density is available as a separate preview; the app’s density setting follows app adoption.</footer>
     </ReviewFrame>
   );
 }
 
 const meta = {
   id: "tasks-row-design",
-  title: "Design proposals/Task row design",
+  title: "Design proposals/Components/Task list",
   component: TaskRowSpecimen,
   globals: { theme: "dark" },
   parameters: {

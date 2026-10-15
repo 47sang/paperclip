@@ -6,9 +6,8 @@ import { Input } from "./ui/input";
 import { FlyoutHeader, FlyoutOptions } from "./ui/flyout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { taskListViews as views, type TaskListView } from "@/lib/task-list-views";
 
-export type TaskListView = "all" | "unread" | "completed";
-const views = [{ value: "all", label: "All tasks" }, { value: "unread", label: "Unread" }, { value: "completed", label: "Completed" }] as const;
 export function TaskListToolbar({ view, onViewChange, query, onQueryChange, searchRef, layout, onLayoutChange, allExpanded, onToggleExpanded, onNewTask, filters }: {
   view: TaskListView;
   onViewChange: (view: TaskListView) => void;
@@ -45,7 +44,7 @@ export function TaskListToolbar({ view, onViewChange, query, onQueryChange, sear
       </div>
       <div className="design-toolbar-actions">
         <Tooltip><TooltipTrigger asChild><Button variant="outline" className="design-toolbar-button design-toolbar-icon" disabled={layout !== "list"} aria-label={allExpanded ? "Collapse all tasks" : "Expand all tasks"} onClick={onToggleExpanded}><ListTree aria-hidden /></Button></TooltipTrigger><TooltipContent>{allExpanded ? "Collapse all tasks" : "Expand all tasks"}</TooltipContent></Tooltip>
-        <div className="design-toolbar-filter"><IssueFiltersPopover {...filters} presentation="streamlined" buttonVariant="outline" iconOnly enableExternalObjectFilters={false} /></div>
+        <div className="design-toolbar-filter"><IssueFiltersPopover {...filters} presentation="refreshed" buttonVariant="outline" iconOnly enableExternalObjectFilters={false} /></div>
         <Button className="design-toolbar-button design-new-task" onClick={onNewTask}><CirclePlus aria-hidden />New Task</Button>
       </div>
     </div>

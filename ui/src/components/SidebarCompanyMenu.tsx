@@ -283,6 +283,7 @@ function BuiltinCompanyMenu({ open: controlledOpen, onOpenChange, showChevron = 
                 the nav to buy that width. A name that still
                 truncates stays hover-recoverable via title. */}
             <TruncatedText
+              marqueeResetKey={open}
               className={cn(
                 "min-w-0 truncate text-sm font-bold text-foreground",
                 rail && SIDEBAR_RAIL_HIDDEN_LABEL,

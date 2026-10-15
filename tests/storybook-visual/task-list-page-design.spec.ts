@@ -22,6 +22,7 @@ test("full page uses the reviewed row contract and three default columns", async
   for (const link of await page.locator(".design-sidebar-navigation a").all()) await expect(link).toHaveCSS("font-size", "14px");
   await expect(page.locator(".design-sidebar-new-task")).toHaveCSS("font-size", "14px");
   await expect(page.getByRole("button", { name: "Open account menu", exact: true })).toHaveCSS("font-size", "14px");
+  await expect(page.getByRole("button", { name: "Open account menu", exact: true }).locator('[data-slot="avatar-fallback"]')).toHaveText("R");
   const recentLinks = page.locator(".design-sidebar-recents a");
   await expect(recentLinks).toHaveCount(5);
   await expect(page.locator(".design-sidebar-recents").getByText("Recent Tasks", { exact: true })).toBeVisible();
@@ -87,19 +88,37 @@ test("search preserves ancestor context, recovers from no results, and expansion
 test("views change the collection while keeping task families together", async ({ page }) => {
   await openPage(page);
   await page.getByRole("button", { name: "Task view: All tasks" }).click();
+  await expect(page.getByRole("menuitemradio")).toHaveText(["Inbox", "Unread", "Needs attention", "All tasks"]);
   await page.getByRole("menuitemradio", { name: "Unread", exact: true }).click();
   await expect(rows(page)).toHaveCount(3);
   await expect(page.locator(".design-task-results")).toHaveText("3 matching tasks");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Task view: Unread" })).toBeVisible();
+  await expect(rows(page)).toHaveCount(3);
   await page.getByRole("button", { name: "Task view: Unread" }).click();
+  await page.getByRole("menuitemradio", { name: "Needs attention", exact: true }).click();
+  await expect(page.locator(".design-task-results")).toHaveText("2 matching tasks · Parent tasks included for context");
+  await expect(rows(page)).toHaveCount(3);
+  await expect(rows(page).locator('[data-slot="task-row-title"]')).toHaveText(["Improve connector reliability", "Define connector health states", "Review budget notifications"]);
+  await page.getByRole("button", { name: "Task view: Needs attention" }).click();
+  await page.getByRole("menuitemradio", { name: "Inbox", exact: true }).click();
+  await expect(page.locator(".design-task-results")).toHaveText("6 matching tasks");
+  await expect(rows(page)).toHaveCount(6);
+  await page.reload();
+  await page.getByRole("button", { name: "Task view: Inbox" }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Inbox", exact: true })).toBeChecked();
   await page.getByRole("menuitemradio", { name: "All tasks", exact: true }).click();
   await expect(rows(page)).toHaveCount(10);
   await expect(page.getByRole("rowgroup", { name: "Improve connector reliability task group", exact: true }).locator('[data-slot="task-row"]')).toHaveCount(5);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Task view: All tasks" })).toBeVisible();
+  await expect(rows(page)).toHaveCount(10);
 });
 
 test("production filters operate on fixtures and list preferences survive board switching", async ({ page }) => {
   await openPage(page);
   await page.locator(".design-toolbar-filter > button").click();
-  await page.getByRole("checkbox", { name: "Done Done", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Done", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.locator(".design-task-results")).toHaveText("2 matching tasks · Parent tasks included for context");
   await expect(rows(page)).toHaveCount(3);
@@ -112,6 +131,59 @@ test("production filters operate on fixtures and list preferences survive board 
   await expect(page.getByRole("columnheader")).toHaveText(["Task", "Task ID", "Last updated"]);
 });
 
+test("refreshed filters use five searchable peer groups and the shared popover shadow", async ({ page }, testInfo) => {
+  await openPage(page);
+  await page.getByRole("button", { name: "Columns", exact: true }).click();
+  const shadow = await page.getByRole("menu", { name: "Columns", exact: true }).evaluate(element => getComputedStyle(element).boxShadow);
+  await page.keyboard.press("Escape");
+  await page.locator(".design-toolbar-filter > button").click();
+  const filters = page.getByRole("dialog", { name: "Filters", exact: true });
+  await expect(filters).toHaveCSS("box-shadow", shadow);
+  await expect(filters).toHaveCSS("background-color", "rgb(26, 26, 26)");
+  await expect(filters.getByRole("heading", { level: 3 })).toHaveText(["Status", "Project", "Creator", "Assignee", "Label"]);
+  const geometry = await filters.locator(".task-filter-group").evaluateAll(groups => groups.map(group => {
+    const bounds = group.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width };
+  }));
+  expect(new Set(geometry.map(group => group.y)).size).toBe(1);
+  for (const [index, group] of geometry.entries()) {
+    expect(group.width).toBe(200);
+    if (index) expect(group.x - geometry[index - 1].x).toBe(216);
+  }
+  for (const name of ["projects", "creators", "assignees", "labels"]) await expect(filters.getByRole("textbox", { name: `Search ${name}`, exact: true })).toBeVisible();
+  await expect(filters.getByText("Quick filters", { exact: true })).toHaveCount(0);
+  for (const dot of await filters.locator(".task-filter-label-dot").all()) await expect(dot).toHaveCSS("border-radius", "5px");
+  await page.screenshot({ path: testInfo.outputPath("task-filters-five-groups.png") });
+  await filters.screenshot({ path: testInfo.outputPath("task-filters-panel.png") });
+
+  const projectSearch = filters.getByRole("textbox", { name: "Search projects", exact: true });
+  await projectSearch.fill("no such project");
+  await expect(filters.getByText("No projects match.", { exact: true })).toBeVisible();
+  await projectSearch.fill("Board");
+  await filters.getByRole("checkbox", { name: "Board UI", exact: true }).click();
+  await filters.getByRole("textbox", { name: "Search creators", exact: true }).fill("Scott");
+  await filters.getByRole("checkbox", { name: "Scott", exact: true }).click();
+  await filters.getByRole("textbox", { name: "Search assignees", exact: true }).fill("Codex");
+  await filters.getByRole("checkbox", { name: "CodexCoder", exact: true }).click();
+  await filters.getByRole("textbox", { name: "Search labels", exact: true }).fill("Design");
+  await filters.getByRole("checkbox", { name: "Design system", exact: true }).click();
+  await expect(rows(page).locator('[data-slot="task-row-title"]')).toHaveText(["Review budget notifications"]);
+  await filters.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(rows(page)).toHaveCount(10);
+  for (const input of await filters.getByRole("textbox").all()) await expect(input).toHaveValue("");
+  await expect(filters.getByRole("checkbox", { checked: true })).toHaveCount(0);
+
+  await page.setViewportSize({ width: 900, height: 862 });
+  const bounds = (await filters.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(900);
+  expect(await filters.locator(".task-filter-group").evaluateAll(groups => new Set(groups.map(group => group.getBoundingClientRect().y)).size)).toBeGreaterThan(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  await page.keyboard.press("Escape");
+  await expect(filters).toBeHidden();
+  await expect(page.locator(".design-toolbar-filter > button")).toBeFocused();
+});
+
 test("New Task opens the shared task composer", async ({ page }) => {
   await openPage(page);
   await page.getByRole("toolbar", { name: "Task list controls" }).getByRole("button", { name: "New Task", exact: true }).click();
@@ -119,6 +191,44 @@ test("New Task opens the shared task composer", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Create task", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "New task", exact: true })).toBeHidden();
+});
+
+test("board has one horizontal scroll owner and fades only its clipped edges", async ({ page }, testInfo) => {
+  await openPage(page);
+  await page.getByRole("button", { name: "Board view", exact: true }).click();
+  const board = page.locator(".design-task-board");
+  const viewport = board.locator(".horizontal-scroll-viewport");
+  const scroll = board.getByRole("region", { name: "Task board columns", exact: true });
+  const scrollOwners = () => board.evaluate(element => [element, ...element.querySelectorAll("*"), element.closest("main")!].filter(node => {
+    const style = getComputedStyle(node);
+    return ["auto", "scroll"].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1;
+  }).length);
+  expect(await scrollOwners()).toBe(1);
+  await expect(viewport).toHaveAttribute("data-overflow-left", "false");
+  await expect(viewport).toHaveAttribute("data-overflow-right", "true");
+  expect(await viewport.evaluate(element => getComputedStyle(element, "::before").opacity)).toBe("0");
+  expect(await viewport.evaluate(element => getComputedStyle(element, "::after").opacity)).toBe("1");
+  expect(await viewport.evaluate(element => getComputedStyle(element, "::after").pointerEvents)).toBe("none");
+
+  await scroll.evaluate(element => element.scrollTo({ left: element.scrollWidth / 4 }));
+  await expect(viewport).toHaveAttribute("data-overflow-left", "true");
+  await expect(viewport).toHaveAttribute("data-overflow-right", "true");
+  await page.screenshot({ path: testInfo.outputPath("task-board-scroll-fades.png") });
+  await scroll.evaluate(element => element.scrollTo({ left: element.scrollWidth }));
+  await expect(viewport).toHaveAttribute("data-overflow-left", "true");
+  await expect(viewport).toHaveAttribute("data-overflow-right", "false");
+  await scroll.hover();
+  await page.mouse.wheel(-300, 0);
+  await expect(viewport).toHaveAttribute("data-overflow-right", "true");
+
+  await page.setViewportSize({ width: 2400, height: 862 });
+  await expect(viewport).toHaveAttribute("data-overflow-left", "false");
+  await expect(viewport).toHaveAttribute("data-overflow-right", "false");
+  expect(await scrollOwners()).toBe(0);
+  await page.setViewportSize({ width: 1000, height: 862 });
+  await expect(viewport).toHaveAttribute("data-overflow-right", "true");
+  expect(await scrollOwners()).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
 });
 
 test("production organization switcher changes selection without leaking task fixtures", async ({ page }, testInfo) => {
@@ -148,6 +258,7 @@ test("production account menu fits profile, settings, Invite and theme actions",
   await expect(page.getByRole("link", { name: "Documentation", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Switch to light mode", exact: true })).toBeVisible();
   const account = page.getByRole("dialog", { name: "Account", exact: true });
+  await expect(account.locator('[data-slot="avatar-fallback"]')).toHaveText("R");
   const content = await account.evaluate(menu => {
     const last = menu.querySelector('[data-flyout-options] > button:last-of-type')!;
     return { bottomGap: menu.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom, minimumHeight: getComputedStyle(menu).minHeight };
