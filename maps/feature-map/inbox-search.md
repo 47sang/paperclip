@@ -51,6 +51,9 @@ unread counts, and activity timestamps while retaining explicit user decisions
 and audit history.
 
 Automated: [Source regressions](../../server/src/__tests__/issues-creation-visibility.test.ts) cover channel attribution, imported comments, direct participation, addressed requests, unread results, and access checks. [Routine regressions](../../server/src/__tests__/routines-service.test.ts) cover fresh, coalesced, and skipped manual runs.
+The source regressions also create an addressed request through the service for a
+human assignee. They check unread lists, flags, and counts, plus exclusion of
+historical questions and closed requests while preserving authorization requests.
 
 Manual: Seed GitHub, Slack, scheduled routine, and manual routine tasks. Attribution, imported comments, and reading alone keep them outside Mine. Direct board/API comments, human assignment, and open addressed requests admit them. Resolve the request and check that another valid reason is needed. Inbox discovery and Blocked hide unrelated automation by default; the **show agent-created tasks** checkbox reveals it without subscribing the user. Reload and verify membership, unread badges, archive/resurfacing, and preference persistence.
 

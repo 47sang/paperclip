@@ -2906,6 +2906,10 @@ function issueCanonicalLastActivityAtExpr(companyId: string) {
 function unreadForUserCondition(companyId: string, userId: string) {
   const touchedCondition = touchedByUserCondition(companyId, userId);
   const myLastTouchAt = myLastTouchAtExpr(companyId, userId);
+  const myLastRequestReadAt = sql`GREATEST(
+    COALESCE(${myLastCommentAtExpr(companyId, userId)}, to_timestamp(0)),
+    COALESCE(${myLastReadAtExpr(companyId, userId)}, to_timestamp(0))
+  )`;
   return sql<boolean>`
     (
       ${touchedCondition}
@@ -2919,7 +2923,7 @@ function unreadForUserCondition(companyId: string, userId: string) {
             OR ${issueComments.authorUserId} <> ${userId}
           )
           AND ${issueComments.createdAt} > ${myLastTouchAt}
-      ) OR ${pendingUserRequestCondition(companyId, userId, myLastTouchAt)})
+      ) OR ${pendingUserRequestCondition(companyId, userId, myLastRequestReadAt)})
     )
   `;
 }

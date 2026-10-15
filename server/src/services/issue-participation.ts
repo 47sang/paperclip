@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { activityLog, chatConversations, chatMessageLinks, issueComments, issues, issueThreadInteractions } from "@paperclipai/db";
 import { HUMAN_TASK_ORIGIN_KINDS } from "@paperclipai/shared";
+import { activeIssueInteractionCondition } from "./issue-question-context.js";
 
 // Mine participation fails closed. Add new user-authored issue mutation actions
 // here instead of admitting every issue activity, because reads, previews, and
@@ -109,6 +110,8 @@ export function pendingUserRequestCondition(companyId: string, userId: string, a
     WHERE ${issueThreadInteractions.companyId} = ${companyId}
       AND ${issueThreadInteractions.issueId} = ${issues.id}
       AND ${issueThreadInteractions.status} = 'pending'
+      AND ${issues.status} NOT IN ('done', 'cancelled')
+      AND ${activeIssueInteractionCondition()}
       AND ${issueThreadInteractions.addresseeUserId} = ${userId}
       AND ${issueThreadInteractions.addresseeAgentId} IS NULL
       AND (

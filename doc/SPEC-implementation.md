@@ -2255,6 +2255,9 @@ Mine, unread counts, badges, and task toasts use the same personal participation
 rules. Automatic creator attribution, synchronized provider comments, manual routine
 runs, responsibility, and read-only activity do not admit automatic work. Human
 assignment, direct board/API participation, and open addressed requests still qualify.
+Only current requests on open tasks qualify. Historical questions remain answerable
+without adding tasks to Mine. A request stays unread until the person reads or
+replies; automatic task updates do not mark requests as read.
 Existing archive behavior and access checks remain in force. Inbox discovery/Blocked preserve
 participated automation and hide unrelated automation by default. Agent profile
 history, routine history, and task-detail subtasks remain complete. API consumers

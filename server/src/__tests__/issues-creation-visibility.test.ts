@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import request from "supertest";
 import { expect, it } from "vitest";
-import { activityLog, agents, chatConversations, chatEndpoints, chatMessageLinks, issueComments, issueReadStates, issues, issueThreadInteractions, toolApplications, toolConnections } from "@paperclipai/db";
+import { activityLog, agents, authUsers, chatConversations, chatEndpoints, chatMessageLinks, issueComments, issueReadStates, issues, issueThreadInteractions, toolApplications, toolConnections } from "@paperclipai/db";
 import { isAgentCreatedIssue } from "@paperclipai/shared";
 import { issueRoutes } from "../routes/issues.js";
 import { issueService } from "../services/issues.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { describeEmbeddedPostgres, resetCompanyIssueFixtures, routeApp, seedCompanyWithBoardAccess, useEmbeddedPostgres } from "./helpers/route-test-harness.js";
 
 describeEmbeddedPostgres("issue creation visibility", () => {
@@ -20,6 +21,7 @@ describeEmbeddedPostgres("issue creation visibility", () => {
       await db.delete(issues);
       await db.delete(agents);
       await resetCompanyIssueFixtures(db);
+      await db.delete(authUsers);
     },
   });
 
@@ -167,6 +169,63 @@ describeEmbeddedPostgres("issue creation visibility", () => {
     for (const interaction of requests) await ctx.db.update(issueThreadInteractions).set({ status: "accepted" }).where(eq(issueThreadInteractions.id, interaction.id));
     const resolved = await request(app).get(`${path}?touchedByUserId=me`).expect(200);
     expect(resolved.body).toEqual([]);
+  });
+
+  it("keeps a service-created request unread for the human assignee until they read it", async () => {
+    const { companyId, userId, actor } = await seedCompanyWithBoardAccess(ctx.db, "Assigned request");
+    await ctx.db.insert(authUsers).values({ id: userId, name: "Recipient", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
+    const [agent] = await ctx.db.insert(agents).values({ companyId, name: "Requester", role: "engineer", adapterType: "process" }).returning();
+    const [issue] = await ctx.db.insert(issues).values({
+      companyId, title: "Assigned channel task", originKind: "chat_channel", status: "todo", assigneeUserId: userId,
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    }).returning();
+    const svc = issueService(ctx.db);
+    await svc.markRead(companyId, issue!.id, userId, new Date("2026-01-02"));
+    const interaction = await issueThreadInteractionService(ctx.db).create(issue!, {
+      kind: "ask_user_questions", addresseeUserId: userId, resolverPolicy: "human_only",
+      payload: { version: 1, questionSet: { schema: "paperclip.question_set.v1", questions: [{ id: "answer", prompt: "What result do you need?", answerMode: "text", required: true }] } },
+    }, { agentId: agent!.id });
+    const [updated] = await ctx.db.select().from(issues).where(eq(issues.id, issue!.id));
+    expect(updated!.updatedAt.getTime()).toBeGreaterThanOrEqual(new Date(interaction.createdAt).getTime());
+    const app = routeApp(ctx.db, actor, issueRoutes);
+    const path = `/api/companies/${companyId}/issues`;
+    for (const view of ["", "&view=compact"]) {
+      const unread = await request(app).get(`${path}?unreadForUserId=me${view}`).expect(200);
+      expect(unread.body.map((row: { id: string }) => row.id)).toEqual([issue!.id]);
+      expect(unread.body[0].isUnreadForMe).toBe(true);
+    }
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(1);
+    await svc.markRead(companyId, issue!.id, userId);
+    expect(await svc.countUnreadTouchedByUser(companyId, userId)).toBe(0);
+    const read = await request(app).get(`${path}?touchedByUserId=me`).expect(200);
+    expect(read.body[0].isUnreadForMe).toBe(false);
+  });
+
+  it("excludes historical and closed requests while preserving current questions and authorization requests", async () => {
+    const { companyId, userId, actor } = await seedCompanyWithBoardAccess(ctx.db, "Current requests");
+    const names = ["historical", "done", "cancelled", "current", "authorization"];
+    const ids = Object.fromEntries(names.map((name) => [name, randomUUID()]));
+    await ctx.db.insert(issues).values(names.map((name) => ({
+      id: ids[name]!, companyId, title: name, originKind: "chat_channel",
+      status: name === "done" || name === "cancelled" ? name : "todo",
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    })));
+    await ctx.db.insert(issueThreadInteractions).values(names.map((name) => ({
+      companyId, issueId: ids[name]!, kind: "ask_user_questions", addresseeUserId: userId,
+      effectiveResolverPolicy: "human_only" as const, createdAt: new Date("2026-01-02"),
+      payload: { version: 1 as const, ...(name === "authorization" ? { connectionAuthorization: {} } : {}),
+        questionSet: { schema: "paperclip.question_set.v1" as const, questions: [{ id: "answer", prompt: "What result do you need?", answerMode: "text" as const, required: true }] } },
+    })));
+    await ctx.db.insert(issueComments).values(["historical", "authorization"].map((name) => ({
+      companyId, issueId: ids[name]!, authorUserId: "another-human", body: "The request has changed.", createdAt: new Date("2026-01-03"),
+    })));
+    const app = routeApp(ctx.db, actor, issueRoutes);
+    const path = `/api/companies/${companyId}/issues`;
+    for (const filter of ["touchedByUserId=me", "unreadForUserId=me", "includeAgentCreatedTasks=false&includeParticipatedTasks=true"]) {
+      const result = await request(app).get(`${path}?${filter}`).expect(200);
+      expect(result.body.map((row: { id: string }) => row.id).sort()).toEqual([ids.current, ids.authorization].sort());
+    }
+    expect(await issueService(ctx.db).countUnreadTouchedByUser(companyId, userId)).toBe(2);
   });
 
 });
