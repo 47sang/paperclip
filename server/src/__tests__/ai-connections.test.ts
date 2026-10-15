@@ -1246,17 +1246,14 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
       await expect(assertManagedAiProjectAuth({ args: ["--api-key=override"] }, "xai", target)).rejects.toThrow("overrides");
     } finally { execute.mockRestore(); }
   });
-  it("checks managed project auth through a task-only provider without shell execution", async () => {
+  it("leaves installed account and project checks to the Runner without a shell", async () => {
     const execute = vi.spyOn(executionTarget, "runAdapterExecutionTargetProcess");
-    const task = vi.fn(async (): Promise<unknown> => ({ kind: "project_auth", taskId: "task", conflict: false }));
-    const target = { kind: "remote", transport: "sandbox", remoteCwd: "/workspace/project", runnerTask: task } as Parameters<typeof assertManagedAiProjectAuth>[2];
+    const task = vi.fn();
+    const target = { kind: "remote", transport: "sandbox", remoteCwd: "/unused", runnerTask: task } as Parameters<typeof assertManagedAiProjectAuth>[2];
     try {
       await expect(assertManagedAiProjectAuth({}, "openai", target)).resolves.toBeUndefined();
-      expect(task).toHaveBeenCalledWith({ kind: "check_project_auth", provider: "openai", projectIds: [] });
-      task.mockResolvedValueOnce({ kind: "project_auth", taskId: "task", conflict: true });
-      await expect(assertManagedAiProjectAuth({}, "anthropic", target)).rejects.toThrow("project authentication settings");
-      task.mockRejectedValueOnce(new Error("private provider failure"));
-      await expect(assertManagedAiProjectAuth({}, "openai", target)).rejects.toThrow("project authentication settings");
+      await expect(assertManagedAiProjectAuth({ args: ["--api-key=override"] }, "openai", target)).rejects.toThrow("overrides");
+      expect(task).not.toHaveBeenCalled();
       expect(execute).not.toHaveBeenCalled();
     } finally { execute.mockRestore(); }
   });

@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RunnerProcessLaunchSpec } from "../../vendor/paperclip-runner/index.js";
-import { configuredEnvironment, configuredEnvironmentProjection } from "../../vendor/paperclip-runner/index.js";
-import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
+import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
 
 const ingress = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../../realtime/runner-prp-outbound.js", () => ({ connectRunnerPrpIngress: ingress.connect }));
 
-function launchSpec(connection: NonNullable<RunnerProcessLaunchSpec["nativeRunner"]>["connection"]): RunnerProcessLaunchSpec {
+function launchSpec(): RunnerProcessLaunchSpec {
   return { command: "unused", args: [], cwd: "/unused", environment: {}, nativeRunner: {
-    connection, identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run",
+    identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run",
       normalizedSessionId: "session", turnId: "turn", itemId: "item" }, ticket: "synthetic-ticket",
     diagnosticsDirectory: "/controller/private/diagnostics",
     stateDirectory: "/state", runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
@@ -20,7 +19,7 @@ function provider() {
   let stopped = false;
   const task = vi.fn(async (operation: any): Promise<unknown> => {
     if (operation.kind === "stop") stopped = true;
-    if (operation.kind === "status") return { kind: "status", taskId: "task", phase: stopped ? "cancelled" : "running", executionStopped: stopped };
+    if (operation.kind === "status") return { kind: "status", taskId: "task", phase: stopped ? "cancelled" : "running", executionStopped: stopped, sessionStateAvailable: stopped };
     if (operation.kind === "connection") return { kind: "connection", taskId: "task", endpoint: {
       kind: "authenticated_websocket", websocketUrl: "wss://fixture.example.test/connect", generation: "fixture", secretHeaders: [],
     } };
@@ -30,7 +29,7 @@ function provider() {
 }
 
 describe("plugin native Runner ownership", () => {
-  it.each([false, true])("collects checkpoints after status failures (retry exhausted: %s)", async exhausted => {
+  it.each([false, true])("records retained sessions after status failures (retry exhausted: %s)", async exhausted => {
     const { task } = provider();
     const perform = task.getMockImplementation()!;
     let failStatus = false;
@@ -47,10 +46,10 @@ describe("plugin native Runner ownership", () => {
     });
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
     const checkpoint = vi.fn(async () => {});
-    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", prepare: async () => {}, checkpoint, pollMs: 1,
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } });
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", onSessionRetained: checkpoint, pollMs: 1,
+      });
     const registration = await owner.registration({} as never, "run");
-    const handle = owner.launcher(launchSpec(registration.connection));
+    const handle = owner.launcher(launchSpec());
     const completed = vi.fn(); void handle.completion.then(completed);
     try {
       registration.activate(); await registration.ready();
@@ -61,35 +60,20 @@ describe("plugin native Runner ownership", () => {
       expect(completed).not.toHaveBeenCalled();
       await registration.release(); await registration.checkpoint("settled");
       await expect(handle.completion).resolves.toMatchObject({ code: 1 });
-      expect(checkpoint).toHaveBeenCalledWith("settled");
+      expect(checkpoint).toHaveBeenCalledOnce();
       expect(task.mock.calls.filter(([op]) => op.kind === "submit")).toHaveLength(1);
       expect(task.mock.calls.filter(([op]) => op.kind === "complete")).toHaveLength(1);
     } finally { now.mockRestore(); handle.child.kill(); }
-  });
-  it("removes discarded controller paths from the configured environment projection", () => {
-    const input = configuredEnvironmentProjection({ OPENCODE_CONFIG_DIR: "/controller/config", RETAINED_SETTING: "configured" });
-    const providerSettings: Record<string, string>[] = [{}, { OPENCODE_CONFIG_DIR: "provider-config" }];
-    for (const provided of providerSettings) {
-      const environment = pluginRunnerEnvironment(input, provided);
-      expect(configuredEnvironment(environment)).toEqual({ RETAINED_SETTING: "configured", PAPERCLIP_CONFIGURED_ENV_KEYS: '["RETAINED_SETTING"]' });
-      expect(environment.OPENCODE_CONFIG_DIR).toBe(provided.OPENCODE_CONFIG_DIR);
-    }
-  });
-  it("keeps selected execution inputs authoritative while replacing controller paths", () => {
-    expect(pluginRunnerEnvironment({ OPENAI_API_KEY: "selected", XAI_API_KEY: "", PATH: "/controller/bin", HOME: "/controller/home", OPENCODE_CONFIG_DIR: "" },
-      { OPENAI_API_KEY: "default", XAI_API_KEY: "default", PATH: "provider-bin", HOME: "provider-home", OPENCODE_CONFIG_DIR: "provider-config" }))
-      .toEqual({ OPENAI_API_KEY: "selected", XAI_API_KEY: "", PATH: "provider-bin", HOME: "provider-home", OPENCODE_CONFIG_DIR: "provider-config" });
   });
   it("exposes connection failure before activation and forwards late recovery exhaustion", async () => {
     const { task } = provider();
     let fail!: (error: Error) => void;
     const failure = new Promise<never>((_resolve, reject) => { fail = reject; });
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), failure, close: async () => {} });
-    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
-      prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",  pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
     const observed = registration.failure.catch(error => error);
-    const handle = owner.launcher(launchSpec(registration.connection));
+    const handle = owner.launcher(launchSpec());
     registration.activate(); await registration.ready();
     const error = new Error("runner ingress recovery exhausted"); fail(error);
     expect(await observed).toBe(error);
@@ -101,29 +85,28 @@ describe("plugin native Runner ownership", () => {
     task.mockRejectedValueOnce(new Error("lost submit reply")).mockRejectedValueOnce(new Error("status temporarily unavailable"));
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+       pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
-    const process = owner.launcher(launchSpec(registration.connection));
+    const process = owner.launcher(launchSpec());
     try {
       registration.activate(); await registration.ready();
       expect(task.mock.calls.filter(([operation]) => operation.kind === "submit")).toHaveLength(1);
       expect(task.mock.calls.find(([operation]) => operation.kind === "submit")?.[0].launch).not.toHaveProperty("diagnosticsDirectory");
-      expect(() => owner.launcher(launchSpec(registration.connection))).toThrow("new task lease");
+      expect(() => owner.launcher(launchSpec())).toThrow("new task lease");
       await registration.release(); await registration.checkpoint("settled"); await process.completion;
       expect(task.mock.calls.filter(([operation]) => operation.kind === "complete")).toHaveLength(1);
     } finally { process.child.kill(); await process.completion.catch(() => {}); }
   });
 
-  it("retains task grants when checkpoint export fails after route release", async () => {
+  it("retains task grants when retention recording fails after route release", async () => {
     const { task } = provider();
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close: async () => {} });
-    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
-      prepare: async () => {}, checkpoint: async () => { throw new Error("export failed"); }, pollMs: 1 });
+    const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex", onSessionRetained: async () => { throw new Error("retention write failed"); }, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
-    const process = owner.launcher(launchSpec(registration.connection));
+    const process = owner.launcher(launchSpec());
     registration.activate(); await registration.ready(); await registration.release();
     expect(task.mock.calls.some(([operation]) => operation.kind === "complete")).toBe(false);
-    await expect(registration.checkpoint("settled")).rejects.toThrow("export failed");
+    await expect(registration.checkpoint("settled")).rejects.toThrow("retention write failed");
     await process.completion;
     expect(task.mock.calls.some(([operation]) => operation.kind === "complete")).toBe(false);
   });
@@ -133,24 +116,24 @@ describe("plugin native Runner ownership", () => {
     const close = vi.fn(async () => {});
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close });
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+       pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
-    owner.launcher(launchSpec(registration.connection));
+    owner.launcher(launchSpec());
     registration.activate(); await registration.ready(); await registration.release("detach");
     expect(close).toHaveBeenCalledOnce();
     expect(task.mock.calls.some(([operation]) => operation.kind === "stop" || operation.kind === "complete")).toBe(false);
   });
 
-  it("prevents a late submission after cancellation during asset preparation", async () => {
+  it("prevents a late submission after cancellation during dispatch recording", async () => {
     let finish!: () => void;
     const prepared = new Promise<void>(resolve => { finish = resolve; });
     const { task } = provider();
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: () => prepared, checkpoint: async () => {}, pollMs: 1 });
+      onDispatched: () => prepared, pollMs: 1 });
     const registration = await owner.registration({} as never, "run");
-    const process = owner.launcher(launchSpec(registration.connection));
+    const process = owner.launcher(launchSpec());
     registration.activate();
-    await registration.release(); finish();
+    process.child.kill(); await registration.release(); finish();
     await expect(process.completion).resolves.toMatchObject({ code: 1 });
     await expect(registration.ready()).rejects.toThrow("cancelled");
     expect(task).not.toHaveBeenCalled();
@@ -161,9 +144,9 @@ describe("plugin native Runner ownership", () => {
     ingress.connect.mockClear();
     const controller = new AbortController(); controller.abort();
     const owner = createPluginRunnerTaskOwner({ task, projectIds: [], harness: "codex",
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {}, checkpoint: async () => {}, pollMs: 1 });
+       pollMs: 1 });
     const registration = await owner.registration({} as never, "run", controller.signal);
-    const process = owner.launcher(launchSpec(registration.connection));
+    const process = owner.launcher(launchSpec());
     try {
       registration.activate();
       await expect(registration.ready()).rejects.toThrow("cancelled");

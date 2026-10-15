@@ -1,6 +1,6 @@
-import { authorizePluginTaskLeaseTransition } from "../environment-task-runtime.js";
+import { resolvePluginTaskResume } from "../environment-task-runtime.js";
 import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
-import { createPluginRunnerTaskOwner, pluginRunnerEnvironment } from "./plugin-runner-task.js";
+import { createPluginRunnerTaskOwner } from "./plugin-runner-task.js";
 import { createRunPreparationTiming } from "../execution-preparation-timing.js";
 import { configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
 import { apiKeyBillingType } from "@paperclipai/adapter-utils/api-billing-type";
@@ -29,7 +29,7 @@ import { createNativeGitHubAccess, type NativeGitHubAccess } from "./native-gith
 import { resolveGitHubOperationCredentials } from "../github-operation-credentials.js";
 import { bindManagedNativeCredentialTurn, completeManagedNativeCredentialTurn } from "./managed-native-credentials.js";
 import { createLocalNativeQuestionBridge } from "./local-native-question-bridge.js";
-import { readVerifiedRemoteWorkspaceFile, readVerifiedTaskWorkspaceFile } from "./remote-deliverable-file.js";
+import { readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
 import { copyBackCodexAuth } from "@paperclipai/adapter-codex-local/server";
 import { nativeCompletionFeedback } from "./native-completion-feedback.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent } from "../acknowledged-native-stop.js";
@@ -1940,7 +1940,20 @@ function runnerdAuthorityLifecycle(
   identity: RunnerdDurableIdentity,
 ): "absent" | "suspended" | "not_suspended" | "indeterminate" {
   const runnerRoot = resolve(root, "runner");
-  if (!existsSync(runnerRoot)) return "absent";
+  if (!existsSync(runnerRoot)) {
+    try {
+      const control = record(JSON.parse(readBoundedNativeFile(
+        resolve(root, "control-plane/control-plane-state.json"), NATIVE_CONTROL_PLANE_STATE_MAX_BYTES,
+        "runner_durable_identity_too_large").toString("utf8")));
+      if (record(record(control.runAttachTemplate).provider).runtimeOwnership !== "agent_home") return "absent";
+      const commands = Array.isArray(control.commands) ? control.commands.map(record) : [];
+      const last = commands.at(-1);
+      const receipt = record(record(record(last?.result).result).runnerState);
+      return last?.type === "runner.suspend" && last.status === "completed" && receipt.lifecycle === "suspended"
+        && ["runnerInstanceId", "environmentLeaseId", "runId", "normalizedSessionId", "turnId", "itemId"]
+          .every(key => receipt[key] === identity[key]) ? "suspended" : "indeterminate";
+    } catch { return "indeterminate"; }
+  }
   if (!isSafeNativeStateDirectory(runnerRoot)) return "indeterminate";
   const statePath = resolve(runnerRoot, "runner-state.json");
   if (!existsSync(statePath)) {
@@ -11150,6 +11163,7 @@ export async function createRunnerdBackend(input: {
   runnerEnvironment?: NodeJS.ProcessEnv;
   /** Private grant materialization; never a user-configured host path. */
   managedAiCredentialHome?: string;
+  managedAiCredentialIdentity?: string;
   onTaskDispatched?: () => Promise<void> | void;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
   /** Resolved per-run authorization; not an independent instance setting. */
@@ -11413,9 +11427,7 @@ async function createRunnerdBackendWithinSessionClaim(
     assertBridgeAuthority: input.execution.schema === "paperclip.native-execution-input.v6" ? () => dotRunnerBroker(input.db).assertRunAuthority(input.execution as import("../../vendor/paperclip-runner/index.js").NativeExecutionInputV6) : undefined,
     workspaceRoot: input.dotWorkspaceRoot ?? remoteTarget?.remoteCwd ?? input.execution.workspace.cwd ?? undefined,
     executionTargetKind: target.kind,
-    readRemoteWorkspaceFile: pluginTask
-      ? file => readVerifiedTaskWorkspaceFile({ task: pluginTask, ...file })
-      : remoteTarget && remoteCommandRunner
+    readRemoteWorkspaceFile: !pluginTask && remoteTarget && remoteCommandRunner
       ? (file) => readVerifiedRemoteWorkspaceFile({ runner: remoteCommandRunner, workspaceRoot: remoteTarget.remoteCwd, ...file })
       : undefined,
     currentWakeComments: currentWakeComments ?? undefined,
@@ -11453,108 +11465,26 @@ async function createRunnerdBackendWithinSessionClaim(
     input.execution.binding.executionWorkspaceId;
   mkdirSync(root, { recursive: true, mode: 0o700 });
   if (pluginTask && remoteTarget?.transport === "sandbox" && input.execution.schema !== "paperclip.native-execution-input.v6") {
-    // Task providers own their qualified image and project volumes. Core keeps
-    // PRP authority and session state; no shell transport is constructed here.
     const provider = input.execution.provider;
     if (provider.kind !== "codex" && provider.kind !== "opencode" && provider.kind !== "acpx") throw new Error("Plugin Runner tasks require a workspace harness");
-    const harness = provider.kind === "acpx" ? provider.agent : provider.kind;
-    const sourceContext = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
-    const resourceIds = ["runner_state", "provider_state", "runtime_context",
-      ...(sourceContext ? ["instructions", ...sourceContext.skills.flatMap(skill => [`skill:${skill.runtimeName}`, `skill_entry:${skill.runtimeName}`]),
-        ...(sourceContext.instructions.workingCopy ? ["instruction_working_copy"] : [])] : [])];
-    const description = environmentTaskResultSchema.parse(await pluginTask({ kind: "describe",
-      sessionId: nativeSessionKey(input.execution), harness, projectIds: [...remoteTarget.runnerTaskProjectIds ?? []], resources: resourceIds }));
-    if (description.kind !== "description" || resourceIds.some(id => !description.resources[id])) throw new Error("Plugin Runner runtime description unavailable");
-    if (provider.kind === "codex" && (!description.codexCommand || !description.codexArgs)) throw new Error("Plugin Runner Codex executable unavailable");
-    if ((provider.kind === "acpx" || provider.kind === "opencode") && !description.providerPack) throw new Error("Plugin Runner qualified provider pack unavailable");
-    const paths = description.resources;
-    const grokCredential = provider.kind === "acpx" && provider.agent === "grok" ? await prepareGrokRunnerCredentials({
-      companyId: input.execution.binding.companyId, environment: input.runnerEnvironment ?? {}, remote: true,
-      managedHome: input.managedAiCredentialHome,
-    }) : null;
-    // Runtime paths/environment come from the provider. Core only supplies selected execution inputs.
-    const taskEnvironment = pluginRunnerEnvironment(grokCredential?.environment ?? input.runnerEnvironment ?? {}, description.environment);
-    taskEnvironment.PAPERCLIP_WORKSPACE_CWD = remoteTarget.remoteCwd;
-    if (relayAssignedMcp) {
-      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_NAME;
-      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_URL;
-      delete taskEnvironment.PAPERCLIP_NATIVE_MCP_TOKEN;
-    }
-    const guestContext = sourceContext ? { ...sourceContext,
-      instructions: { ...sourceContext.instructions, bundle: { ...sourceContext.instructions.bundle, rootPath: paths.instructions },
-        ...(sourceContext.instructions.workingCopy ? { workingCopy: { ...sourceContext.instructions.workingCopy, rootPath: paths.instruction_working_copy } } : {}),
-      },
-      skills: sourceContext.skills.map(skill => ({ ...skill, bundle: { ...skill.bundle, rootPath: paths[`skill:${skill.runtimeName}`] } })),
-    } : null;
-    const providerStateName = provider.kind === "codex" ? "codex-home" : provider.kind;
-    const assets = () => [
-      ...[{ resource: "runtime_context", sourcePath: join(root, "runtime-context.json") },
-        { resource: "provider_state", sourcePath: join(root, providerStateName) }].filter(asset => existsSync(asset.sourcePath)),
-      ...(sourceContext ? [
-        { resource: "instructions", sourcePath: sourceContext.instructions.bundle.rootPath },
-        ...sourceContext.skills.map(skill => ({ resource: `skill:${skill.runtimeName}`, sourcePath: skill.bundle.rootPath })),
-        ...(sourceContext.instructions.workingCopy ? [{ resource: "instruction_working_copy", sourcePath: sourceContext.instructions.workingCopy.rootPath }] : []),
-      ] : []),
-    ];
-    const checkpoint = async (exports: { resource: string; targetPath: string }[] = [], archive?: unknown) => {
-      const result = environmentTaskResultSchema.parse(await pluginTask({ kind: "checkpoint", exports, ...(archive ? { archive } : {}) }));
-      if (result.kind !== "checkpoint") throw new Error("Plugin Runner checkpoint unavailable");
-      return result.state;
-    };
+    const description = environmentTaskResultSchema.parse(await pluginTask({ kind: "describe" }));
+    if (description.kind !== "description") throw new Error("Plugin Runner artifact identity unavailable");
+    const prior = durableBinding ? durableIdentity as RunnerdDurableIdentity : undefined;
+    const resumeFrom = prior && prior.runId !== input.execution.binding.runId
+      ? await resolvePluginTaskResume(input.db, { companyId: input.execution.binding.companyId,
+          leaseId: remoteTarget.leaseId!, priorIdentity: prior }) : undefined;
     const owner = createPluginRunnerTaskOwner({ task: pluginTask, projectIds: remoteTarget.runnerTaskProjectIds ?? [],
-      harness, connection: description.connection, prepare: async () => {}, assets,
-      checkpoint: async settlement => {
-        if (settlement !== "settled") return;
-        const directories = [{ name: providerStateName, resource: "provider_state", targetPath: join(root, providerStateName) },
-          { name: "runner", resource: "runner_state", targetPath: join(root, "runner") }];
-        if (sourceContext?.instructions.workingCopy) directories.push({ name: "instruction-working-copy",
-          resource: "instruction_working_copy", targetPath: sourceContext.instructions.workingCopy.rootPath });
-        // Each swap must stay on the destination filesystem, including agent files.
-        const staged: (typeof directories[number] & { pending: string })[] = [];
-        const replaced: typeof staged = [];
-        const installed: typeof staged = [];
-        let cleanPending = true;
-        const removeCheckpointDirectory = async (item: typeof directories[number], directory: string) => {
-          if (item.name === "codex-home") await releaseMaterializedNativeRuntimeSkills(join(directory, "skills"));
-          rmSync(directory, { recursive: true, force: true });
-        };
-        try {
-          for (const item of directories) {
-            mkdirSync(dirname(item.targetPath), { recursive: true, mode: 0o700 });
-            staged.push({ ...item, pending: mkdtempSync(join(dirname(item.targetPath), ".plugin-checkpoint-")) });
-          }
-          const state = await checkpoint(staged.map(item => ({ resource: item.resource, targetPath: join(item.pending, item.name) })));
-          const expected = { schema: RUNNERD_STATE_SCHEMA, runnerInstanceId: effectiveRunnerInstanceId,
-            environmentLeaseId: effectiveEnvironmentLeaseId, runId: input.execution.binding.runId,
-            normalizedSessionId: nativeSessionKey(input.execution), lifecycle: "suspended" };
-          if (Object.entries(expected).some(([key, value]) => state[key] !== value)) throw new Error("Plugin Runner checkpoint identity mismatch");
-          for (const item of staged) if (!isSafeNativeStateDirectory(join(item.pending, item.name))) throw new Error("Plugin Runner checkpoint files unavailable");
-          const runnerStage = staged.find(item => item.name === "runner")!;
-          const providerState = JSON.parse(readBoundedNativeFile(join(runnerStage.pending, "runner", runnerProviderStateFilename(input.execution)),
-            NATIVE_RUNNER_STATE_MAX_BYTES, "plugin_runner_checkpoint_too_large").toString("utf8"));
-          if (!providerSessionIdentityIsPresent(providerSessionIdentityFromDurableProviderState({ execution: input.execution, providerState }))) {
-            throw new Error("Plugin Runner provider checkpoint is incomplete");
-          }
-          writeFileSync(join(runnerStage.pending, "runner/runner-state.json"), JSON.stringify(state), { mode: 0o600 });
-          for (const item of staged) {
-            if (existsSync(item.targetPath)) { renameSync(item.targetPath, join(item.pending, "previous")); replaced.push(item); }
-            renameSync(join(item.pending, item.name), item.targetPath); installed.push(item);
-          }
-          await input.db.update(environmentLeases).set({ metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || '{"runnerTaskCheckpointed":true}'::jsonb` })
-            .where(and(eq(environmentLeases.id, remoteTarget.leaseId!), eq(environmentLeases.companyId, input.execution.binding.companyId)));
-        } catch (error) {
-          cleanPending = false;
-          for (const item of installed.reverse()) await removeCheckpointDirectory(item, item.targetPath);
-          for (const item of replaced.reverse()) renameSync(join(item.pending, "previous"), item.targetPath);
-          cleanPending = true;
-          throw error;
-        } finally {
-          if (cleanPending) for (const item of staged) {
-            await removeCheckpointDirectory(item, join(item.pending, item.name));
-            await removeCheckpointDirectory(item, join(item.pending, "previous"));
-            rmSync(item.pending, { recursive: true, force: true });
-          }
-        }
+      harness: provider.kind === "acpx" ? provider.agent : provider.kind, resumeFrom,
+      credentialIdentity: input.managedAiCredentialIdentity,
+      onSessionRetained: async () => {
+        await input.db.update(environmentLeases).set({ metadata: sql`coalesce(${environmentLeases.metadata}, '{}'::jsonb) || ${JSON.stringify({
+          runnerTaskSessionRetained: true, runnerTaskIdentity: {
+            runnerId: prior?.runnerInstanceId ?? effectiveRunnerInstanceId,
+            leaseId: prior?.environmentLeaseId ?? effectiveEnvironmentLeaseId,
+            runId: input.execution.binding.runId, sessionId: nativeSessionKey(input.execution),
+          },
+        })}::jsonb` })
+          .where(and(eq(environmentLeases.id, remoteTarget.leaseId!), eq(environmentLeases.companyId, input.execution.binding.companyId)));
       }, onDispatched: input.onTaskDispatched,
     });
     const executeTool = (call: Parameters<SessionToolAuthorityEpoch["execute"]>[0]) => {
@@ -11562,81 +11492,33 @@ async function createRunnerdBackendWithinSessionClaim(
       if (!current) throw new Error("native_session_tool_authority_unavailable");
       return current.execute(call);
     };
-    const backend = createNativeSessionBackend({ ...input.execution, workspace: { ...input.execution.workspace, cwd: remoteTarget.remoteCwd },
-      ...(sourceContext && guestContext ? { runtimeContext: { ...sourceContext,
-        instructions: { ...sourceContext.instructions, ...(guestContext.instructions.workingCopy ? { workingCopy: guestContext.instructions.workingCopy } : {}) },
-      } } : {}),
-    }, {
-      runnerInstanceId: effectiveRunnerInstanceId, environment: taskEnvironment,
+    const backend = createNativeSessionBackend(input.execution, {
+      runnerInstanceId: prior?.runnerInstanceId ?? effectiveRunnerInstanceId, environment: {},
       workingDirectoryAuthority: "remote_runner", dynamicTools, dynamicToolHandler: executeTool,
       completionFeedback: async result => { await authorityEpoch.definitions(); return nativeCompletionFeedback(input.db, input.execution.binding.runId, result); },
       codexTransportFactory: recovery => createRunnerdCodexTransport({ provider: provider.kind, stateDirectory: root,
+        ...owner.driver, runnerArtifact: description.runner,
         ...(provider.kind === "acpx" ? { acpxAgent: provider.agent,
           acpxCandidateProfile: provider.agent === "pi" ? undefined : resolveAcpxQualification(provider, process.env),
           acpxPermissionMode: provider.permissionMode, acpxMode: provider.mode, piThinkingLevel: provider.piThinkingLevel,
-          acpxRuntimeDirectory: paths.provider_state, acpxPermissionModePinned: true } : {}),
-        ...(provider.kind === "opencode" ? { opencodePermissionMode: provider.permissionMode,
-          opencodeRuntimeDirectory: paths.provider_state } : {}),
-        ...(description.providerPack ? { providerPackAuthorityDigest: description.providerPack.authorityDigest,
-          providerNodeCommand: description.providerPack.node.executable, providerNodeCommandSha256: description.providerPack.node.digest,
-          acpxSidecarPath: description.providerPack.acpxSidecar?.executable, acpxSidecarSha256: description.providerPack.acpxSidecar?.digest,
-          opencodeCommand: description.providerPack.opencodeExecutable?.executable, opencodeCommandSha256: description.providerPack.opencodeExecutable?.digest,
-          opencodeProxyPath: description.providerPack.opencodeProxy?.executable, opencodeProxySha256: description.providerPack.opencodeProxy?.digest,
-        } : {}),
-        runnerArtifact: description.runner, runnerBinary: description.runner.executable,
-        codexCommand: description.codexCommand, codexArgs: description.codexArgs,
-        runnerRuntimePaths: { environment: description.environment, codexHome: paths.provider_state, runtimeContext: paths.runtime_context,
-          skillEntries: Object.fromEntries((sourceContext?.skills ?? []).map(skill => [skill.runtimeName, paths[`skill_entry:${skill.runtimeName}`]])) },
-        runnerStateDirectory: paths.runner_state, readRunnerState: () => checkpoint(),
-        prepareExternalRunnerState: async () => { await checkpoint(); },
-        archiveExternalRunnerState: archive => checkpoint([], archive),
-        authorizeEnvironmentLeaseTransition: transition => authorizePluginTaskLeaseTransition(input.db, {
-          companyId: input.execution.binding.companyId, ...transition,
-        }),
-        environment: taskEnvironment,
-        sourceCodexHome: input.managedAiCredentialHome ?? resolveSourceCodexHome(input.runnerEnvironment ?? {}) ?? "",
-        runnerProcessLauncher: owner.launcher, runnerReconnectGraceMs: 120_000,
-        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, runtimeContext: sourceContext,
-        runnerRuntimeContext: guestContext, resumeWorkingDirectory: remoteTarget.remoteCwd,
+          acpxPermissionModePinned: true } : {}),
+        ...(provider.kind === "opencode" ? { opencodePermissionMode: provider.permissionMode } : {}),
+        runnerReconnectGraceMs: 120_000, lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
+        runtimeContext: "runtimeContext" in input.execution ? input.execution.runtimeContext : null,
         externallySandboxed: true, baseInstructions: recovery?.baseInstructions,
         resumeDynamicTools: dynamicTools, resumeCompletionContract: { revision: input.execution.completionContract.contract.revision,
           criterionIds: input.execution.completionContract.contract.criteria.map(criterion => criterion.id) },
         resumeActiveTurnId: recovery?.persistedSession?.activeTurnId ?? null, resumeProviderSession: recovery?.persistedSession,
-        prpIdentity: { runnerInstanceId: effectiveRunnerInstanceId, environmentLeaseId: effectiveEnvironmentLeaseId,
+        prpIdentity: { runnerInstanceId: prior?.runnerInstanceId ?? effectiveRunnerInstanceId,
+          environmentLeaseId: prior?.environmentLeaseId ?? effectiveEnvironmentLeaseId,
           runId: input.execution.binding.runId, normalizedSessionId: nativeSessionKey(input.execution),
           turnId: `turn-${input.execution.binding.runId}`, itemId: `item-${input.execution.binding.runId}` },
-        controlPlaneRegistration: (control, identity, signal) => owner.registration(control, identity?.runId ?? input.execution.binding.runId, signal),
       }).transport,
     });
     sessionToolAuthorityEpochs.get(sessionScopeId)?.revoke();
     sessionToolAuthorityEpochs.set(sessionScopeId, authorityEpoch);
-    const boundManagedSessions = new WeakSet<NativeSession>();
-    const bind = (session: NativeSession) => {
-      if (boundManagedSessions.has(session)) return session;
-      if (grokCredential?.home) {
-        boundManagedSessions.add(session);
-        const home = join(realpathSync(root), "acpx/acpx", acpxRuntimeSessionDirectoryName(nativeSessionKey(input.execution)), "grok-home");
-        return bindManagedNativeCredentialTurn(session, {
-          copyBack: async () => { await copyBackGrokAuth({ hostHomeDir: grokCredential.home!, log: () => {},
-            readSandboxAuth: async () => {
-              try { return Buffer.from(await readLocalAiCredentialFile(join(home, "auth.json"))); }
-              catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-                return Buffer.from(await readLocalAiCredentialFile(join(home, "auth-refresh.json"))); }
-            } }); },
-          remove: async () => { for (const name of ["auth.json", "auth-refresh.json", "auth-refresh.json.tmp"]) rmSync(join(home, name), { force: true }); },
-        });
-      }
-      if (!input.managedAiCredentialHome || provider.kind !== "codex") return session;
-      boundManagedSessions.add(session);
-      return bindManagedNativeCredentialTurn(session, {
-        copyBack: async () => { await copyBackCodexAuth({ hostAuthPath: join(input.managedAiCredentialHome!, "auth.json"),
-          readSandboxAuth: async () => readFileSync(join(root, "codex-home/auth.json")), log: () => {} }); },
-        remove: async () => { rmSync(join(root, "codex-home/auth.json"), { force: true }); },
-      });
-    };
-    return { ...backend, descriptor: () => backend.descriptor(), openSession: async session => bind(await backend.openSession(session)),
-      recoverSession: async (snapshot, options) => { const result = await backend.recoverSession!(snapshot, options);
-        return result.session ? { ...result, session: bind(result.session) } : result; }, bindManagedSession: bind };
+    return { ...backend, descriptor: () => backend.descriptor(), openSession: session => backend.openSession(session),
+      recoverSession: (snapshot, options) => backend.recoverSession!(snapshot, options), bindManagedSession: session => session };
   }
   if (input.execution.schema === "paperclip.native-execution-input.v6") {
     if (target.kind === "remote" && input.dotWorkspaceRoot) throw new Error("dot_remote_workspace_access_unavailable");

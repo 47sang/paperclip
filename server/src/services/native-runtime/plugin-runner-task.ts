@@ -2,21 +2,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { environmentTaskOperationSchema, environmentTaskResultSchema, type PluginEnvironmentTaskOperation, type PluginEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
 import type { RunnerIngressEndpoint } from "@paperclipai/adapter-utils/runner-connectivity";
 import { RUNNER_PRP_PROTOCOL_MIN, RUNNER_PRP_PROTOCOL_MAX, type RunnerProcessHandle, type RunnerProcessLaunchSpec,
-  type DurablePrpControlPlane, configuredEnvironment } from "../../vendor/paperclip-runner/index.js";
+  type DurablePrpControlPlane, type RunnerExecutionDriver } from "../../vendor/paperclip-runner/index.js";
 import { connectRunnerPrpIngress } from "../../realtime/runner-prp-outbound.js";
-
-/** Do not project the controller's shell, homes or installed command locations into a task. */
-export function pluginRunnerEnvironment(input: NodeJS.ProcessEnv, provided: Record<string, string>): NodeJS.ProcessEnv {
-  const environment = { ...input };
-  for (const key of Object.keys(environment)) {
-    if (/^(PATH|HOME|USERPROFILE|CODEX_HOME|GROK_HOME|AGENT_HOME|HERMES_HOME|CLAUDE_CONFIG_DIR|OPENCODE_CONFIG(_DIR)?|AWS_SHARED_CREDENTIALS_FILE|AWS_CONFIG_FILE|AWS_WEB_IDENTITY_TOKEN_FILE|BASH_ENV|ZDOTDIR|SHELL|TMPDIR|GH_CONFIG_DIR|GIT_CONFIG_.*|GIT_SSH.*|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|PAPERCLIP_GITHUB_.*|PAPERCLIP_WORKSPACE_CWD)$/.test(key)) delete environment[key];
-  }
-  if (environment.PAPERCLIP_CONFIGURED_ENV_KEYS !== undefined) {
-    environment.PAPERCLIP_CONFIGURED_ENV_KEYS = JSON.stringify(Object.keys(configuredEnvironment(input))
-      .filter(key => key !== "PAPERCLIP_CONFIGURED_ENV_KEYS" && environment[key] !== undefined));
-  }
-  return { ...provided, ...environment };
-}
 
 /** Adapts a lease-bound task provider to the existing native process owner.
  * No provider pid is treated as a local pid. Only executionStopped settles it.
@@ -24,15 +11,16 @@ export function pluginRunnerEnvironment(input: NodeJS.ProcessEnv, provided: Reco
 export function createPluginRunnerTaskOwner(input: {
   task: (operation: unknown) => Promise<unknown>;
   projectIds: readonly string[];
-  connection: Extract<NonNullable<RunnerProcessLaunchSpec["nativeRunner"]>["connection"], { mode: "listen" }>;
   harness: string;
-  prepare: () => Promise<void>;
-  assets?: () => { resource: string; sourcePath: string }[];
-  checkpoint: (settlement: "settled" | "unsettled") => Promise<void>;
+  resumeFrom?: string;
+  credentialIdentity?: string;
+  onSessionRetained?: () => Promise<void>;
   onDispatched?: () => Promise<void> | void;
   pollMs?: number;
 }) {
   const pollMs = input.pollMs ?? 500;
+  let registrationGeneration = 0;
+  let activeOutbound: ReturnType<typeof connectRunnerPrpIngress> | null = null;
   let launched = false;
   let stopRequested = false;
   let released = false;
@@ -49,7 +37,7 @@ export function createPluginRunnerTaskOwner(input: {
   void running.catch(() => undefined);
   const call = async (operation: PluginEnvironmentTaskOperation) => {
     const result = environmentTaskResultSchema.parse(await input.task(operation));
-    if (result.kind !== (operation.kind === "read_file" ? "file" : operation.kind === "describe" ? "description" : ["status", "connection", "checkpoint"].includes(operation.kind) ? operation.kind : "accepted")) {
+    if (result.kind !== (operation.kind === "describe" ? "description" : ["status", "connection"].includes(operation.kind) ? operation.kind : "accepted")) {
       throw new Error("Plugin Runner returned an invalid operation result");
     }
     return result;
@@ -84,11 +72,13 @@ export function createPluginRunnerTaskOwner(input: {
   const launcher = (spec: RunnerProcessLaunchSpec): RunnerProcessHandle => {
     if (launched || released) throw new Error("Plugin Runner replacement requires a new task lease");
     const native = spec.nativeRunner;
-    if (!native || native.connection?.mode !== "listen" || native.lifecyclePolicy?.mode !== "per_turn") {
+    if (!native || native.lifecyclePolicy?.mode !== "per_turn") {
       throw new Error("Plugin Runner requires a structured per-turn native launch");
     }
     const operation = environmentTaskOperationSchema.parse({
       kind: "submit", projectIds: [...input.projectIds], bootstrapTicket: native.ticket,
+      ...(input.resumeFrom ? { resumeFrom: input.resumeFrom } : {}),
+      ...(input.credentialIdentity ? { credentialIdentity: input.credentialIdentity } : {}),
       runner: { protocolMin: RUNNER_PRP_PROTOCOL_MIN, protocolMax: RUNNER_PRP_PROTOCOL_MAX,
         harness: input.harness,
         runnerId: native.identity.runnerInstanceId, leaseId: native.identity.environmentLeaseId,
@@ -98,8 +88,6 @@ export function createPluginRunnerTaskOwner(input: {
         maxOutboxBytes: native.maxOutboxBytes, p0ReserveBytes: native.p0ReserveBytes,
         maxRuntimeMs: native.maxRuntimeMs, maxLifetimeMs: native.maxLifetimeMs,
         reconnectGraceMs: native.reconnectGraceMs, lifecyclePolicy: native.lifecyclePolicy,
-        environment: Object.fromEntries(Object.entries(spec.environment).filter(([key, value]) =>
-          value !== undefined && key !== "PAPERCLIP_RUNNER_BOOTSTRAP_TICKET")),
       },
     });
     launched = true;
@@ -114,13 +102,11 @@ export function createPluginRunnerTaskOwner(input: {
       };
     });
     void (async () => {
-      await input.prepare();
       if (released || stopRequested) {
         failReady(new Error("Plugin Runner startup cancelled"));
         confirmStopped(1);
         return;
       }
-      if (operation.kind === "submit" && operation.launch) operation.launch.assets = input.assets?.() ?? [];
       environmentTaskOperationSchema.parse(operation);
       // Persist/mark dispatch before crossing the provider boundary. A lost reply
       // must reconcile this attempt and must never launch another task.
@@ -153,6 +139,8 @@ export function createPluginRunnerTaskOwner(input: {
     return { child, completion, restart: null };
   };
   const registration = async (authority: DurablePrpControlPlane, runId: string, signal?: AbortSignal) => {
+    const generation = ++registrationGeneration;
+    let registrationReleased = false;
     let outbound: ReturnType<typeof connectRunnerPrpIngress> | null = null;
     let activation: Promise<void> | null = null;
     const endpoint = async (): Promise<RunnerIngressEndpoint> => {
@@ -161,15 +149,18 @@ export function createPluginRunnerTaskOwner(input: {
       return { ...result.endpoint, refresh: endpoint, close: async () => {} };
     };
     return {
-      connection: input.connection,
+      connection: { mode: "external" as const },
       startupFailureCode: "runner_ingress_unavailable" as const,
       activate: () => {
         activation = (async () => {
           await running;
-          if (released || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
+          if (registrationReleased || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
           const ingress = await endpoint();
-          if (released || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
+          if (registrationReleased || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
+          await activeOutbound?.close();
+          if (registrationReleased || signal?.aborted) throw new Error("Plugin Runner startup cancelled");
           outbound = connectRunnerPrpIngress({ authority, endpoint: ingress });
+          activeOutbound = outbound;
           void outbound.failure?.catch(rejectFailure);
           await outbound.ready;
         })();
@@ -179,17 +170,21 @@ export function createPluginRunnerTaskOwner(input: {
       failure,
       checkpoint: async (settlement: "settled" | "unsettled") => {
         if (submitted) { stopRequested = true; await stopAndConfirm(); }
-        await input.checkpoint(settlement);
+        if (settlement === "settled" && stoppedState?.sessionStateAvailable === true) await input.onSessionRetained?.();
         if (submitted) await call({ kind: "complete" });
       },
       release: async (reason?: "detach") => {
-        released = true;
-        if (reason === "detach") detached = true;
-        // Native ownership release closes the PRP route before checkpointing.
-        // Keep task grants until checkpoint succeeds; lease recovery owns failures.
+        registrationReleased = true;
+        if (generation === registrationGeneration) released = true;
+        if (reason === "detach") { released = true; detached = true; }
+        // Closing WSS does not retire the provider process or release its lease.
         await outbound?.close();
       },
     };
   };
-  return { launcher, registration };
+  const driver: RunnerExecutionDriver = {
+    persistentAgentHome: true, runnerProcessLauncher: launcher,
+    controlPlaneRegistration: (authority, identity, signal) => registration(authority, identity?.runId ?? "", signal),
+  };
+  return { launcher, registration, driver };
 }

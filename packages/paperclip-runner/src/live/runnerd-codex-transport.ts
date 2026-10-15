@@ -258,7 +258,6 @@ function authorityArchiveDirectory(
 function latestArchivedControlPlaneState(
   root: string,
   desired: DurableRecoveryIdentity,
-  allowLeaseTransition = false,
 ): Record<string, unknown> | null {
   const archivesRoot = resolve(root, "authority-epochs");
   if (!existsSync(archivesRoot)) return null;
@@ -281,7 +280,7 @@ function latestArchivedControlPlaneState(
     const identity = controlPlaneIdentity(state);
     if (
       identity.runnerInstanceId === desired.runnerInstanceId &&
-      (allowLeaseTransition || identity.environmentLeaseId === desired.environmentLeaseId) &&
+      identity.environmentLeaseId === desired.environmentLeaseId &&
       identity.normalizedSessionId === desired.normalizedSessionId
     ) {
       return state;
@@ -371,21 +370,17 @@ async function rotateExternalAuthorityEpoch(
     archiveKey: string;
     priorIdentity: DurableRecoveryIdentity;
   }) => Promise<Record<string, unknown>>,
-  authorizeLeaseTransition?: (input: { priorIdentity: DurableRecoveryIdentity; desiredIdentity: DurableRecoveryIdentity }) => Promise<void>,
 ): Promise<Record<string, unknown>> {
   const priorIdentity = controlPlaneIdentity(controlPlaneState);
   if (
     priorIdentity.runnerInstanceId !== desired.runnerInstanceId ||
+    priorIdentity.environmentLeaseId !== desired.environmentLeaseId ||
     priorIdentity.normalizedSessionId !== desired.normalizedSessionId ||
     priorIdentity.runId === desired.runId
   ) {
     throw new Error(
       "PRP recovery identity does not match the durable session binding",
     );
-  }
-  if (priorIdentity.environmentLeaseId !== desired.environmentLeaseId) {
-    if (!authorizeLeaseTransition) throw new Error("PRP task lease transition is not authorized");
-    await authorizeLeaseTransition({ priorIdentity, desiredIdentity: desired });
   }
   const archive = authorityArchiveDirectory(root, priorIdentity);
   const archivedControlPlane = resolve(archive, "control-plane");
@@ -1320,8 +1315,6 @@ export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionD
   runnerRuntimeContext?: NativeRuntimeContextSnapshot | null;
   /** Root path visible to runnerd when it is not on the Paperclip host. */
   runnerFilesystemRoot?: string;
-  /** Explicit provider-owned protocol paths. Never derive guest paths from a host/root path. */
-  runnerRuntimePaths?: { codexHome: string; runtimeContext: string; skillEntries: Record<string, string>; environment: Record<string, string> };
   /** Workspace cwd to retain when a local provider session is reopened. */
   resumeWorkingDirectory?: string;
   /**
@@ -1373,7 +1366,6 @@ export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionD
   onWarmTransitionRecoveryCompleted?: (input: {
     transitionId: string;
   }) => void | Promise<void>;
-  authorizeEnvironmentLeaseTransition?: (input: { priorIdentity: DurableRecoveryIdentity; desiredIdentity: DurableRecoveryIdentity }) => Promise<void>;
 }
 
 export type RunnerdCodexTransportOptions =
@@ -3083,7 +3075,7 @@ function acpxRunnerLaunchProfile(
 } {
   const localDigest = (path: string) =>
     `sha256:${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
-  if (!options.runnerFilesystemRoot && !options.runnerRuntimePaths) {
+  if (!options.runnerFilesystemRoot && !options.persistentAgentHome) {
     const buildCommand = process.execPath;
     const buildSidecarCandidates = buildOwnedCliArtifactCandidates(
       "acpx-runtime-sidecar.cjs",
@@ -3157,7 +3149,7 @@ function opencodeRunnerLaunchProfile(
   const localDigest = (path: string) =>
     `sha256:${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
   const usesLocalBuildOwnedDefaults =
-    !options.runnerFilesystemRoot && !options.runnerRuntimePaths &&
+    !options.runnerFilesystemRoot && !options.persistentAgentHome &&
     options.providerNodeCommand === undefined &&
     options.opencodeProxyPath === undefined &&
     options.opencodeCommand === undefined;
@@ -3187,7 +3179,7 @@ function opencodeRunnerLaunchProfile(
 
 function resolveRunnerOpenCodeExecutable(options: RunnerdCodexTransportOptions): string {
   if (options.opencodeCommand !== undefined) return options.opencodeCommand;
-  if (options.runnerFilesystemRoot || options.runnerRuntimePaths) {
+  if (options.runnerFilesystemRoot || options.persistentAgentHome) {
     throw new Error("runner_remote_provider_artifact_incompatible: OpenCode executable is missing from the provider pack");
   }
   return resolvePinnedOpenCodeCommand();
@@ -3277,24 +3269,7 @@ export function createCapabilityRunnerdProviderEnvironment(input: {
       ? { PAPERCLIP_NATIVE_RUNTIME_CONTEXT_PATH: input.runtimeContextPath }
       : {}),
   };
-  if (input.options.runnerRuntimePaths) {
-    const binding = input.provider === "acpx" ? createAcpxCredentialBinding(
-      input.options.environment, input.options.acpxAgent ?? "codex", input.identity.normalizedSessionId) : undefined;
-    const selected = input.provider === "acpx" ? createSanitizedAcpxSpawnInput(input.options.environment, input.options.acpxAgent ?? "codex").env
-      : input.provider === "opencode" ? createSanitizedOpenCodeRunnerEnvironment(input.options.environment, false)
-      : createSanitizedCodexEnvironment(input.options.environment);
-    return { ...input.options.runnerRuntimePaths.environment, ...selected, ...commonIdentity,
-      ...(input.provider === "acpx" && input.options.acpxAgent === "grok" && input.options.environment?.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET
-        ? { PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET: input.options.environment.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET } : {}),
-      ...(binding === undefined ? {} : { [ACPX_CREDENTIAL_BINDING_ENV]: binding }),
-      ...(input.provider === "opencode" ? {
-        PAPERCLIP_OPENCODE_PERMISSION_MODE: input.options.opencodePermissionMode ?? "allow",
-        ...(input.options.opencodeRuntimeDirectory === undefined ? {} : {
-          PAPERCLIP_OPENCODE_RUNTIME_DIR: input.options.opencodeRuntimeDirectory,
-        }),
-      } : {}),
-    };
-  }
+  if (input.options.persistentAgentHome) return commonIdentity;
   if (input.provider === "opencode") {
     return {
       ...createSanitizedOpenCodeRunnerEnvironment(input.options.environment),
@@ -3415,9 +3390,8 @@ const OPEN_CODE_RUNNER_ENVIRONMENT_KEYS = new Set([
 
 function createSanitizedOpenCodeRunnerEnvironment(
   source: NodeJS.ProcessEnv | undefined,
-  inheritHost = true,
 ): NodeJS.ProcessEnv {
-  const candidate = { ...(inheritHost ? process.env : {}), ...source };
+  const candidate = { ...process.env, ...source };
   for (const key of ["PAPERCLIP_AGENT_KEY_ID", "PAPERCLIP_AGENT_PUBLIC_KEY", "PAPERCLIP_AGENT_PRIVATE_KEY"]) {
     delete candidate[key];
     if (source?.[key] !== undefined) candidate[key] = source[key];
@@ -4075,6 +4049,24 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     );
   }
 
+  #resolvePersistentRuntime(runAttachTemplate: Record<string, unknown>): void {
+    if (this.options.persistentAgentHome) {
+      const sourceRuntimeContext = this.options.runtimeContext ?? null;
+      const descriptor = runAttachTemplate.provider as Record<string, unknown>;
+      for (const key of ["command", "args", "sidecarCommand", "sidecarArgs", "runtimeDirectory", "cwd", "runtimeContext"]) delete descriptor[key];
+      descriptor.runtimeOwnership = "agent_home";
+      descriptor.runtimeContext = sourceRuntimeContext ? {
+        ...sourceRuntimeContext,
+        instructions: { entryPath: sourceRuntimeContext.instructions.entryPath,
+          bundle: { ...sourceRuntimeContext.instructions.bundle, rootPath: "." } },
+        skills: sourceRuntimeContext.skills.map(skill => ({ ...skill, bundle: { ...skill.bundle, rootPath: `skills/${skill.runtimeName}` } })),
+      } : null;
+      descriptor.instructions = sourceRuntimeContext
+        ? sourceRuntimeContext.prompt.text + "\n\n" + (sourceRuntimeContext.connectionInstructions?.text ?? "")
+        : this.options.baseInstructions ?? descriptor.instructions;
+    }
+  }
+
   async attachRun(input: {
     runId: string;
     turnId: string;
@@ -4124,10 +4116,11 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
             this.#authorizedTools,
             this.options.resumeCompletionContract,
           );
+      this.#resolvePersistentRuntime(runAttachTemplate);
       this.#runAttachTemplate = structuredClone(runAttachTemplate);
       const payload = {
         ...runAttachTemplate,
-        paperclipNextAuthority: { identity: desired, connection },
+        paperclipNextAuthority: { identity: desired, connection: this.options.persistentAgentHome ? { mode: "retain" } : connection },
       };
       core.queueCommand("run.attach", payload, commandId, true);
       // ACPX run attachment checkpoints the old sidecar and starts a fresh
@@ -4281,6 +4274,12 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   }
 
   async #readDurableRunnerState(): Promise<Record<string, unknown>> {
+    if (this.options.persistentAgentHome) {
+      const command = [...this.#core?.store.state.commands ?? []].reverse().find(item => item.type === "runner.suspend" && item.status === "completed");
+      const state = record(record(record(command?.result).result).runnerState);
+      if (Object.keys(state).length === 0) throw new Error("Runner suspension receipt unavailable");
+      return state;
+    }
     if (this.options.readRunnerState) return this.options.readRunnerState();
     return record(
       JSON.parse(
@@ -4300,7 +4299,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       }
     | "unreadable"
     | null {
-    if (this.options.runnerFilesystemRoot !== undefined || this.options.runnerRuntimePaths) return null;
+    if (this.options.runnerFilesystemRoot !== undefined || this.options.persistentAgentHome) return null;
     const provider = this.options.provider ?? "codex";
     const filename =
       provider === "acpx"
@@ -4554,10 +4553,11 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       // their authority is safe to rotate; require the same exact suspension
       // barrier even when there is no remote checkpoint callback.
       suspensionRequired = true;
+      const closeStartSeq = Math.max(0, ...this.#core.store.state.commands.map(command => command.controllerSeq));
       runnerSuspended = await awaitRunnerSuspensionBarrier({
-        commands: () => this.#core?.store.state.commands ?? [],
+        commands: () => (this.#core?.store.state.commands ?? []).filter(command => !this.options.persistentAgentHome || command.type !== "runner.suspend" || command.controllerSeq > closeStartSeq),
         queueSuspend: (commandId) => {
-          this.#core?.queueCommand("runner.suspend", {}, commandId, true);
+          this.#core?.queueCommand("runner.suspend", this.options.persistentAgentHome ? { includeStateReceipt: true } : {}, commandId, true);
         },
         readRunnerState: async () => {
           const state = await this.#readDurableRunnerState();
@@ -4758,7 +4758,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // Daytona sandbox). Do not create an empty controller-side placeholder:
     // prior-run authority checks must be able to distinguish absent remote
     // state from malformed direct state.
-    if (this.options.runnerStateDirectory === undefined) {
+    if (this.options.runnerStateDirectory === undefined && !this.options.persistentAgentHome) {
       mkdirSync(resolve(this.#root, "runner"), {
         recursive: true,
         mode: 0o700,
@@ -4766,16 +4766,16 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     }
     const provider = this.options.provider ?? "codex";
     const sourceRuntimeContext = this.options.runtimeContext ?? null;
-    if (provider === "codex" && (this.options.runnerFilesystemRoot || this.options.runnerRuntimePaths) && !this.options.codexCommand) {
+    if (provider === "codex" && this.options.runnerFilesystemRoot && !this.options.codexCommand) {
       throw new Error("runner_remote_provider_artifact_incompatible: remote Codex omitted its qualified guest executable; verify the selected environment's Codex artifacts");
     }
     const runtimeContext =
       this.options.runnerRuntimeContext ?? sourceRuntimeContext;
     const localRuntimeContextPath = resolve(this.#root, "runtime-context.json");
-    const runtimeContextPath = this.options.runnerRuntimePaths?.runtimeContext ?? (this.options.runnerFilesystemRoot
+    const runtimeContextPath = (this.options.runnerFilesystemRoot
       ? resolve(this.options.runnerFilesystemRoot, "runtime-context.json")
       : localRuntimeContextPath);
-    if (runtimeContext !== null) {
+    if (runtimeContext !== null && !this.options.persistentAgentHome) {
       writeFileSync(
         localRuntimeContextPath,
         `${JSON.stringify(runtimeContext)}\n`,
@@ -4783,13 +4783,13 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       );
     }
     const localCodexHome = resolve(this.#root, "codex-home");
-    const codexHome = this.options.runnerRuntimePaths?.codexHome ?? (this.options.runnerFilesystemRoot
+    const codexHome = (this.options.runnerFilesystemRoot
       ? resolve(this.options.runnerFilesystemRoot, "codex-home")
       : localCodexHome);
     if (provider === "aws_agentcore") {
       mkdirSync(codexHome, { recursive: true, mode: 0o700 });
     }
-    if (provider === "codex") {
+    if (provider === "codex" && !this.options.persistentAgentHome) {
       await prepareIsolatedCodexHome({
         context: sourceRuntimeContext,
         codexHome: localCodexHome,
@@ -4804,15 +4804,15 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     }
     this.#assertStartupOpen();
     const opencodeProxyPath =
-      this.options.opencodeProxyPath ??
-      (provider === "opencode" && !this.options.runnerFilesystemRoot && !this.options.runnerRuntimePaths
+      (this.options.persistentAgentHome ? "" : undefined) ?? this.options.opencodeProxyPath ??
+      (provider === "opencode" && !this.options.runnerFilesystemRoot && !this.options.persistentAgentHome
         ? resolveBuildOwnedCliArtifact("opencode-app-server-proxy.cjs")
         : fileURLToPath(
             new URL("../cli/opencode-app-server-proxy.cjs", import.meta.url),
           ));
     const acpxSidecarPath =
-      this.options.acpxSidecarPath ??
-      (provider === "acpx" && !this.options.runnerFilesystemRoot && !this.options.runnerRuntimePaths
+      (this.options.persistentAgentHome ? "" : undefined) ?? this.options.acpxSidecarPath ??
+      (provider === "acpx" && !this.options.runnerFilesystemRoot && !this.options.persistentAgentHome
         ? resolveBuildOwnedCliArtifact("acpx-runtime-sidecar.cjs")
         : fileURLToPath(
             new URL("../cli/acpx-runtime-sidecar.cjs", import.meta.url),
@@ -4820,14 +4820,14 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const providerNodeCommand =
       this.options.providerNodeCommand ?? process.execPath;
     const effectiveCodexCommand = provider === "codex"
-      ? this.options.codexCommand ?? resolveCodexCommand(undefined, this.options.environment, String(params.cwd ?? tmpdir()))
+      ? (this.options.persistentAgentHome ? "codex" : undefined) ?? this.options.codexCommand ?? resolveCodexCommand(undefined, this.options.environment, String(params.cwd ?? tmpdir()))
       : undefined;
     const opencodeExecutable =
-      provider === "opencode"
+      provider === "opencode" && !this.options.persistentAgentHome
         ? resolveRunnerOpenCodeExecutable(this.options)
         : null;
     const runnerAcpxLaunchProfile =
-      provider === "acpx"
+      provider === "acpx" && !this.options.persistentAgentHome
         ? acpxRunnerLaunchProfile(
             this.options,
             providerNodeCommand,
@@ -4835,7 +4835,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           )
         : undefined;
     const runnerOpenCodeLaunchProfile =
-      provider === "opencode"
+      provider === "opencode" && !this.options.persistentAgentHome
         ? opencodeRunnerLaunchProfile(
             this.options,
             providerNodeCommand,
@@ -4844,7 +4844,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           )
         : undefined;
     if (
-      (this.options.runnerFilesystemRoot || this.options.runnerRuntimePaths) &&
+      this.options.runnerFilesystemRoot &&
       (provider === "opencode" || provider === "acpx")
     ) {
       const providerPaths = [
@@ -4855,7 +4855,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       ] as const;
       for (const [label, candidate] of providerPaths) {
         if (
-          !this.options.runnerRuntimePaths && (candidate.startsWith("/Users/") ||
+          !this.options.persistentAgentHome && (candidate.startsWith("/Users/") ||
           /^[A-Za-z]:\\\\Users\\\\/.test(candidate))
         ) {
           throw new Error(
@@ -5030,7 +5030,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
                   args:
                     provider === "opencode"
                       ? [opencodeProxyPath]
-                      : (this.options.codexArgs ??
+                      : (this.options.persistentAgentHome ? [] : this.options.codexArgs ??
                         createRunnerdCodexAppServerArgs({
                           environment: this.options.environment,
                           codexHome,
@@ -5089,6 +5089,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // Preserve the first generation's provider attachment seed independently
     // of bounded command history. The in-memory copy serves a live warm
     // continuation; the control-plane copy serves a controller/runner resume.
+    this.#resolvePersistentRuntime(runAttachTemplate);
     this.#runAttachTemplate = structuredClone(runAttachTemplate);
     core.persistRunAttachTemplate(runAttachTemplate);
     core.queueCommand("run.prepare", runAttachTemplate);
@@ -5147,7 +5148,6 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       ),
       diagnosticsDirectory: resolve(this.#root, "diagnostics"),
       processLauncher: this.options.runnerProcessLauncher,
-      additionalEnvironmentKeys: Object.keys(this.options.runnerRuntimePaths?.environment ?? {}),
     });
     this.#handle = handle;
     this.#watchRunner(handle);
@@ -5211,7 +5211,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const localStateOwner =
       this.options.readRunnerState === undefined &&
       this.options.runnerStateDirectory === undefined &&
-      this.options.runnerFilesystemRoot === undefined && !this.options.runnerRuntimePaths;
+      this.options.runnerFilesystemRoot === undefined && !this.options.persistentAgentHome;
     const localRunnerStatePath = resolve(
       this.#root,
       "runner",
@@ -5347,6 +5347,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       identity.normalizedSessionId === desiredIdentity.normalizedSessionId &&
       identity.turnId === desiredIdentity.turnId &&
       identity.itemId === desiredIdentity.itemId;
+    const persistentRunTransition = this.options.persistentAgentHome && controlPlaneState !== null && !exactAuthority;
     let rotatedAuthority = false;
     if (controlPlaneState === null) {
       if (!localProvider) {
@@ -5355,7 +5356,6 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       const archivedState = latestArchivedControlPlaneState(
         this.#root,
         desiredIdentity,
-        !localStateOwner && this.options.authorizeEnvironmentLeaseTransition !== undefined,
       );
       if (!archivedState) {
         throw new Error("PRP provider resume state is unavailable");
@@ -5383,12 +5383,11 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           desiredIdentity,
           this.options.readRunnerState,
           this.options.archiveExternalRunnerState,
-          this.options.authorizeEnvironmentLeaseTransition,
         );
       }
       identity = desiredIdentity;
       rotatedAuthority = true;
-    } else if (!exactAuthority && warmRecovery === null) {
+    } else if (!exactAuthority && warmRecovery === null && !persistentRunTransition) {
       if (!localProvider || controlPlaneState === null) {
         throw new Error("native_runner_prp_run_rotation_unavailable");
       }
@@ -5417,7 +5416,6 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           desiredIdentity,
           this.options.readRunnerState,
           this.options.archiveExternalRunnerState,
-          this.options.authorizeEnvironmentLeaseTransition,
         );
       }
       identity = desiredIdentity;
@@ -5441,23 +5439,23 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const runtimeContext =
       this.options.runnerRuntimeContext ?? sourceRuntimeContext;
     const localRuntimeContextPath = resolve(this.#root, "runtime-context.json");
-    const runtimeContextPath = this.options.runnerRuntimePaths?.runtimeContext ?? (this.options.runnerFilesystemRoot
+    const runtimeContextPath = (this.options.runnerFilesystemRoot
       ? resolve(this.options.runnerFilesystemRoot, "runtime-context.json")
       : localRuntimeContextPath);
     const localCodexHome = resolve(this.#root, "codex-home");
-    const codexHome = this.options.runnerRuntimePaths?.codexHome ?? (this.options.runnerFilesystemRoot
+    const codexHome = (this.options.runnerFilesystemRoot
       ? resolve(this.options.runnerFilesystemRoot, "codex-home")
       : localCodexHome);
     const opencodeProxyPath =
-      this.options.opencodeProxyPath ??
-      (provider === "opencode" && !this.options.runnerFilesystemRoot && !this.options.runnerRuntimePaths
+      (this.options.persistentAgentHome ? "" : undefined) ?? this.options.opencodeProxyPath ??
+      (provider === "opencode" && !this.options.runnerFilesystemRoot && !this.options.persistentAgentHome
         ? resolveBuildOwnedCliArtifact("opencode-app-server-proxy.cjs")
         : fileURLToPath(
             new URL("../cli/opencode-app-server-proxy.cjs", import.meta.url),
           ));
     const acpxSidecarPath =
-      this.options.acpxSidecarPath ??
-      (provider === "acpx" && !this.options.runnerFilesystemRoot && !this.options.runnerRuntimePaths
+      (this.options.persistentAgentHome ? "" : undefined) ?? this.options.acpxSidecarPath ??
+      (provider === "acpx" && !this.options.runnerFilesystemRoot && !this.options.persistentAgentHome
         ? resolveBuildOwnedCliArtifact("acpx-runtime-sidecar.cjs")
         : fileURLToPath(
             new URL("../cli/acpx-runtime-sidecar.cjs", import.meta.url),
@@ -5465,11 +5463,11 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const providerNodeCommand =
       this.options.providerNodeCommand ?? process.execPath;
     const opencodeExecutable =
-      provider === "opencode"
+      provider === "opencode" && !this.options.persistentAgentHome
         ? resolveRunnerOpenCodeExecutable(this.options)
         : null;
     const runnerAcpxLaunchProfile =
-      provider === "acpx"
+      provider === "acpx" && !this.options.persistentAgentHome
         ? acpxRunnerLaunchProfile(
             this.options,
             providerNodeCommand,
@@ -5477,7 +5475,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           )
         : undefined;
     const runnerOpenCodeLaunchProfile =
-      provider === "opencode"
+      provider === "opencode" && !this.options.persistentAgentHome
         ? opencodeRunnerLaunchProfile(
             this.options,
             providerNodeCommand,
@@ -5560,7 +5558,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // provider restoration. Queue a unique, side-effect-free barrier before
     // runnerd starts so every provider backend restores its durable session.
     const recoveryProbeCommandId =
-      warmRecovery === null && exactAuthority && runAttachment === null
+      warmRecovery === null && (exactAuthority || persistentRunTransition) && (runAttachment === null || this.options.persistentAgentHome)
         ? `command_resume_probe_${randomUUID().replaceAll("-", "")}`
         : null;
     if (recoveryProbeCommandId !== null) {
@@ -5588,7 +5586,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         committedEvents[adoptedProviderIdentityIndex]!,
       );
     } else if (
-      (exactAuthority || warmRecovery !== null) &&
+      (exactAuthority || persistentRunTransition || warmRecovery !== null) &&
       this.options.resumeProviderSession?.driverSessionId.trim() &&
       this.options.resumeProviderSession.providerSessionId?.trim()
     ) {
@@ -5704,7 +5702,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     this.#assertStartupOpen();
     // Route and immutable endpoint admission precedes every launch-material
     // write. A refused transition leaves its retained home/context untouched.
-    if (runtimeContext !== null) {
+    if (runtimeContext !== null && !this.options.persistentAgentHome) {
       writeFileSync(
         localRuntimeContextPath,
         `${JSON.stringify(runtimeContext)}\n`,
@@ -5713,7 +5711,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     }
     if (provider === "aws_agentcore")
       mkdirSync(codexHome, { recursive: true, mode: 0o700 });
-    if (provider === "codex") {
+    if (provider === "codex" && !this.options.persistentAgentHome) {
       await releaseMaterializedNativeRuntimeSkills(
         resolve(localCodexHome, "skills"),
       );
@@ -5790,7 +5788,6 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           ),
           diagnosticsDirectory: resolve(this.#root, "diagnostics"),
           processLauncher: this.options.runnerProcessLauncher,
-          additionalEnvironmentKeys: Object.keys(this.options.runnerRuntimePaths?.environment ?? {}),
         });
     if (handle) {
       this.#handle = handle;
@@ -5893,6 +5890,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       admissionDeadline,
     );
     this.#startupComplete = true;
+    if (persistentRunTransition) await this.attachRun(desiredIdentity);
     this.#diagnostic(
       rotatedAuthority
         ? "runnerd attached the durable provider session to a fresh PRP run authority"
@@ -6011,8 +6009,8 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const skills = resolveRunnerdCodexSkillInputs(
       input.filter((item) => item.type === "skill"),
       this.options.runtimeContext ?? null,
-      this.options.runnerRuntimePaths?.codexHome ?? resolve(this.options.runnerFilesystemRoot ?? this.#root, "codex-home"),
-      this.options.runnerRuntimePaths?.skillEntries,
+      resolve(this.options.runnerFilesystemRoot ?? this.#root, "codex-home"),
+      this.options.persistentAgentHome ? Object.fromEntries((this.options.runtimeContext?.skills ?? []).map(skill => [skill.runtimeName, `skills/${skill.runtimeName}/SKILL.md`])) : undefined,
     );
     if (skills.length && (this.options.provider ?? "codex") !== "codex") {
       throw new Error("Explicit skill inputs are supported only by Codex");
@@ -6044,7 +6042,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           text: message,
           ...((this.options.provider ?? "codex") === "codex" && params.effort !== undefined ? { effort: params.effort } : {}),
           ...(reasoningMode === undefined ? {} : { reasoningMode }),
-          ...(skills.length ? { skills } : {}),
+          ...(skills.length ? { skills, ...(this.options.persistentAgentHome ? { runtimeOwnership: "agent_home" } : {}) } : {}),
           turnId: pendingTurnId,
         },
         commandDeadline,
@@ -7184,7 +7182,7 @@ export async function probeNativeRunnerEnvironment(options: {
 }> {
   const environment = { ...options.environment };
   const remoteFilesystemRoot = options.transportOptions?.runnerFilesystemRoot;
-  const providerPaths = options.transportOptions?.runnerRuntimePaths;
+  const providerPaths = options.transportOptions?.persistentAgentHome;
   if (options.workingDirectory !== undefined && !remoteFilesystemRoot && !providerPaths) throw new Error("Native setup remote working directory requires a remote runner filesystem.");
   const workingDirectory = options.workingDirectory ?? resolve(options.runtimeDirectory, "workspace");
   if (!remoteFilesystemRoot && !providerPaths) mkdirSync(workingDirectory, { mode: 0o700 });

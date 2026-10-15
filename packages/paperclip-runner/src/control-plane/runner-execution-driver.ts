@@ -8,6 +8,8 @@ import type { DurableRecoveryIdentity } from "../contracts/durable-recovery.js";
  * not a serializable plugin API.
  */
 export interface RunnerExecutionDriver {
+  /** The process owner supplies a persistent agent home and installed provider runtime. */
+  persistentAgentHome?: boolean;
   /** Prepare resources and register or acquire the connection before launch. */
   controlPlaneRegistration?: (
     authority: DurablePrpControlPlane,

@@ -7844,26 +7844,14 @@ it("cold-restores a suspended provider session under its durable run binding", a
 
   const externalIdentity = {
     ...secondIdentity,
-    environmentLeaseId: "lease-cold-external-task",
     runId: "run-cold-external",
     turnId: "turn-cold-external",
     itemId: "item-cold-external",
   };
-  const authorizeLeaseTransition = vi.fn(async (transition) => {
-    expect(transition).toEqual({ priorIdentity: secondIdentity, desiredIdentity: externalIdentity });
-  });
-  const deniedArchive = vi.fn();
-  const deniedLeaseTransition = createCapabilityRunnerdCodexTransport({ ...options,
-    runnerStateDirectory: externallyOwnedRunnerStateDirectory, readRunnerState,
-    prepareExternalRunnerState: async () => {}, archiveExternalRunnerState: deniedArchive,
-    prpIdentity: externalIdentity });
-  await expect(deniedLeaseTransition.transport.request("thread/read", {})).rejects.toThrow("task lease transition is not authorized");
-  await deniedLeaseTransition.transport.close();
-  expect(deniedArchive).not.toHaveBeenCalled();
   const rejectedExternalRotationSteps: string[] = [];
   let externalArchiveDirectory: string | null = null;
   const rejectedExternalRotation = createCapabilityRunnerdCodexTransport({
-    ...options, authorizeEnvironmentLeaseTransition: authorizeLeaseTransition,
+    ...options,
     runnerStateDirectory: externallyOwnedRunnerStateDirectory,
     readRunnerState,
     prepareExternalRunnerState: async () => {
@@ -7914,7 +7902,7 @@ it("cold-restores a suspended provider session under its durable run binding", a
 
   const externalRotationSteps: string[] = [];
   const externallyRotated = createCapabilityRunnerdCodexTransport({
-    ...options, authorizeEnvironmentLeaseTransition: authorizeLeaseTransition,
+    ...options,
     runnerStateDirectory: externallyOwnedRunnerStateDirectory,
     readRunnerState,
     prepareExternalRunnerState: async () => {
@@ -7951,7 +7939,6 @@ it("cold-restores a suspended provider session under its durable run binding", a
       cwd: tmpdir(),
     });
     expect(externalRotationSteps).toEqual(["archived"]);
-    expect(authorizeLeaseTransition).toHaveBeenCalledTimes(2);
     expect((await readRunnerState()).environmentLeaseId).toBe(externalIdentity.environmentLeaseId);
   } finally {
     await externallyRotated.transport.close();
@@ -8530,24 +8517,6 @@ it.each(["claude", "codex"] as const)("keeps the explicitly assigned gateway in 
   expect(environment).toMatchObject(gateway);
   expect(environment.PAPERCLIP_API_KEY).toBeUndefined();
   expect(environment.DATABASE_URL).toBeUndefined();
-});
-
-it.each(["codex", "opencode", "acpx"] as const)("preserves provider-owned paths without host discovery (%s)", provider => {
-  const provided = { HOME: "V:\\account", PATH: "V:\\bin;W:\\tools", PROVIDER_PRIVATE_ROOT: "W:\\runtime" };
-  const environment = createCapabilityRunnerdProviderEnvironment({ provider,
-    options: { provider, acpxAgent: "pi", environment: { OPENAI_API_KEY: "selected", PAPERCLIP_AI_PROVIDER_KEY: "selected", DATABASE_URL: "must-not-cross", PAPERCLIP_API_KEY: "must-not-cross" },
-      opencodeRuntimeDirectory: "provider-state/opencode",
-      runnerRuntimePaths: { codexHome: "V:\\account", runtimeContext: "W:\\input.json", skillEntries: {}, environment: { ...provided,
-        ...(provider === "codex" ? { PAPERCLIP_AI_PROVIDER_KEY: "provider-default" } : {}) } } },
-    identity: { runnerInstanceId: "runner", environmentLeaseId: "lease", runId: "run", normalizedSessionId: "session", turnId: "turn", itemId: "item" },
-    codexHome: "V:\\account", runtimeContextPath: "W:\\input.json", hasRuntimeContext: true,
-  });
-  expect(environment).toMatchObject({ ...provided, PAPERCLIP_NATIVE_RUNTIME_CONTEXT_PATH: "W:\\input.json" });
-  expect(environment.DATABASE_URL).toBeUndefined(); expect(environment.PAPERCLIP_API_KEY).toBeUndefined();
-  expect(environment.CODEX_HOME).toBeUndefined();
-  if (provider === "codex") expect(environment.PAPERCLIP_AI_PROVIDER_KEY).toBe("selected");
-  if (provider === "opencode") expect(environment.PAPERCLIP_OPENCODE_RUNTIME_DIR).toBe("provider-state/opencode");
-  if (provider === "acpx") expect(createAcpxSidecarHostEnvironment(environment, "pi", "session").OPENAI_API_KEY).toBe("selected");
 });
 
 it("resolves explicit skills to the remote provider home and rejects unassigned paths", () => {

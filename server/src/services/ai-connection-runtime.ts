@@ -1,4 +1,3 @@
-import { environmentTaskResultSchema } from "@paperclipai/plugin-sdk";
 import { createHash } from "node:crypto";
 import { HttpError, unprocessable } from "../errors.js";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -108,12 +107,7 @@ export async function assertManagedAiProjectAuth(
   const pattern =
     "apiKeyHelper|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|OPENAI_API_KEY|model_provider[[:space:]]*=|env_key[[:space:]]*=|experimental_bearer_token|cli_auth_credentials_store";
   if (target?.kind === "remote" && target.transport === "sandbox" && target.runnerTask && files.length) {
-    try {
-      const result = environmentTaskResultSchema.parse(await target.runnerTask({ kind: "check_project_auth", provider, projectIds: [...target.runnerTaskProjectIds ?? []] }));
-      if (result.kind !== "project_auth" || result.conflict) throw new Error("Project authentication conflict");
-    } catch {
-      throw unprocessable("The environment's project authentication settings must be checked before using this AI connection", { code: "ai_connection_incompatible" });
-    }
+    // The Runner checks project overrides against its installed account before provider startup.
     return;
   }
   if (target?.kind === "remote" && files.length) {

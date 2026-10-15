@@ -296,6 +296,7 @@ export interface RunnerProcessHandle {
 }
 
 export type RunnerProcessConnection =
+  | { mode: "external" }
   | { mode: "connect"; connectUrl: string; caBundlePath?: string }
   | {
       mode: "listen";
@@ -3455,7 +3456,6 @@ function runnerEnvironment(
   ticket: string,
   normalizedSessionId: string,
   explicitSource?: NodeJS.ProcessEnv,
-  additionalKeys: readonly string[] = [],
 ): NodeJS.ProcessEnv {
   const platformSource = explicitSource ?? process.env;
   const environment: NodeJS.ProcessEnv = {
@@ -3469,7 +3469,7 @@ function runnerEnvironment(
   // already-sanitized environment for this run. Never inherit them implicitly
   // from the server process.
   if (explicitSource !== undefined) {
-    for (const key of [...runnerExplicitProviderEnvironmentKeys, ...additionalKeys]) {
+    for (const key of runnerExplicitProviderEnvironmentKeys) {
       const value = explicitSource[key];
       if (value !== undefined) environment[key] = value;
     }
@@ -3533,8 +3533,6 @@ export function spawnRunner(options: {
     executableSha256: string;
   };
   environment?: NodeJS.ProcessEnv;
-  /** Validated plugin runtime settings; values still come from the final, policy-bound environment. */
-  additionalEnvironmentKeys?: readonly string[];
   processLauncher?: (spec: RunnerProcessLaunchSpec) => RunnerProcessHandle;
   diagnosticsDirectory?: string;
 }): RunnerProcessHandle {
@@ -3545,8 +3543,9 @@ export function spawnRunner(options: {
       : null);
   if (connection === null)
     throw new Error("runner process connection is required");
+  if (connection.mode === "external" && !options.processLauncher) throw new Error("External Runner connection requires a process owner");
   const connectionArgs =
-    connection.mode === "connect"
+    connection.mode === "external" ? [] : connection.mode === "connect"
       ? [
           "--connect-url",
           connection.connectUrl,
@@ -3645,7 +3644,7 @@ export function spawnRunner(options: {
   }
 
   const command = options.runnerBinaryPath ?? runnerBinary;
-  const environment = runnerEnvironment(options.ticket, options.identity.normalizedSessionId, options.environment, options.additionalEnvironmentKeys);
+  const environment = runnerEnvironment(options.ticket, options.identity.normalizedSessionId, options.environment);
   const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => handle.restart === null ? handle : ({
     ...handle,
     restart: (ticket) => spawnRunner({ ...options, ticket }),

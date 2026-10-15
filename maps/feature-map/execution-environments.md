@@ -77,8 +77,10 @@ execution. Remote-driver probes and a real bounded run need their own evidence.
 
 For `paperclip_runner`, a saved plugin environment can provide per-turn Runner
 execution when its manifest and worker expose the Runner task API. The task
-contract delivers assets and checkpoints without shell or workspace hooks. Core resolves the saved lease, stages runtime context, connects
-through PRP, and verifies stop before lease cleanup. See the
+contract starts a provider-owned Runner without shell or workspace hooks. Core
+resolves the saved lease, connects through PRP, and verifies stop before lease
+cleanup. The provider owns the installed agent home and retained session files;
+data transfer is outside task execution. See the
 [plugin contract](../../doc/plugins/PLUGIN_RUNNER_EXECUTION.md).
 The [fake-provider integration](../../server/src/__tests__/plugin-runner-task.integration.test.ts)
 checks acquisition, SDK dispatch, scope denial, stop proof and deletion recovery.

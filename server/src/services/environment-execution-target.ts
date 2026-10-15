@@ -262,15 +262,10 @@ export async function resolveEnvironmentExecutionTarget(input: {
         lease.environmentId !== input.environment.id || !await runtime.supportsTasks({ lease })) {
       throw new Error("Plugin environment does not provide native Runner task execution");
     }
-    const providerMetadata = parseObject(lease.metadata?.providerMetadata);
-    const remoteCwd = typeof lease.metadata?.remoteCwd === "string" ? lease.metadata.remoteCwd
-      : typeof providerMetadata.remoteCwd === "string" ? providerMetadata.remoteCwd : null;
-    if (!remoteCwd || /[\x00-\x1f]/.test(remoteCwd)) {
-      throw new Error("Plugin Runner lease must provide its workspace path");
-    }
+    // The Runner resolves its workspace locally; this is only a relative scope marker.
     return {
       kind: "remote", transport: "sandbox", providerKey: "plugin",
-      environmentId: input.environment.id, leaseId: lease.id, remoteCwd,
+      environmentId: input.environment.id, leaseId: lease.id, remoteCwd: ".",
       runnerLifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
       sandboxLeaseAcquisition: { outcome: "created", providerLeaseId: lease.providerLeaseId! },
       ...(lease.metadata?.runnerTaskProbe ? { runnerTaskProbe: lease.metadata.runnerTaskProbe as { runId: string; sessionId: string } } : {}),

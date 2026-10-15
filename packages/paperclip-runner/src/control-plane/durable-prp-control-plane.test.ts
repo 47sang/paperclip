@@ -420,7 +420,7 @@ it("pins the OpenCode launch profile in runner startup arguments and restarts", 
   }
 });
 
-it.each([false, true])("preserves explicit OpenCode permissions and admitted plugin settings (%s)", (pluginSettings) => {
+it.each([false, true])("preserves explicit OpenCode permissions and process-owner restart policy (%s)", (pluginSettings) => {
   const launches: RunnerProcessLaunchSpec[] = [];
   const handle = spawnRunner({
     connection: { mode: "connect", connectUrl: "ws://127.0.0.1:43127" },
@@ -431,7 +431,6 @@ it.each([false, true])("preserves explicit OpenCode permissions and admitted plu
     p0ReserveBytes: 64 * 1024,
     runnerVersion: expectedRunnerVersion,
     runnerDigest: expectedRunnerDigest,
-    additionalEnvironmentKeys: pluginSettings ? ["OPENCODE_CONFIG_DIR", "PROVIDER_PRIVATE_ROOT", "PAPERCLIP_RUNNER_BOOTSTRAP_TICKET"] : [],
     environment: {
       OPENCODE_CONFIG_DIR: "provider-config", PROVIDER_PRIVATE_ROOT: "provider-storage", PAPERCLIP_RUNNER_BOOTSTRAP_TICKET: "wrong-ticket",
       PATH: "/bin",
@@ -470,8 +469,8 @@ it.each([false, true])("preserves explicit OpenCode permissions and admitted plu
 
   expect(launches).toHaveLength(1);
   expect(handle.restart).toEqual(pluginSettings ? null : expect.any(Function));
-  expect(launches[0]!.environment.OPENCODE_CONFIG_DIR).toBe(pluginSettings ? "provider-config" : undefined);
-  expect(launches[0]!.environment.PROVIDER_PRIVATE_ROOT).toBe(pluginSettings ? "provider-storage" : undefined);
+  expect(launches[0]!.environment.OPENCODE_CONFIG_DIR).toBeUndefined();
+  expect(launches[0]!.environment.PROVIDER_PRIVATE_ROOT).toBeUndefined();
   expect(launches[0]!.environment.PAPERCLIP_RUNNER_BOOTSTRAP_TICKET).toBe("bootstrap-ticket");
   expect(launches[0]!.environment).toMatchObject({
     PATH: "/bin",

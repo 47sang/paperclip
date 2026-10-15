@@ -10136,131 +10136,36 @@ describe("runnerd provider runtime wiring", () => {
     expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
   });
 
-  it.each(["codex", "grok"] as const)("binds task-only %s credentials once and copies refreshes back", async kind => {
-    const privateRoot = await realpath(isolatedStateDirectory);
-    const managedHome = join(privateRoot, "selected-account");
-    await mkdir(managedHome, { mode: 0o700 });
-    await writeFile(join(managedHome, "auth.json"), "fixture-selected-subscription", { mode: 0o600 });
-    const selected = kind === "codex" ? execution : { ...execution,
-      provider: { kind: "acpx", agent: "grok", model: "grok-4.7", permissionMode: "deny-all" },
-      session: { ...execution.session, driverKind: "acpx_runtime" } } as unknown as NativeExecutionInputV1;
-    const artifact = { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` };
-    const task = vi.fn(async () => ({ kind: "description", taskId: "task", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, runner: artifact,
-      codexCommand: "/codex", codexArgs: ["app-server"], providerPack: { authorityDigest: artifact.digest, node: artifact, acpxSidecar: artifact } }));
-    const close = vi.fn(async () => {});
-    const raw = { close };
-    state.createBackend.mockReturnValueOnce({ kind: "test", openSession: async () => raw,
-      recoverSession: async () => ({ recovered: true, session: raw }) } as never);
-    state.copyBackCodexAuth.mockClear(); grokCopyBack.mockClear();
-    const backend = await createRunnerdBackend({ db: leaseDb(selected), execution: selected, runnerInstanceId: "task-credentials",
-      runnerIngressAuthorized: true, managedAiCredentialHome: managedHome, runnerEnvironment: {},
-      runnerExecutionTarget: { kind: "remote", transport: "sandbox", providerKey: "plugin", leaseId: "task-lease", remoteCwd: "/workspace", runnerTask: task } as never });
-    state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
-    const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & { environment: NodeJS.ProcessEnv };
-    if (kind === "grok") expect(options.environment.PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET).toBe("fixture-selected-subscription");
-    const session = await backend.openSession({} as never);
-    expect(backend.bindManagedSession!(session)).toBe(session);
-    expect((await backend.recoverSession!({} as never, { signal: new AbortController().signal })).session).toBe(session);
-    if (kind === "grok") {
-      const home = join(options.stateDirectory!, "acpx/acpx", acpxRuntimeSessionDirectoryName(execution.session.normalizedSessionId!), "grok-home");
-      await mkdir(home, { recursive: true, mode: 0o700 });
-      await writeFile(join(home, "auth.json"), "fixture-refreshed", { mode: 0o600 });
-      grokCopyBack.mockImplementationOnce(async input => { expect(input.hostHomeDir).toBe(managedHome); expect((await input.readSandboxAuth()).toString()).toBe("fixture-refreshed"); });
-    }
-    await session.close({ reason: "fixture done" });
-    expect(close).toHaveBeenCalledOnce();
-    expect(kind === "grok" ? grokCopyBack : state.copyBackCodexAuth).toHaveBeenCalledOnce();
-  });
-
-  it("selects the plugin task process owner and binds Runner identity to its acquired lease", async () => {
-    const instructionRoot = join(isolatedStateDirectory, "agent-files/working");
-    await mkdir(instructionRoot, { recursive: true, mode: 0o700 });
-    await writeFile(join(instructionRoot, "AGENTS.md"), "original instructions");
-    const runtimeContext = nativeRuntimeContextFixture();
-    runtimeContext.instructions.workingCopy = { rootPath: instructionRoot, kind: "agent_files", entryPath: "AGENTS.md" } as never;
-    runtimeContext.skills = Array.from({ length: 64 }, (_, index) => ({
-      key: `skill-${index}`, runtimeName: `skill-${index}`, versionId: null, bundle: runtimeContext.instructions.bundle,
-    }));
-    const skillResources = Object.fromEntries(runtimeContext.skills.flatMap(skill => [
-      [`skill:${skill.runtimeName}`, `/assigned/${skill.runtimeName}`],
-      [`skill_entry:${skill.runtimeName}`, `/assigned/${skill.runtimeName}/SKILL.md`],
-    ]));
-    const taskExecution = { ...execution, runtimeContext };
+  it("uses a task-only driver without exposing Core paths or transferring the agent home", async () => {
     const launcher = vi.fn();
     const registration = vi.fn();
-    const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration });
-    const task = vi.fn(async (operation: unknown): Promise<unknown> => { environmentTaskOperationSchema.parse(operation); return { kind: "description", taskId: "task", resources: { ...skillResources, runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" },
-      runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` }, codexCommand: "/codex", codexArgs: ["app-server"] }; });
-    const target = { kind: "remote", transport: "sandbox", providerKey: "plugin",
-      leaseId: "plugin-task-lease", remoteCwd: "/workspace", runnerTask: task,
-      runnerTaskProjectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] } as never;
+    const driver = { persistentAgentHome: true, runnerProcessLauncher: launcher, controlPlaneRegistration: registration };
+    const owner = vi.spyOn(pluginTaskRuntime, "createPluginRunnerTaskOwner").mockReturnValue({ launcher, registration, driver });
+    const task = vi.fn(async (operation: unknown) => {
+      environmentTaskOperationSchema.parse(operation);
+      return { kind: "description", taskId: "task", runner: { version: "fixture", digest: `sha256:${"a".repeat(64)}` } };
+    });
+    const target = { kind: "remote", transport: "sandbox", providerKey: "plugin", leaseId: "plugin-task-lease",
+      remoteCwd: "/unused", runnerTask: task, runnerTaskProjectIds: ["10000000-0000-4000-8000-000000000001"] } as const;
     state.createBackend.mockClear(); state.createTransport.mockClear();
     try {
-      await expect(createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution,
-        runnerInstanceId: "plugin-runner", runnerExecutionTarget: target })).rejects.toThrow("runner_ingress_unavailable");
-      await createRunnerdBackend({ db: leaseDb(execution), execution: taskExecution, runnerInstanceId: "plugin-runner",
-        runnerExecutionTarget: target, runnerIngressAuthorized: true,
-        runnerEnvironment: { PAPERCLIP_GITHUB_LAUNCHER_DIR: "/controller/wrappers", PATH: "/controller/private/bin", PAPERCLIP_WORKSPACE_CWD: "/controller/workspace" } });
-      expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] }));
-      expect(state.createBackend.mock.calls.at(-1)![1]).toMatchObject({ workingDirectoryAuthority: "remote_runner",
-        environment: { PAPERCLIP_WORKSPACE_CWD: "/workspace" } });
+      await expect(createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "runner", runnerExecutionTarget: target }))
+        .rejects.toThrow("runner_ingress_unavailable");
+      await createRunnerdBackend({ db: leaseDb(execution), execution, runnerInstanceId: "runner", runnerExecutionTarget: target,
+        runnerIngressAuthorized: true, managedAiCredentialIdentity: "selected-account-revision",
+        runnerEnvironment: { HOME: "/controller/private", PATH: "/controller/bin", OPENAI_API_KEY: "fixture-secret" } });
+      expect(owner).toHaveBeenCalledWith(expect.objectContaining({ task, projectIds: target.runnerTaskProjectIds,
+        credentialIdentity: "selected-account-revision" }));
+      expect(state.createBackend.mock.calls.at(-1)![1]).toMatchObject({ workingDirectoryAuthority: "remote_runner", environment: {} });
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
-      expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
-        runnerProcessLauncher: launcher,
-        prpIdentity: expect.objectContaining({ environmentLeaseId: "plugin-task-lease" }),
-      }));
-      expect(state.createTransport).toHaveBeenCalledWith(expect.objectContaining({
-        runnerArtifact: expect.objectContaining({ version: "fixture" }), codexCommand: "/codex", codexArgs: ["app-server"],
-        runnerRuntimePaths: expect.objectContaining({ codexHome: "/accounts/selected", runtimeContext: "/inputs/context.json" }), readRunnerState: expect.any(Function),
-        archiveExternalRunnerState: expect.any(Function),
-        environment: expect.objectContaining({ HOME: "/accounts/selected", PAPERCLIP_WORKSPACE_CWD: "/workspace" }),
-      }));
-      expect(task).toHaveBeenCalledWith(expect.objectContaining({ kind: "describe", projectIds: ["10000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000002"] }));
-      expect((task.mock.calls[0]![0] as { resources: string[] }).resources).toHaveLength(133);
-      const options = state.createTransport.mock.calls.at(-1)![0] as RunnerTransportOptions & {
-        runnerRuntimeContext: { instructions: { workingCopy: { rootPath: string } } }; environment: NodeJS.ProcessEnv;
-      };
-      expect(options.runnerRuntimeContext.instructions.workingCopy.rootPath).toBe("/working/agent");
-      expect(state.createBackend.mock.calls.at(-1)![0]).toMatchObject({ runtimeContext: { instructions: { workingCopy: { rootPath: "/working/agent" } } } });
-      expect(options.environment.PATH).toBeUndefined();
-      expect(options.environment.PAPERCLIP_GITHUB_LAUNCHER_DIR).toBeUndefined();
-      expect(options.environment.BASH_ENV).toBeUndefined();
-      expect(owner.mock.calls.at(-1)![0].assets!()).toEqual(expect.arrayContaining([
-        { resource: "instruction_working_copy", sourcePath: instructionRoot },
-      ]));
-      const root = state.createTransport.mock.calls.at(-1)![0].stateDirectory!;
-      await mkdir(join(root, "codex-home"), { recursive: true, mode: 0o700 });
-      await writeFile(join(root, "codex-home/auth.json"), "preserved-private-fixture");
-      const sealedSkill = join(root, "codex-home/skills/assigned");
-      await mkdir(sealedSkill, { recursive: true });
-      await writeFile(join(sealedSkill, "SKILL.md"), "sealed skill", { mode: 0o444 });
-      await chmod(sealedSkill, 0o555);
-      await chmod(dirname(sealedSkill), 0o555);
-      task.mockImplementation(async (operation: any) => {
-        for (const item of operation.exports ?? []) await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
-        return { kind: "checkpoint", taskId: "task", state: { lifecycle: "active", runId: "wrong-run" } };
-      });
-      await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).rejects.toThrow("checkpoint identity mismatch");
-      expect(await readFile(join(root, "codex-home/auth.json"), "utf8")).toBe("preserved-private-fixture");
-      task.mockImplementation(async (operation: any) => {
-        for (const item of operation.exports ?? []) {
-          await mkdir(item.targetPath, { recursive: true, mode: 0o700 });
-          if (item.resource === "instruction_working_copy") {
-            expect(dirname(dirname(item.targetPath))).toBe(dirname(instructionRoot));
-            await writeFile(join(item.targetPath, "AGENTS.md"), "exported instructions");
-          }
-          if (item.resource === "runner_state") await writeFile(join(item.targetPath, "codex-provider-state.json"), JSON.stringify({
-            schema: "paperclip.runner.codex-provider-state.v1", lifecycle: "session_open", threadId: "thread",
-            activeProviderTurnId: null, config: { provider: "codex", driver: "codex_app_server" },
-          }));
-        }
-        return { kind: "checkpoint", taskId: "task", state: { schema: "paperclip.runner.durable.state.v1",
-          ...state.createTransport.mock.calls.at(-1)![0].prpIdentity, lifecycle: "suspended" } };
-      });
-      await expect(owner.mock.calls.at(-1)![0].checkpoint("settled")).resolves.toBeUndefined();
-      expect(await readFile(join(instructionRoot, "AGENTS.md"), "utf8")).toBe("exported instructions");
-      expect((await readdir(root)).filter(name => name.startsWith(".plugin-checkpoint-"))).toEqual([]);
-      expect(JSON.parse(await readFile(join(root, "runner/runner-state.json"), "utf8"))).toMatchObject({ lifecycle: "suspended", environmentLeaseId: "plugin-task-lease" });
+      const options = state.createTransport.mock.calls.at(-1)![0];
+      expect(options).toMatchObject({ ...driver, runnerArtifact: { version: "fixture" },
+        prpIdentity: { environmentLeaseId: "plugin-task-lease" } });
+      for (const key of ["environment", "codexCommand", "codexArgs", "runnerRuntimePaths", "readRunnerState", "archiveExternalRunnerState"]) {
+        expect(options).not.toHaveProperty(key);
+      }
+      expect(task.mock.calls).toEqual([[{ kind: "describe" }]]);
+      expect(owner.mock.calls.at(-1)![0]).not.toHaveProperty("assets");
     } finally { owner.mockRestore(); }
   });
 

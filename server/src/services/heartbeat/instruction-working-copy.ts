@@ -1,4 +1,3 @@
-import { assertPluginRunnerInstructionMirror } from "../environment-task-runtime.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -78,15 +77,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
   let instructionCopy: Awaited<ReturnType<typeof instructionCopies.prepare>> = null;
   let instructionSave: Record<string, unknown> | null = null;
   const task = executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" ? executionTarget.runnerTask : undefined;
-  // Core validates and saves a local mirror. The task owner transfers the
-  // registered working copy without a shell or command bridge.
-  const instructionTarget = task ? { kind: "local" as const } : executionTarget;
-  if (task && !executionTarget?.leaseId) throw new Error("Plugin Runner instruction lease unavailable");
-  const checkpointTaskInstructions = async () => {
-    if (!task || !instructionCopy || executionTarget?.kind !== "remote") return;
-    await assertPluginRunnerInstructionMirror(db, { companyId: agent.companyId, runId: readRun().id,
-      receipt: { runnerTaskLeaseId: executionTarget.leaseId } });
-  };
+  const instructionTarget = executionTarget;
   const instructionPreparationKey = createHash("sha256").update(JSON.stringify({
     adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, sessionConfigMetadata,
     workspace: nativeSessionWorkspaceScope({
@@ -110,7 +101,6 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
   };
   const collectStoppedInstructions = async () => {
     if (!instructionCopy) return;
-    await checkpointTaskInstructions();
     const saved = await collectStoppedInstructionCopyWithRetries(() => instructionCopies.collectStopped({
       companyId: agent.companyId, runId: readRun().id, target: instructionTarget,
     }));
@@ -125,7 +115,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
       if (saved) await recordInstructionSave(saved);
       return saved?.state === "warm_saved" && saved.errorCode === null;
     } } : {}),
-    hasChanges: async () => { await checkpointTaskInstructions(); return instructionCopies.hasChanges({ companyId: agent.companyId, runId: readRun().id, target: instructionTarget }); },
+    hasChanges: async () => { return instructionCopies.hasChanges({ companyId: agent.companyId, runId: readRun().id, target: instructionTarget }); },
     collectStopped: collectStoppedInstructions,
     retirementFailed: async () => { await instructionCopies.reportRetirementUnconfirmed(agent.companyId, readRun().id); },
   } : undefined;
@@ -135,7 +125,7 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
     nativeRuntimeResolution: Selection["nativeRuntimeResolution"];
     hasInstructionFilesystem: boolean;
   }) {
-    if (hasInstructionFilesystem) {
+    if (hasInstructionFilesystem && !task) {
       try {
         // Missing contract fields on a restored session mean the deployed
         // legacy format. New sessions opt into whole-directory persistence.
@@ -205,12 +195,6 @@ export function createHeartbeatInstructionWorkingCopy(input: InstructionWorkingC
         }
       }
       if (instructionCopy) {
-        if (task && executionTarget?.kind === "remote") {
-          const receipt = { ...instructionCopy.receipt, runnerTaskLeaseId: executionTarget.leaseId };
-          await db.update(agentInstructionWorkingCopies).set({ receipt }).where(and(
-            eq(agentInstructionWorkingCopies.companyId, agent.companyId), eq(agentInstructionWorkingCopies.runId, readRun().id)));
-          instructionCopy = { ...instructionCopy, receipt };
-        }
         const storageWarning = readNonEmptyString(instructionCopy.receipt?.storageWarning);
         if (storageWarning) {
           instructionSave = { state: "prepared", contract: "agent_files", storageWarning };

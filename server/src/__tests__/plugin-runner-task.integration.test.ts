@@ -12,7 +12,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/shared";
 import { agentEnvironmentTestService } from "../services/agent-environment-test.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { remoteExecutionHasStopped } from "../services/remote-execution-termination.js";
-import { authorizePluginTaskLeaseTransition } from "../services/environment-task-runtime.js";
+import { resolvePluginTaskResume } from "../services/environment-task-runtime.js";
 import { remoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
 import { environmentRunOrchestrator } from "../services/environment-run-orchestrator.js";
@@ -86,19 +86,15 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     const released = vi.fn(), complete = vi.fn();
     const plugin = definePlugin({
       async setup() {},
-      async onEnvironmentAcquireLease() { return { providerLeaseId: `attempt:fixture.${++acquisition}`, metadata: { remoteCwd: "/workspace" } }; },
+      async onEnvironmentAcquireLease() { return { providerLeaseId: `attempt:fixture.${++acquisition}`, metadata: {} }; },
       async onEnvironmentReleaseLease() { if (releaseFailure) throw new Error("synthetic release failure"); released(); },
       async onEnvironmentTask(params) {
         calls.push(params.operation);
         switch (params.operation.kind) {
           case "describe": return { kind: "description", taskId: params.taskId,
-            runner: { executable: "/runner", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
-            resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, codexCommand: "/codex", codexArgs: ["app-server"] };
-          case "check_project_auth": return { kind: "project_auth", taskId: params.taskId, conflict: false };
-          case "read_file": return { kind: "file", taskId: params.taskId, base64: "" };
-          case "checkpoint": return { kind: "checkpoint", taskId: params.taskId, state: {} };
+            runner: { version: "fixture", digest: `sha256:${"a".repeat(64)}` } };
           case "submit": stopRequested = false; executionStopped = false; return { kind: "accepted", taskId: params.taskId };
-          case "status": return { kind: "status", taskId: params.taskId, phase: stopRequested ? "cancelled" : "running", executionStopped };
+          case "status": return { kind: "status", taskId: params.taskId, phase: stopRequested ? "cancelled" : "running", executionStopped, sessionStateAvailable: executionStopped };
           case "connection": return { kind: "connection", taskId: params.taskId, endpoint: {
             kind: "authenticated_websocket", websocketUrl: "wss://runner.example.test/connect", generation: "fixture",
             secretHeaders: [{ name: "Authorization", value: "Bearer synthetic-fixture" }],
@@ -119,10 +115,8 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     expect(probe.fallbackChecks).toEqual([]);
     expect(probe.executionTarget).toMatchObject({ runnerTaskProbe: { runId: expect.any(String), sessionId: expect.any(String) } });
     if (probe.executionTarget?.kind !== "remote" || probe.executionTarget.transport !== "sandbox" || !probe.executionTarget.runnerTaskProbe) throw new Error("Probe task target unavailable");
-    await expect(probe.executionTarget.runnerTask!({ kind: "describe", harness: "codex", projectIds: [], sessionId: probe.executionTarget.runnerTaskProbe.sessionId }))
+    await expect(probe.executionTarget.runnerTask!({ kind: "describe" }))
       .resolves.toMatchObject({ kind: "description" });
-    await expect(probe.executionTarget.runnerTask!({ kind: "check_project_auth", provider: "openai", projectIds: [] }))
-      .resolves.toMatchObject({ kind: "project_auth", conflict: false });
     const [probeLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, probe.executionTarget.leaseId!));
     expect(probeLease.heartbeatRunId).toBeNull();
     await probe.executionTarget.runnerTask!({ kind: "submit", bootstrapTicket: "synthetic-probe-ticket", projectIds: [],
@@ -130,7 +124,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
         runId: probe.executionTarget.runnerTaskProbe.runId, sessionId: probe.executionTarget.runnerTaskProbe.sessionId, turnId: "probe-turn", itemId: "probe-item" },
       launch: { runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
         maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0,
-        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null }, environment: {}, assets: [] },
+        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } },
     });
     const probeSubmit = calls.find((op): op is Extract<PluginEnvironmentTaskOperation, { kind: "submit" }> => op.kind === "submit")!;
     expect(probeSubmit.launch?.maxRuntimeMs).toBeGreaterThan(0);
@@ -148,16 +142,15 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
         warnings: [], created: false, branchCreatedByRuntime: false },
       effectiveExecutionWorkspaceMode: null, persistedExecutionWorkspace: null });
     const target = realization.executionTarget;
-    expect(target).toMatchObject({ kind: "remote", transport: "sandbox", remoteCwd: "/workspace", leaseId: acquired.lease.id });
+    expect(target).toMatchObject({ kind: "remote", transport: "sandbox", remoteCwd: ".", leaseId: acquired.lease.id });
     if (target?.kind !== "remote" || target.transport !== "sandbox" || !target.runnerTask) throw new Error("Missing plugin target");
     expect(target.runner).toBeUndefined();
-    await expect(target.runnerTask({ kind: "describe", sessionId: "fixture-session", harness: "codex", projectIds: [projectId] }))
-      .resolves.toMatchObject({ kind: "description", resources: { runner_state: "/records", provider_state: "/accounts/selected", runtime_context: "/inputs/context.json", instructions: "/assigned/instructions", instruction_working_copy: "/working/agent" }, environment: { HOME: "/accounts/selected", CODEX_HOME: "/accounts/selected" }, connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" }, runner: { executable: "/runner" } });
+    await expect(target.runnerTask({ kind: "describe" }))
+      .resolves.toMatchObject({ kind: "description", runner: { version: "fixture" } });
     const onDispatched = vi.fn(), checkpoint = vi.fn(async () => {}), close = vi.fn(async () => {});
     ingress.connect.mockReturnValue({ ready: Promise.resolve(), close });
     const owner = createPluginRunnerTaskOwner({ task: target.runnerTask, projectIds: target.runnerTaskProjectIds ?? [], harness: "codex",
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 7777, listenPath: "/provider-listener" } as const, prepare: async () => {},
-      assets: () => [{ resource: "runtime_context", sourcePath: "/core/context" }], checkpoint, onDispatched, pollMs: 1 });
+      onSessionRetained: checkpoint, onDispatched, pollMs: 1 });
     const registration = await owner.registration({} as never, runId);
     const handle = owner.launcher({ command: "ignored", args: [], cwd: "/ignored", environment: { OPENAI_API_KEY: "synthetic-launch-key" },
       nativeRunner: { identity: { runnerInstanceId: randomUUID(), environmentLeaseId: acquired.lease.id, runId,
@@ -172,7 +165,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       expect(ingress.connect).toHaveBeenCalledWith(expect.objectContaining({ endpoint: expect.objectContaining({ websocketUrl: "wss://runner.example.test/connect" }) }));
       const submit = calls.find(operation => operation.kind === "submit");
       expect(submit).toMatchObject({ kind: "submit", projectIds: [projectId], runner: { leaseId: acquired.lease.id, runId },
-        launch: { assets: [{ resource: "runtime_context", sourcePath: "/core/context" }], environment: { OPENAI_API_KEY: "synthetic-launch-key" } } });
+        launch: { runnerVersion: "fixture" } });
       const [saved] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, acquired.lease.id));
       expect(saved.metadata?.runnerTaskDispatched).toBe(true);
       expect(JSON.stringify(saved.metadata)).not.toMatch(/synthetic-launch-key|synthetic-bootstrap-ticket|synthetic-fixture/);
@@ -186,7 +179,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
       executionStopped = true; await handle.completion;
       await registration.release(); expect(complete).not.toHaveBeenCalled();
       await registration.checkpoint("settled");
-      expect(checkpoint).toHaveBeenCalledWith("settled"); expect(complete).toHaveBeenCalledOnce();
+      expect(checkpoint).toHaveBeenCalledOnce(); expect(complete).toHaveBeenCalledOnce();
       await runtime.releaseRunLeases(runId, "released");
       expect(released).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce();
       expect(await remoteExecutionHasStopped(db, companyId, runId)).toBe(true);
@@ -226,7 +219,7 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     const oldRunId = randomUUID(), nextRunId = randomUUID(), oldLeaseId = randomUUID(), nextLeaseId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Lease transition", issuePrefix: `T${companyId.slice(0, 7).replace(/-/g, "").toUpperCase()}` });
     await db.insert(agents).values({ id: agentId, companyId, name: "Fixture", role: "engineer", adapterType: "paperclip_runner" });
-    await db.insert(environments).values({ id: environmentId, companyId, name: "Fixture", driver: "plugin", config: {} });
+    await db.insert(environments).values({ id: environmentId, companyId, name: `Fixture ${environmentId}`, driver: "plugin", config: {} });
     await db.insert(heartbeatRuns).values([
       { id: oldRunId, companyId, agentId, invocationSource: "manual", status: "succeeded" },
       { id: nextRunId, companyId, agentId, invocationSource: "manual", status: "running" },
@@ -235,20 +228,26 @@ databaseSuite("Core plugin Runner task lifecycle", () => {
     const prior = { id: oldLeaseId, companyId, environmentId, heartbeatRunId: oldRunId, provider: "plugin:fixture:tasks", providerLeaseId: "old-task" };
     await db.insert(environmentLeases).values([
       { ...prior, status: "released", leasePolicy: "ephemeral", cleanupStatus: "success", releasedAt: new Date(),
-        metadata: { ...pin, remoteExecutionTermination: remoteTerminationReceipt(prior, { providerLeaseId: "old-task", state: "stopped" }) } },
+        metadata: { ...pin, runnerTaskSessionRetained: true, runnerTaskIdentity: { runnerId: "runner", leaseId: oldLeaseId, runId: oldRunId, sessionId: "session" }, remoteExecutionTermination: remoteTerminationReceipt(prior, { providerLeaseId: "old-task", state: "stopped" }) } },
       { id: nextLeaseId, companyId, environmentId, heartbeatRunId: nextRunId, provider: prior.provider, providerLeaseId: "new-task",
         status: "active", leasePolicy: "ephemeral", metadata: pin },
     ]);
     const priorIdentity = { runnerInstanceId: "runner", normalizedSessionId: "session", environmentLeaseId: oldLeaseId, runId: oldRunId };
-    const desiredIdentity = { ...priorIdentity, environmentLeaseId: nextLeaseId, runId: nextRunId };
-    const authorize = () => authorizePluginTaskLeaseTransition(db, { companyId, priorIdentity, desiredIdentity });
-    await expect(authorize()).resolves.toBeUndefined();
-    await expect(authorizePluginTaskLeaseTransition(db, { companyId: randomUUID(), priorIdentity, desiredIdentity })).rejects.toThrow("unproven");
+    const authorize = () => resolvePluginTaskResume(db, { companyId, leaseId: nextLeaseId, priorIdentity });
+    await expect(authorize()).resolves.toBe("old-task");
+    for (const field of ["runnerInstanceId", "environmentLeaseId", "normalizedSessionId", "runId"]) {
+      await expect(resolvePluginTaskResume(db, { companyId, leaseId: nextLeaseId,
+        priorIdentity: { ...priorIdentity, [field]: randomUUID() } })).rejects.toThrow("not authorized");
+    }
+    await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, oldRunId));
+    await expect(authorize()).rejects.toThrow("not authorized");
+    await db.update(heartbeatRuns).set({ status: "succeeded" }).where(eq(heartbeatRuns.id, oldRunId));
+    await expect(resolvePluginTaskResume(db, { companyId: randomUUID(), leaseId: nextLeaseId, priorIdentity })).rejects.toThrow("not authorized");
     await db.update(environmentLeases).set({ metadata: { ...pin, pluginId: randomUUID() } }).where(eq(environmentLeases.id, nextLeaseId));
-    await expect(authorize()).rejects.toThrow("unproven");
+    await expect(authorize()).rejects.toThrow("not authorized");
     await db.update(environmentLeases).set({ metadata: pin }).where(eq(environmentLeases.id, nextLeaseId));
     await db.update(environmentLeases).set({ cleanupStatus: "failed" }).where(eq(environmentLeases.id, oldLeaseId));
-    await expect(authorize()).rejects.toThrow("unproven");
+    await expect(authorize()).rejects.toThrow("not authorized");
   });
 
 });

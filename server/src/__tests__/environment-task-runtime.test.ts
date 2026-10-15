@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import { environmentTaskOperationSchema, parseEnvironmentTaskResult } from "@paperclipai/plugin-sdk";
-import { assertPluginRunnerInstructionMirror, executeEnvironmentTask } from "../services/environment-task-runtime.js";
+import { executeEnvironmentTask } from "../services/environment-task-runtime.js";
 
 const state = vi.hoisted(() => ({ plugin: {} as any }));
 vi.mock("../services/plugin-registry.js", () => ({ pluginRegistryService: () => ({ getById: vi.fn(async () => state.plugin) }) }));
@@ -30,26 +30,17 @@ const submit = { kind: "submit" as const, projectIds: [projectId], runner: { pro
 beforeEach(() => {
   state.plugin = { id: "original", pluginKey: "test.provider", status: "ready", manifestJson: { capabilities: ["environment.drivers.register"], environmentDrivers: [{ driverKey: "tasks", supportsTasks: true }] } };
 });
-it("bounds description resources while allowing both paths for each assigned skill", () => {
-  const operation = { kind: "describe", sessionId: "session", harness: "codex", projectIds: [],
-    resources: Array.from({ length: 256 }, (_, index) => `resource-${index}`) };
-  expect(environmentTaskOperationSchema.safeParse(operation).success).toBe(true);
-  expect(environmentTaskOperationSchema.safeParse({ ...operation, resources: [...operation.resources, "overflow"] }).success).toBe(false);
-});
-
 describe("plugin-provided Runner execution", () => {
-  it("requires provider bindings for named resources and rejects caller-selected destinations", () => {
-    const operation = environmentTaskOperationSchema.parse({ kind: "describe", sessionId: "session", harness: "codex", projectIds: [], resources: ["instructions"] });
-    const description = { kind: "description", taskId: "attempt-1", runner: { executable: "paperclip-runnerd", version: "fixture", digest: `sha256:${"a".repeat(64)}` },
-      connection: { mode: "listen", listenAddress: "0.0.0.0", listenPort: 9000, listenPath: "/connect" }, resources: { instructions: "V:\\assigned\\instructions" } };
-    expect(parseEnvironmentTaskResult(operation, "attempt-1", description)).toMatchObject({ resources: description.resources });
-    expect(parseEnvironmentTaskResult(operation, "attempt-1", { ...description, environment: { HOME: "V:\\account", PATH: "bin", CODEX_HOME: "account" } })).toHaveProperty("environment.PATH", "bin");
-    for (const key of ["OPENAI_API_KEY", "XAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "PAPERCLIP_AI_PROVIDER_KEY", "OPENCODE_AUTH_JSON", "PAPERCLIP_PI_PROVIDERS", "OPENCODE_CONFIG_CONTENT"]) {
-      expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, environment: { [key]: "provider-default" } })).toThrow("cannot contain credentials");
+  it("accepts artifact identity and excludes filesystem transfer from the contract", () => {
+    const operation = environmentTaskOperationSchema.parse({ kind: "describe" });
+    const description = { kind: "description", taskId: "attempt-1", runner: { version: "fixture", digest: `sha256:${"a".repeat(64)}` } };
+    expect(parseEnvironmentTaskResult(operation, "attempt-1", description)).toEqual(description);
+    for (const field of ["resources", "environment", "connection", "codexCommand"]) {
+      expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, [field]: {} })).toThrow();
     }
-    expect(() => parseEnvironmentTaskResult(operation, "attempt-1", { ...description, resources: {} })).toThrow("omitted a requested runtime resource");
-    expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ resource: "instructions", targetPath: "/core/mirror" }] }).success).toBe(true);
-    expect(environmentTaskOperationSchema.safeParse({ kind: "checkpoint", exports: [{ sourcePath: "/guest/guessed", targetPath: "/core/mirror" }] }).success).toBe(false);
+    for (const kind of ["checkpoint", "read_file", "check_project_auth"]) {
+      expect(environmentTaskOperationSchema.safeParse({ kind }).success).toBe(false);
+    }
   });
   it("allows only the private, unexpired setup identity on an ad-hoc lease", async () => {
     const value = row();
@@ -58,7 +49,7 @@ describe("plugin-provided Runner execution", () => {
     const operation = { ...submit, projectIds: [], runner: { ...submit.runner, runId: "probe-run", sessionId: "probe-session" },
       launch: { runnerVersion: "fixture", runnerDigest: `sha256:${"a".repeat(64)}`,
         maxOutboxBytes: 262144, p0ReserveBytes: 65536, maxRuntimeMs: 0, maxLifetimeMs: 0,
-        lifecyclePolicy: { mode: "per_turn" as const, idleTimeoutMs: null }, environment: {}, assets: [],
+        lifecyclePolicy: { mode: "per_turn" as const, idleTimeoutMs: null },
       } };
     const workers = worker();
     await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation })).resolves.toMatchObject({ kind: "accepted" });
@@ -72,30 +63,6 @@ describe("plugin-provided Runner execution", () => {
     Object.assign(value.lease.metadata, { runnerTaskProbe: { runId: "probe-run", sessionId: "probe-session", expiresAtMs: Date.now() - 1 } });
     await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation })).rejects.toThrow("not active");
     await expect(executeEnvironmentTask(database(value).db, workers as never, { companyId: "company", leaseId, operation: { kind: "stop" } })).resolves.toMatchObject({ kind: "accepted" });
-  });
-  it("fences persisted instruction mirrors until both export and stop are proved", async () => {
-    let metadata: Record<string, unknown> | undefined;
-    const where = vi.fn(async (_predicate: unknown) => metadata ? [{ metadata }] : []);
-    const db = { select: () => ({ from: () => ({ where }) }) } as unknown as Db;
-    const input = { companyId: "company", runId: "run", receipt: { runnerTaskLeaseId: leaseId } };
-    for (const value of [undefined, { runnerTaskDispatched: true }, { runnerTaskDispatched: true, runnerTaskCheckpointed: true },
-      { runnerTaskExecutionStopped: true, runnerTaskCheckpointed: false }]) {
-      metadata = value;
-      await expect(assertPluginRunnerInstructionMirror(db, input)).rejects.toThrow("instruction checkpoint unavailable");
-    }
-    for (const value of [{}, { runnerTaskExecutionStopped: true, runnerTaskCheckpointed: true }]) {
-      metadata = value; await expect(assertPluginRunnerInstructionMirror(db, input)).resolves.toBeUndefined();
-    }
-    const scope = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
-    expect(scope.params).toEqual([leaseId, "company", "run"]);
-  });
-  it("validates project storage before provider-owned authentication inspection", async () => {
-    const workers = worker({ kind: "project_auth", taskId: "attempt-1", conflict: false });
-    const operation = { kind: "check_project_auth", provider: "openai", projectIds: [projectId] } as const;
-    await expect(executeEnvironmentTask(database(row(), []).db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).rejects.toThrow("project unavailable");
-    expect(workers.call).not.toHaveBeenCalled();
-    await expect(executeEnvironmentTask(database().db, workers as never, { companyId: "company", leaseId, operation: { ...operation, projectIds: [...operation.projectIds] } })).resolves.toMatchObject({ kind: "project_auth", conflict: false });
-    expect(workers.call).toHaveBeenCalledWith("original", "environmentTask", expect.objectContaining({ projectIds: [projectId] }), 15_000);
   });
   it("dispatches with host-derived scope and a persisted attempt identity", async () => {
     const { db, query } = database(); const workers = worker();
@@ -120,12 +87,6 @@ describe("plugin-provided Runner execution", () => {
     const rejected = worker();
     await expect(executeEnvironmentTask(database(row(), [{ id: projectId }]).db, rejected as never, { companyId: "company", leaseId, operation })).rejects.toThrow("project unavailable");
     expect(rejected.call).not.toHaveBeenCalled();
-  });
-  it("validates descriptor project scope before calling the pinned task provider", async () => {
-    const workers = worker();
-    await expect(executeEnvironmentTask(database(row(), []).db, workers as never, { companyId: "company", leaseId,
-      operation: { kind: "describe", sessionId: "session", harness: "codex", projectIds: ["00000000-0000-4000-8000-000000000099"] } })).rejects.toThrow("project unavailable");
-    expect(workers.call).not.toHaveBeenCalled();
   });
   it("validates unique project IDs and allows tasks with no project mounts", async () => {
     for (const projectIds of [[projectId, projectId], ["invalid"], Array(65).fill(projectId)]) {
