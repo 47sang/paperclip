@@ -10,7 +10,6 @@ import { pathToFileURL } from "node:url";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import {
-  agents,
   companies,
   createDb,
   executionWorkspaceRepositoryAccess,
@@ -19,6 +18,8 @@ import {
   issues,
   startEmbeddedPostgresTestDatabase,
 } from "@paperclipai/db";
+
+import { createAgentLifecycle } from "../src/services/agent-lifecycle.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -120,17 +121,16 @@ try {
   const unrelatedKey = createHash("sha256").update(unrelatedRoot).digest("hex");
 
   await db.insert(companies).values({ id: companyId, name: "Synthetic workspace-admission benchmark", issuePrefix: "WAB" });
-  await db.insert(agents).values({
+  await createAgentLifecycle(db).requestHire(companyId, {
     id: agentId,
-    companyId,
     name: "Synthetic Codie",
     role: "engineer",
-    status: "active",
+    status: "idle",
     adapterType: "codex_local",
     adapterConfig: {},
     runtimeConfig: {},
     permissions: {},
-  });
+  }, { runnerResolved: true });
 
   await insertBatches((rows) => db.insert(executionWorkspaces).values(rows as never), workspaceIds.map((id, index) => ({
     id,
