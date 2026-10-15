@@ -3485,6 +3485,36 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         } finally { await act(async () => root.unmount()); }
       });
 
+      it("unlocks Claude setup when automatic runner availability changes during verification", async () => {
+        mockAdapterBuild.buildAdapterConfig.mockImplementation(values => buildClaudeLocalConfig(values!));
+        mockAdaptersApi.list.mockResolvedValue([setupAdapterInfo({ type: "claude_local", defaultRunner: "paperclip" })]);
+        const finishes: Array<(value: typeof passed) => void> = [];
+        mockAgentsApi.testEnvironment.mockImplementation(() => new Promise(resolve => finishes.push(resolve)));
+        const { root, queryClient } = await openStep4({ adapterType: "claude_local" });
+        try {
+          await pickSource(/Claude/);
+          await detected();
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+          expectTesting();
+          mockAdaptersApi.list.mockResolvedValue([setupAdapterInfo({ type: "claude_local", defaultRunner: "legacy" })]);
+          await act(async () => queryClient.setQueryData(queryKeys.adapters.availability("company-new", LOCAL_ENVIRONMENT.id), [setupAdapterInfo({ type: "claude_local", defaultRunner: "legacy" })]));
+          await settle();
+          expect(document.body.textContent).toContain("Configuration changed during setup");
+          expect(button("Connect").disabled).toBe(false);
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+          await act(async () => finishes[0](passed));
+          await settle();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+          await click("Connect");
+          expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(2);
+          await act(async () => finishes[1](passed));
+          await settle();
+          expect(mockAgentsApi.hire).toHaveBeenCalledTimes(1);
+          const hired = mockAgentsApi.hire.mock.calls[0] as unknown as [string, { adapterConfig: Record<string, unknown> }];
+          expect(hired[1].adapterConfig.maxTurnsPerRun).toBe(1000);
+        } finally { await act(async () => root.unmount()); }
+      });
+
       it("fails closed on Claude discovery rejection and retries availability before verification", async () => {
         mockAdaptersApi.list.mockRejectedValue(new Error("Discovery unavailable"));
         const { root, queryClient } = await openStep4({ adapterType: "claude_local" });

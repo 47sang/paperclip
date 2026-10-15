@@ -1032,7 +1032,7 @@ function OnboardingWizardInner({
       null,
     [loginEnvironmentList, resolvedLoginEnvironmentId],
   );
-  const claudeSetupSelectionKey = JSON.stringify([createdCompanyId, adapterType, runner, model, command,
+  const claudeSetupSelectionKey = JSON.stringify([createdCompanyId, adapterType, runner, resolvedRunner, model, command,
     args, url, credentialMode, apiKey, selectedSavedKey, selectedApiKey?.binding, savedSubscription?.binding,
     resolvedLoginEnvironmentId, resolvedLoginEnvironment?.config]);
   const claudeSetupSelectionRef = useRef(claudeSetupSelectionKey);
