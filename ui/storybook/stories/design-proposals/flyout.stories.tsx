@@ -8,7 +8,7 @@ const meta = {
   globals: { theme: "dark" },
   args: { mode: "columns", shadow: "" },
   argTypes: {
-    mode: { control: "select", options: ["columns", "views", "profile"] },
+    mode: { control: "select", options: ["columns", "views", "account-menu"] },
     shadow: { name: "Shadow", control: "text", description: "Local CSS box-shadow override. Clear to inherit --shadow-flyout. Save the approved default in ui/src/index.css to apply it to every refreshed flyout." },
   },
   parameters: {
@@ -21,7 +21,7 @@ const meta = {
       exception: "Shared flyout component and shadow tuning reference staged with the task-list design refresh.",
       implementation: "production",
       boundary: "fixtures",
-      notes: "Isolates the shared flyout composition used by the proposed page menus. Columns demonstrates toggle buttons and inherited-color checks; Views shares the page choices Inbox, Unread, Needs attention and All tasks, using existing radio-menu semantics with checkmarks; Profile demonstrates a rich header and compact actions including Invite. State and profile actions are local fixtures, not production navigation, invitation or permission evidence. Shadow controls affect this preview only; approved values belong in the shared --shadow-flyout token.",
+      notes: "Isolates the shared flyout composition used by the proposed page menus. Columns demonstrates toggle buttons and inherited-color checks; Views shares the page choices Inbox, Unread, Needs attention and All tasks, using existing radio-menu semantics with checkmarks; Account Menu mounts the canonical SidebarAccountMenu with the same DesignProposalAccess fixture boundary as Sidebar/Account Menu. Its profile link, Settings, Invite, Documentation, theme action, dismissal and focus behavior come directly from that component. Router and owner-access fixtures do not prove backend behavior or permission enforcement. Shadow controls affect this preview only; approved values belong in the shared --shadow-flyout token.",
     },
   },
 } satisfies Meta<typeof FlyoutPreview>;
@@ -31,4 +31,5 @@ type Story = StoryObj<typeof meta>;
 
 export const Columns: Story = {};
 export const Views: Story = { args: { mode: "views" } };
-export const Profile: Story = { args: { mode: "profile" } };
+// Keep the original story ID so existing review links remain valid.
+export const Profile: Story = { name: "Account Menu", args: { mode: "account-menu" } };

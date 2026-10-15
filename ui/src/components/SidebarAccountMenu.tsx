@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -39,6 +39,8 @@ interface SidebarAccountMenuProps {
   onOpenChange?: (open: boolean) => void;
   /** Contextual navigation occupies a full sidebar even if the saved global nav mode is collapsed. */
   forceExpanded?: boolean;
+  /** Optional local shadow preview; the shared token remains the default. */
+  shadow?: CSSProperties["boxShadow"];
 }
 
 interface MenuActionProps {
@@ -120,6 +122,7 @@ export function SidebarAccountMenu({
   open: controlledOpen,
   onOpenChange,
   forceExpanded = false,
+  shadow,
 }: SidebarAccountMenuProps) {
   const cloud = useCloudInstance();
   const isCloud = Boolean(cloud);
@@ -191,6 +194,7 @@ export function SidebarAccountMenu({
             </button>
           </PopoverTrigger>
           <FlyoutContent
+            shadow={shadow}
             aria-label="Account"
             side="top"
             align="start"

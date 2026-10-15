@@ -386,7 +386,11 @@ and full page consume the same `TaskList` collection.
   checks. The preview supplies owner access and loaded operator-policy fixtures.
   This appearance remains opt-in while the proposal is reviewed.
   Review the component separately in **Design proposals → Components → Popover**, with Columns,
-  Views and Profile examples. Its Shadow control previews a local override;
+  Views and Account Menu examples. Account Menu mounts the canonical
+  `SidebarAccountMenu` with the same owner-access fixture boundary as the Sidebar
+  story; no separate action list or simulated account handlers are maintained.
+  The former Profile story keeps its stable URL and is named Account Menu.
+  Its Shadow control previews a local override;
   changing the saved `--shadow-flyout` token in `ui/src/index.css` updates every
   refreshed flyout. Storybook controls do not persist token edits.
 - Views appear in this order: Inbox, Unread, Needs attention, All tasks. Inbox includes
@@ -408,10 +412,42 @@ and full page consume the same `TaskList` collection.
   Sidebar links exercise the memory router; destination pages, creation API
   behavior, production preferences and production routes are outside this preview.
 
-The next milestone after full-page visual approval is the agent reference
-contract and a fresh-agent reproduction test using these components and tokens.
-The staged page itself does not prove that an unfamiliar agent can discover
-and reuse the design system.
+### Reuse collection behavior as well as appearance
+
+`useTaskListCollection` in `ui/src/hooks/` is the shared presentation controller
+for the proposed task page and reproduction trial. Supply accessible `items`,
+the selected `companyId`, current `userId`, an isolated `viewStorageKey`, and
+optionally `initialQuery`. Feed its query/view/layout/filter handlers to
+`TaskListToolbar`, its `creators` directly to the Creator filter, and its
+`visibleItems`, `companyItems` and expansion state to `TaskList`. Boards consume
+`matchingItems`: contextual parents belong in the hierarchical list only.
+The caller owns data loading and mutations; this hook does not authorize data
+access, define server permissions, or integrate production persistence.
+
+Creator IDs are namespaced (`user:<id>` / `agent:<id>`), including when human
+and agent IDs coincide. Search includes task IDs, titles, creator, assignee,
+project and tags. Changing query, view or filters expands matching families so
+results cannot remain hidden behind collapsed ancestors. Clear resets search,
+filters and view, while keeping the chosen layout. View storage remains isolated
+by the caller's scope/user key. Company changes scope tasks and creator options
+and start with expanded families.
+
+The reproduction story now uses this controller too. It is a repaired regression
+reference, not an untouched fresh-agent result. Preserve the first submission's
+source, frozen PNGs and capture metadata separately when evaluating improvements;
+do not replace its evidence with repaired output or silently accept new images.
+The opt-in `task-list-reproduction-trial.config.ts` suite requires
+`TRIAL_REFERENCE_PNG` pointing to the original frozen reference (and a matching
+Chromium executable via `TRIAL_CHROMIUM_EXECUTABLE`). Missing visual evidence is
+an error rather than an omitted comparison. Its browser cases exercise creator
+filters, collapsed search/view/filter transitions, metadata search and board
+matching on both the reference and trial. These checks establish fixture behavior
+and reproduction of that frozen desktop state, not production acceptance.
+
+The next milestone is the agent reference contract and another fresh-agent test
+using the shared components, tokens and collection controller. A corrected trial
+does not establish that a new agent will discover and reuse this system without
+coaching. Visual approval and production integration remain separate milestones.
 
 ## Enforcement (what "compliant" means for the extraction run)
 

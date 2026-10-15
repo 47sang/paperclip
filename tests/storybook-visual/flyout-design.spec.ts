@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 1512, height: 1050 } });
 
-test("standalone Flyout sections support toggles, radio checks and a profile header", async ({ page }, testInfo) => {
+test("standalone Popover sections support toggles, radio checks and the canonical account menu", async ({ page }, testInfo) => {
   await page.goto("/iframe.html?id=design-flyout--columns&viewMode=story&globals=theme:dark");
   const columns = page.getByRole("dialog", { name: "Columns", exact: true });
   await expect(columns).toBeVisible();
@@ -35,10 +35,39 @@ test("standalone Flyout sections support toggles, radio checks and a profile hea
   await expect(unread.locator("svg.lucide-check")).toBeVisible();
 
   await page.goto("/iframe.html?id=design-flyout--profile&viewMode=story&globals=theme:dark");
-  await expect(page.getByRole("heading", { name: "Riley Board", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View profile", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Account", exact: true }).locator('[data-slot="avatar-fallback"]')).toHaveText("R");
-  await page.getByRole("button", { name: "Invite", exact: true }).click();
-  await expect(page.getByText("Invite selected in this preview.", { exact: true })).toBeVisible();
+  const invite = page.getByRole("link", { name: "Invite", exact: true });
+  await expect(invite).toHaveAttribute("href", /\/company\/settings\/members\?tab=invites$/);
+  await invite.click();
+  await expect(page.getByRole("dialog", { name: "Account", exact: true })).toBeHidden();
+});
+
+test("Popover Account Menu matches the canonical Sidebar Account Menu", async ({ page }, testInfo) => {
+  const snapshots = [];
+  for (const story of ["design-sidebar--account-menu", "design-flyout--profile"]) {
+    await page.goto(`/iframe.html?id=${story}&viewMode=story&globals=theme:dark`);
+    const menu = page.getByRole("dialog", { name: "Account", exact: true });
+    await expect(menu.getByRole("link", { name: "Invite", exact: true })).toBeVisible();
+    await page.mouse.move(0, 0);
+    snapshots.push(await menu.evaluate(element => ({
+      actions: [...element.querySelectorAll("a,button")].map(action => ({ label: action.textContent?.trim(), href: action.getAttribute("href"), target: action.getAttribute("target") })),
+      width: element.getBoundingClientRect().width,
+      height: element.getBoundingClientRect().height,
+      shadow: getComputedStyle(element).boxShadow,
+      background: getComputedStyle(element).backgroundColor,
+    })));
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    const trigger = page.getByRole("button", { name: "Open account menu", exact: true });
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    if (story === "design-flyout--profile") await menu.screenshot({ path: testInfo.outputPath("canonical-account-menu.png") });
+    await menu.getByRole("link", { name: "Settings", exact: true }).click();
+    await expect(menu).toBeHidden();
+  }
+  expect(snapshots[1]).toEqual(snapshots[0]);
 });
 
 test("Shadow control previews an override and clearing it restores the shared token", async ({ page }, testInfo) => {
