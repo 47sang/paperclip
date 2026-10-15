@@ -811,6 +811,12 @@ function Setup({
                       onConnected={(next) => {
                         setConnection(next);
                         setRuntimeAiBinding(undefined);
+                        // An import chose this agent's model on the card it was
+                        // confirmed on, so it lands in the field the hire reads.
+                        // Nothing else sets it: every other way of connecting
+                        // arrives with no opinion about the model.
+                        if (next.model) setModel(next.model);
+                        resetTest();
                         setScreen("runtime");
                       }}
                     /> : <p role="status" className="text-sm text-muted-foreground">Loading connection settings…</p>}

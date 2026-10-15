@@ -234,7 +234,12 @@ export function AiConnectionField({
             companyId={companyId}
             provider={provider}
             initialMethod={reconnecting?.method ?? method}
-            fixedMethod={Boolean(reconnecting)}
+            // An imported connection was made from this machine's Claude config, so
+            // re-importing it is how it gets repaired. Pinning the method here would
+            // hide the mode switch and leave the operator no way back to it; the
+            // api_key method is unchanged either way, so only a switch to a
+            // subscription starts a different account.
+            fixedMethod={Boolean(reconnecting?.baseUrl === undefined && reconnecting)}
             connectionId={reconnecting?.id}
             name={reconnecting?.name ?? `My ${provider === "anthropic" ? "Claude" : provider === "openai" ? "OpenAI" : provider === "xai" ? "Grok" : provider === "google" ? "Gemini" : "OpenRouter"} ${method === "subscription" ? "subscription" : "API"}`}
             ownership="personal"
