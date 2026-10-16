@@ -47,6 +47,7 @@ export function AiConnectionField({
   model,
   value,
   onChange,
+  onModelSelect,
   environmentId,
   legacy = false,
   readOnly = false,
@@ -60,6 +61,13 @@ export function AiConnectionField({
   model?: string;
   value?: AiRuntimeConnectionBinding;
   onChange: (binding: AiRuntimeConnectionBinding) => void;
+  /**
+   * Called with the model an import was confirmed with, for the surface to put
+   * in the agent's own model field. An agent whose stored model predates the
+   * gateway would keep running on it, and a gateway that does not serve that
+   * model rejects every run.
+   */
+  onModelSelect?: (model: string) => void;
   environmentId?: string;
   legacy?: boolean;
   readOnly?: boolean;
@@ -250,6 +258,9 @@ export function AiConnectionField({
             onComplete={(result) => {
               setSavedAccount(result);
               selectDefault.mutate(result);
+              // The model the import card confirmed belongs to the agent's own
+              // field, the same as every other surface that imports.
+              if (result.model) onModelSelect?.(result.model);
             }}
           />}
           {!reconnecting && !savedAccount && <details>
