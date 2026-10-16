@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
-import { createDb, companies, companyMemberships, agents, environments, toolConnections, toolConnectionInstalls } from "@paperclipai/db";
+import { createDb, companies, companyMemberships, agents, environments, instanceSettings, toolConnections, toolConnectionInstalls } from "@paperclipai/db";
 import {
   type PatchInstanceExperimentalSettings,
   type PatchInstanceGeneralSettings,
@@ -595,6 +595,58 @@ describe("importing from the local Claude configuration", () => {
       const after = await service.list(companyId, "alice");
       expect(after.find(c => c.id === imported.body.connectionId)?.isDefault).toBe(true);
       expect(after.find(c => c.id === older.connectionId)?.isDefault).toBe(false);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("does not let an unrelated sandbox agent block an import for a new local one", async () => {
+    // A surface with no agent yet grants company-wide access, which is an
+    // authorization fact. Reachability is judged for the agents this setup
+    // serves, so an unrelated agent that runs in a sandbox changes nothing.
+    const [sandbox] = await db.insert(environments).values({ name: "Unrelated sandbox", driver: "sandbox", config: { provider: "daytona" } }).returning();
+    const unrelatedAgentId = randomUUID();
+    await db.insert(agents).values({ id: unrelatedAgentId, companyId, name: "Unrelated worker", adapterType: "claude_local", defaultEnvironmentId: sandbox.id });
+    const { spy } = gateway();
+    try {
+      const payload = await named("Unrelated-agent gateway");
+      const response = await request(app()).post(`${base}/import`).send({ ...payload, allAgents: true });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("judges a re-import by the agents already using the account", async () => {
+    // Repairing an account is judged where its agents run, not where the
+    // instance default points: an account that serves a local agent stays
+    // repairable after the default moves to a sandbox.
+    const { spy } = gateway();
+    try {
+      const first = await request(app()).post(`${base}/import`).send(await named("Served account"));
+      expect(first.status, JSON.stringify(first.body)).toBe(201);
+      const [local] = await db.select().from(environments).where(eq(environments.driver, "local")).limit(1);
+      const localAgentId = randomUUID();
+      await db.insert(agents).values({ id: localAgentId, companyId, name: "Local user of the account", adapterType: "claude_local", defaultEnvironmentId: local!.id });
+      await db.update(agents).set({ runtimeConfig: { aiConnection: { connectionId: first.body.connectionId } } }).where(eq(agents.id, localAgentId));
+      const [sandbox] = await db.insert(environments).values({ name: "Moved default", driver: "sandbox", config: { provider: "daytona" } }).returning();
+      await db.update(instanceSettings).set({ defaultEnvironmentId: sandbox.id });
+      const repaired = await request(app()).post(`${base}/import`).send({ ...confirmOf(GATEWAY, "ANTHROPIC_API_KEY", "Served account"), connectionId: first.body.connectionId });
+      expect(repaired.status, JSON.stringify(repaired.body)).toBe(201);
+    } finally {
+      await db.update(instanceSettings).set({ defaultEnvironmentId: null });
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses an import for an agent whose network egress is disabled", async () => {
+    const deniedAgentId = randomUUID();
+    await db.insert(agents).values({ id: deniedAgentId, companyId, name: "Offline worker", adapterType: "claude_local", adapterConfig: { networkScope: "deny" } });
+    const { spy } = gateway();
+    try {
+      const payload = await named("Offline worker gateway", [deniedAgentId]);
+      const response = await request(app()).post(`${base}/import`).send(payload);
+      expect(response.status).toBe(422);
+      expect(response.body.code).toBe("ai_connection_network_denied");
+      expect(response.body.error).toContain("network egress disabled");
+      expect(spy).not.toHaveBeenCalled();
+      expect((await service.list(companyId, "alice")).some(c => c.name === payload.name)).toBe(false);
     } finally { spy.mockRestore(); }
   });
 

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { agents, environments, instanceSettings, type Db } from "@paperclipai/db";
 import {
   type LocalClaudeConfigImportInput,
@@ -419,7 +419,7 @@ function unreachableUnderPolicy(
 export async function assertImportedGatewayReachable(
   db: Db,
   companyId: string,
-  input: Pick<LocalClaudeConfigImportInput, "agentIds" | "allAgents" | "environmentId">,
+  input: Pick<LocalClaudeConfigImportInput, "agentIds" | "allAgents" | "environmentId" | "connectionId">,
   baseUrl: string,
 ) {
   const [localEnvironment] = await db
@@ -434,14 +434,22 @@ export async function assertImportedGatewayReachable(
   const policies = await forcedExecutionPolicies(db);
   const resolveEnvironmentId = (agentDefault: string | null) =>
     agentDefault ?? instanceDefault?.defaultEnvironmentId ?? localEnvironment?.id ?? null;
+  // Reachability is judged for the agents this setup actually serves: the ones
+  // the surface named, the ones already using the account a re-import repairs,
+  // or — for a surface with no agent yet — the environment it resolved. Company
+  // wide access is an authorization fact, not a reachability one: an unrelated
+  // agent that runs in a sandbox must not block an import for a new local one.
   const targetAgentIds = input.agentIds.length
     ? input.agentIds
-    : input.allAgents
+    : input.connectionId
       ? (
           await db
             .select({ id: agents.id })
             .from(agents)
-            .where(eq(agents.companyId, companyId))
+            .where(and(
+              eq(agents.companyId, companyId),
+              sql`${agents.runtimeConfig}->'aiConnection'->>'connectionId' = ${input.connectionId}`,
+            ))
         ).map((row) => row.id)
       : [];
   const targets = targetAgentIds.length
@@ -480,6 +488,14 @@ export async function assertImportedGatewayReachable(
         { code: "ai_connection_environment_unreachable" },
       );
     const networkScope = agent.adapterConfig?.networkScope;
+    // An agent with egress disabled cannot reach the gateway either, and the
+    // server probe succeeding proves nothing about it: the import would report
+    // success until the operator tests or runs the agent.
+    if (networkScope === "deny")
+      throw unprocessable(
+        `${agent.name} has network egress disabled, so it cannot reach this gateway. Enable its network access, or import for an agent that can reach ${gatewayHost}.`,
+        { code: "ai_connection_network_denied" },
+      );
     if (networkScope === "allowlist" && !allowlistCovers(agent.adapterConfig?.networkAllowlist, gatewayUrl))
       throw unprocessable(
         `Add ${gatewayHost} to ${agent.name}'s network allowlist: that agent's network egress is limited to an allowlist, and the gateway host is not on it.`,
